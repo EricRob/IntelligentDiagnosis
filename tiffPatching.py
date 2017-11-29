@@ -9,7 +9,7 @@ from matplotlib.image import imread
 from numpy.lib.stride_tricks import as_strided
 from math import floor
 from skimage.measure import block_reduce
-
+from skimage.io import imsave
 
 
 # Create patches and load into 6-dimension array with properties:
@@ -66,8 +66,7 @@ def save_patches (originalPath, patches, patchSize, overlap, sampleFactor):
         for j in range(patches.shape[1]):
             name = folderPath + '/' +  os.path.splitext(originalPath)[0] + '_' + str(x_index) + '_' + str(y_index) + '.tif'
             downsample = block_reduce(patches[i,j,0,:,:,:], block_size=(sampleFactor,sampleFactor,1), func=np.mean)
-            misc.imsave(name,downsample)
-            #misc.imsave(name, patches[i,j,0,:,:,:])
+            imsave(name,downsample)
             x_index += floor(patchSize*(1-overlap*.01))
         y_index += floor(patchSize*(1-overlap*.01))
 
