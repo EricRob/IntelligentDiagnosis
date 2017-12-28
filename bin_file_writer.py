@@ -17,7 +17,7 @@ if __name__ == '__main__':
 	for dirpath, dirnames, filenames in os.walk("."):
 		lst = os.listdir(dirpath)
 		print(dirpath)
-		lst.sort()
+		lst.sort() # need files in order by index (see fix_patch_alpha) so time series is accurately fed to RNN
 		for filename in [f for f in lst if f.endswith(".tif")]:
 			# open tiff as grayscale, convert to unsiged 8-bit integer, and append to file
 			img = io.imread(os.path.join(dirpath,filename), as_grey=True)
