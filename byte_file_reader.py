@@ -1,4 +1,50 @@
+import tensorflow as tf
+import sys
 
+Py3 = sys.version_info[0] == 3
+
+
+def _generate_half_batch(sequence, label, min_queue_examples, batch_size):
+	""" Construct half of a queued batch, all of the same label
+	Args:
+		sequence: 2-D tensor of [sequence_length, sequence_length*image_bytes]
+		label: 1-D tensor of size [1]
+		min_queue_examples: minimum samples to retain in the queue
+		batch_size: number of image sequences per batch
+	Returns:
+		sequences: Half batch of images. 3-D tensor of
+		[batch_size // 2, sequence_length, image_bytes] size.
+		label_batch: Half batch of labels. 1-D tensor of [batch_size // 2] size.
+	"""
+
+	num_preprocess_threads = 16
+
+	# Create a batch of this data type's sequences, half the size of the
+	# batch that will be used in the RNN 
+	sequences, label_batch = tf.train.batch(
+		[sequence, label],
+		batch_size = (batch_size // 2),
+		num_threads = num_preprocess_threads,
+		capacity = (min_queue_examples + 3 * batch_size) // 2)
+
+	# Remove one dimension from label_batch
+	label_batch = tf.reshape(label_batch, [batch_size // 2])
+
+
+	return sequences, label_batch
+
+
+def _read_from_file(queue, class_label):
+	""" Reads data from a binary file of cell image data.
+	Create an object with information about sequence and
+	batch that will be filled with data obtained from the
+	queue by the FixedLengthRecordReader
+	
+	Args:
+		queue: FIFOQueue from which records will be read.
+		class_label: All images in a binary file must have same class. This is
+		their label.
+	Returns:
 		An object representing a single sequence with features
 			height: Patch image height in pixels
 			width: Patch image width in pixels
