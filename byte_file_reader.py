@@ -106,16 +106,14 @@ def read_data(r_filename, nr_filename, batch_size):
 
 	min_queue_examples = 10000 # Currently an arbitrary number
 
-	r_sequences, r_label_batch = _generate_half_batch(
-												r_result.sequence,
-												r_result.label,
-												min_queue_examples,
-												batch_size)
-	nr_sequences, nr_label_batch = _generate_half_batch(
-												nr_result.sequence,
-												nr_result.label,
-												min_queue_examples,
-												batch_size)
+	r_sequences, r_label_batch = _generate_half_batch( r_result.sequence,
+							  r_result.label,
+							  min_queue_examples,
+							  batch_size)
+	nr_sequences, nr_label_batch = _generate_half_batch( nr_result.sequence,
+							    nr_result.label,
+							    min_queue_examples,
+							    batch_size)
 
 	sequence_batches_joined = tf.concat([r_sequences, nr_sequences], 0)
 	label_batches_joined = tf.concat([r_label_batch, nr_label_batch], 0)
