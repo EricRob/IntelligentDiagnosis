@@ -11,7 +11,16 @@ if __name__ == '__main__':
 	bin_name = str(sys.argv[1])
 
 	# create a new byte file that can be appended
-	bin_file = open(bin_name, "ab+")
+	bin_train_file = open(str(bin_name + "_train.bin"), "ab+")
+	bin_valid_file = open(str(bin_name + "_valid.bin"), "ab+")
+	bin_test_file = open(str(bin_name + "_test.bin"), "ab+")
+
+	TRAIN_PORTION = 0.7
+	VALID_PORTION = 0.2
+	TEST_PORTION = 0.1
+
+	total_files = sum([len(files) for r, d, files in os.walk(".")])
+	counter = 1
 
 	# walk over all files in starting directory and sub-directories
 	for dirpath, dirnames, filenames in os.walk("."):
@@ -23,8 +32,17 @@ if __name__ == '__main__':
 			img = io.imread(os.path.join(dirpath,filename), as_grey=True)
 			arr = np.floor(img*255)
 			arr = np.uint8(arr)
-			bin_file.write(arr.tobytes())
+			if(counter / total_files < TRAIN_PORTION):
+				bin_train_file.write(arr.tobytes())
+				counter += 1
+			elif(counter / total_files < (TRAIN_PORTION + VALID_PORTION)):
+				bin_valid_file.write(arr.tobytes())
+				counter += 1
+			else:
+				bin_test_file.write(arr.tobytes())
 
-	bin_file.close()
+	bin_train_file.close()
+	bin_valid_file.close()
+	bin_test_file.close()
 
-	sys.exit(0)
+sys.exit(0)
