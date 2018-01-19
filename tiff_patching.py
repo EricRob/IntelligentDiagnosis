@@ -9,6 +9,7 @@ from matplotlib.image import imread
 from numpy.lib.stride_tricks import as_strided
 from math import floor
 from PIL import Image
+import pdb
 
 
 # Create patches and load into 6-dimension array with properties:
@@ -50,10 +51,11 @@ def extract_patches (original_path, patch_size, overlap):
 
 # Create a folder to hold patches if one doesn't exist, then
 # use it to save tiffs from the patches array
-def save_patches (original_path, sample_patches, mask_patches, keep_percentage, patch_size, overlap, sample_size):
+def save_patches (original_path, data_parent, label, sample_patches, mask_patches, keep_percentage, patch_size, overlap, sample_size):
 
     # Create enclosing folder to hold patch dump
-    folder_path = os.path.abspath(os.path.join(original_path, os.pardir)) + '/' + os.path.splitext(original_path)[0] + '_patches'
+    # folder_path = os.path.abspath(os.path.join(original_path, os.pardir)) + '/' + label + '/' + os.path.splitext(original_path)[0] + '_patches'
+    folder_path = os.path.join(os.path.abspath(os.path.join(original_path, os.pardir)), data_parent, label, (os.path.splitext(original_path)[0] + '_patches'))
     os.makedirs(folder_path, exist_ok=True)
     x_index = 0
     y_index = 0
@@ -92,23 +94,3 @@ def patch_threshold(single_mask_patch, keep_percentage, sample_size):
         return True
     
     return False
-
-if __name__ == '__main__':
-
-    # Specify image to be patched, size of each path, and amount of overlap between patches
-    original_path = str(sys.argv[1])
-    patch_size = int(sys.argv[2])
-    overlap = int(sys.argv[3])
-    sample_size = int(sys.argv[4])
-    keep_percentage = int(sys.argv[5])
-
-    mask_path = 'masks/mask_' + original_path
-
-    sample_patches = extract_patches(original_path, patch_size, overlap)
-    mask_patches = extract_patches(mask_path, patch_size, overlap)
-
-    num_patches = save_patches(original_path, sample_patches, mask_patches, keep_percentage, patch_size, overlap, sample_size)
-
-    print('Created ' + str(num_patches) + ' patches from ' + original_path)
-
-    sys.exit(0)
