@@ -72,6 +72,10 @@ flags.DEFINE_string("recur_data_path", None,
                     "Where the recurrence binary file is stored.")
 flags.DEFINE_string("nonrecur_data_path", None,
                     "Where the nonrecurrence binary file is stored.")
+flags.DEFINE_float("learning_rate", None,
+                    "hyperparameters of model's learning rate")
+flags.DEFINE_float("keep_prob", None,
+                    "hyperparameter of model's dropout rate")
 flags.DEFINE_string("eval_dir", "/tmp/recurrence_lstm/", "Directory where to write event logs." )
 flags.DEFINE_string("save_path", None,
                     "Model output directory.")
@@ -133,9 +137,8 @@ class SeqModel(object):
     #inputs = input_.input_data
     #pdb.set_trace()
     inputs = tf.reshape(input_.input_data,[self.batch_size, self.num_steps, -1])
-    
     if is_training and config.keep_prob < 1:
-      inputs = tf.nn.dropout(inputs, config.keep_prob)
+      inputs = tf.nn.dropout(tf.cast(inputs, tf.float32), config.keep_prob)
 
     output, state = self._build_rnn_graph(inputs, config, is_training)
 
@@ -172,6 +175,8 @@ class SeqModel(object):
     # Update the cost
     self._cost = tf.reduce_sum(loss)
     self._final_state = state
+
+
 
     if not is_training:
       return
@@ -375,15 +380,15 @@ class SmallConfig(object):
 class ColorConfig(object):
   """Color config."""
   init_scale = 0.1
-  learning_rate = 0.001 # 10e-5 to 5e-3
+  learning_rate = 0.001 # 10e-5 to 5e-3 #parameter
   max_grad_norm = 5
   num_layers = 1
   num_steps = 20 #50-500
-  hidden_size = 500 
+  hidden_size =500 
   max_epoch = 5 
   max_max_epoch = 50
-  keep_prob = 1.0 # 0.2-0.8
-  lr_decay = 1 / 1.15
+  keep_prob = 0.50 # 0.2-0.8 #parameter
+  lr_decay = 1
   batch_size = 50 #10-100
   num_classes = 2
   rnn_mode = BLOCK
@@ -446,13 +451,12 @@ class TestConfig(object):
   image_depth = 3
 
 
-def run_epoch(session, model, eval_op=None, verbose=False):
+def run_epoch(session, model, results_file, eval_op=None, verbose=False):
   """Runs the model on the given data."""
   start_time = time.time()
   costs = 0.0
   iters = 0
   state = session.run(model.initial_state)
-  total_loss = 0.0
 
   fetches = {
       "cost": model.cost,
@@ -505,12 +509,15 @@ def run_epoch(session, model, eval_op=None, verbose=False):
             result[3] += 1  # FP
 
     if verbose and step % (model.input.epoch_size // 10) == 10 and model.mode == "train":
-      print("%.3f loss: %.3f speed: %.0f images per second" %
+      print("%.3f loss: %.3f" %
             (step * 1.0 / model.input.epoch_size,
-              np.exp(costs / iters),
-              iters * model.input.batch_size * max(1, FLAGS.num_gpus) /
-             (time.time() - start_time)))
-    total_loss += np.exp(costs / iters) 
+              np.exp(costs / iters)
+              ))
+      results_file.writelines("%.3f loss: %.3f \n" %
+            (step * 1.0 / model.input.epoch_size,
+              np.exp(costs / iters)
+              ))
+    
     start_time = time.time()
   #pdb.set_trace()
   #print("Accuracy : %.3f  Epoch Size : %d " % (correct_num * 1.0 / model.input.epoch_size / model.input.batch_size, model.input.epoch_size)
@@ -522,7 +529,18 @@ def run_epoch(session, model, eval_op=None, verbose=False):
       (result[0] + result[2]) * 1.0 / np.sum(result), #Accurary
       result[0] + result[1], #Pos cases
       result[2] + result[3])) #Neg cases
-  print("Total Loss: %.2f" % total_loss)
+  print(model.mode + " loss: %.2f" % cost)
+
+  results_file.writelines(model.mode + " -- Sens : %.3f  Spec: %.3f  FDR : %.3f FOR: %.3f ACC: %.3f Pos : %d  Neg : %d \n" 
+    % (result[0] * 1.0 / (result[0] + result[1]), # Sensitivity
+      result[2] * 1.0 / (result[2] + result[3]), # Specificity
+      result[3] * 1.0 / (result[0] + result[3]), # False Discovery
+      result[1] * 1.0 / (result[1] + result[2]), # False Omission
+      (result[0] + result[2]) * 1.0 / np.sum(result), #Accurary
+      result[0] + result[1], #Pos cases
+      result[2] + result[3])) #Neg cases
+  results_file.writelines(model.mode + " loss: %.2f \n" % cost)
+
   return costs / model.input.epoch_size
 
 
@@ -547,6 +565,10 @@ def get_config():
     config.rnn_mode = BASIC
   return config
 
+def create_log_directory(eval_dir):
+  if tf.gfile.Exists(eval_dir):
+    tf.gfile.DeleteRecursively(eval_dir)
+  tf.gfile.MakeDirs(eval_dir)
 
 def main(_):
   if not FLAGS.recur_data_path:
@@ -554,6 +576,12 @@ def main(_):
 
   if not FLAGS.nonrecur_data_path:
     raise ValueError("Must set --nonrecur_data_path to recurrence data directory")
+
+  if not FLAGS.learning_rate:
+    raise ValueError("Must set --learning_rate hyperparameter")
+
+  if not FLAGS.keep_prob:
+    raise ValueError("Must set --keep_prob hyperparameter (dropout rate)")
   gpus = [
       x.name for x in device_lib.list_local_devices() if x.device_type == "GPU"
   ]
@@ -563,13 +591,25 @@ def main(_):
         "which is fewer than the requested --num_gpus=%d."
         % (len(gpus), FLAGS.num_gpus))
   config = get_config()
+  
+  config.learning_rate = FLAGS.learning_rate
+  config.keep_prob = FLAGS.keep_prob
+
+  results_file = open("overnight_results.txt", 'at+')
+  results_file.writelines("-----------------------\n")
+  results_file.writelines("Learning Rate: " + str(config.learning_rate) + ", Dropout: " + str(config.keep_prob) + "\n")
+
   eval_config = get_config()
   eval_config.batch_size = 10
   eval_config.num_steps = 50
 
-  with tf.Graph().as_default():
+  create_log_directory(FLAGS.eval_dir)
+
+  with tf.Graph().as_default() as g:
     initializer = tf.random_uniform_initializer(-config.init_scale,
                                                 config.init_scale)
+    # summary_op = tf.summary.merge_all()
+    # summary_writer = tf.summary.FileWriter(FLAGS.eval_dir, GRAPH)
 
     with tf.name_scope("Train"):
       train_input = SeqInput(
@@ -600,7 +640,6 @@ def main(_):
                          input_=test_input)
 
     models = {"Train": m, "Valid": mvalid, "Test": mtest}
-    #models = {"Train": m}
 
     for name, model in models.items():
       model.export_ops(name)
@@ -628,18 +667,19 @@ def main(_):
         m.assign_lr(session, config.learning_rate * lr_decay)
 
         print("Epoch: %d Learning rate: %.4f" % (i + 1, session.run(m.lr)))
+        results_file.writelines("Epoch: %d Learning rate: %.4f \n" % (i + 1, session.run(m.lr)))
         
-        avg_train_cost = run_epoch(session, m, eval_op=m.train_op, verbose=True)
+        avg_train_cost = run_epoch(session, m, results_file, eval_op=m.train_op, verbose=True)
         # print("Train Epoch: %d Avg Train Cost: %.3f" % (i + 1, avg_train_cost))
         #pdb.set_trace()
-        avg_valid_cost = run_epoch(session, mvalid, verbose=True)
+        avg_valid_cost = run_epoch(session, mvalid,results_file, verbose=True)
         # print("Valid Epoch: %d Avg Valid Cost: %.3f" % (i + 1, avg_valid_cost))
 
         training_loss.append(avg_train_cost)
 
-      avg_test_cost = run_epoch(session, mtest, verbose=True)
+      avg_test_cost = run_epoch(session, mtest, results_file, verbose=True)
       # print("Avg Test Cost: %.3f" % avg_test_cost)
-
+      results_file.close()
       if FLAGS.save_path:
         print("Saving model to %s." % FLAGS.save_path)
         sv.saver.save(session, FLAGS.save_path, global_step=sv.global_step)
