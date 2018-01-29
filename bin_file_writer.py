@@ -4,6 +4,7 @@ import sys
 from skimage import io
 from IPython import embed
 import math
+import pdb
 
 # ATTN: must be run within parent folder for set of patches
 
@@ -13,60 +14,73 @@ if __name__ == '__main__':
 	bin_name = str(sys.argv[1])
 	sequence_overlap_percentage = int(sys.argv[2]) / 100
 	num_steps = int(sys.argv[3])
+	mode = str(sys.argv[4])
 
-	# create a new byte file that can be appended
-	bin_train_file = open(str(bin_name + "_train.bin"), "ab+")
-	bin_valid_file = open(str(bin_name + "_valid.bin"), "ab+")
-	bin_test_file = open(str(bin_name + "_test.bin"), "ab+")
+	bin_file = open(bin_name + "_" + mode + ".bin", "ab+")
 
-	TRAIN_PORTION = 0.7
-	VALID_PORTION = 0.2
-	TEST_PORTION = 0.1
+	IMAGE_HEIGHT = 100
+	IMAGE_WIDTH = 100
+	IMAGE_DEPTH = 3
+	
+	image_bytes = IMAGE_HEIGHT * IMAGE_WIDTH * IMAGE_DEPTH
 
-	IMAGE_BYTES = 10000
-
-	write_array = np.zeros([num_steps, IMAGE_BYTES], dtype=np.uint8)
-	write_stride = int(math.ceil(num_steps * (1-sequence_overlap_percentage)))
+	write_array = np.zeros([num_steps, image_bytes], dtype=np.uint8)
+	write_stride = int(math.floor(num_steps * (1-sequence_overlap_percentage)))
 
 	total_files = sum([len(files) for r, d, files in os.walk(".")])
+	total_dirs = sum([len(d) for r, d, f in os.walk(".")])
 	counter = 0
+	dir_counter = 0
 
+	
 	# walk over all files in starting directory and sub-directories
-	for dirpath, dirnames, filenames in os.walk("."):
-		lst = os.listdir(dirpath)
-		lst.sort() # need files in order by index (see fix_patch_alpha) so time series is accurately fed to RNN]
-		
-		for filename in [f for f in lst if f.endswith(".tif")]:
-			
+	folder_file = open(bin_name + "_" + mode + "_subjects.txt")
+	subjects_list = folder_file.read().splitlines()
+	for subject in subjects_list:
+		dir_counter +=1
+		print("Writing " + subject + " -- %i/%i" % (dir_counter, len(subjects_list)))
+		image_list = os.listdir(subject)
+		#image_list.sort()
+		#pdb.set_trace()
+		img_dict = {}	
+		img_dict_y = {}
+		for image_name in image_list:
+			if image_name.endswith(".tif"):
+				#pdb.set_trace()
+				image_name_noex = os.path.splitext(image_name)[0]
+				image_name_chop = image_name_noex.split("_")
+				x_coord = int(image_name_chop[len(image_name_chop)-2])
+				y_coord = int(image_name_chop[len(image_name_chop)-1])
+				#pdb.set_trace()
+				img_dict[x_coord] = img_dict.get(x_coord, {})
+				img_dict[x_coord][y_coord] = image_name
+				#image_name
+		#pdb.set_trace()
+
+		# for key in sorted(img_dict.keys()): #.items():
+		# 	print(key) #, value)
+		# 	for key2 in sorted(img_dict[key].keys()):
+		# 		#print(key2)
+		# 		print(img_dict[key][key2])
+
+		for filename in [f for f in image_list if f.endswith(".tif")]:
 			counter +=1
+			img = io.imread(os.path.join(subject,filename))
+			arr = img.flatten()
 
-			# open tiff as grayscale, convert to unsiged 8-bit integer, and append to file
-			img = io.imread(os.path.join(dirpath,filename), as_grey=True)
-			arr = np.floor(img*255)
-			arr = np.uint8(arr)
-			arr = arr.flatten()
-
-			# At start of iterations, first fill write_array with data until it contains one complete sequence
 			if(counter <= num_steps):
 				write_array[counter-1,:] = arr
 			else: # Shift all images in the write_array to the left one step, then replace the last value with the new image data
 				write_array = np.roll(write_array, -1, axis=0)
 				write_array[num_steps - 1,:] = arr
-
+			
+			# if counter == write_stride:		
+			# 	pdb.set_trace()
+			write_count = counter - num_steps
 			# After the a new portion of the sequence has been added, add the write_array to the binary file
-			if(counter % write_stride == 0):
-				print(filename + " -- writing " + str(counter))
-				if(counter / total_files < TRAIN_PORTION):
-					bin_train_file.write(write_array.tobytes())
-				elif(counter / total_files < (TRAIN_PORTION + VALID_PORTION)):
-					bin_valid_file.write(write_array.tobytes())
-				else:
-					bin_test_file.write(write_array.tobytes())
-
-	bin_train_file.close()
-	bin_valid_file.close()
-	bin_test_file.close()
-
-	print("stride: " + str(write_stride))
+			if(write_count >= 0) & (write_count % write_stride == 0):
+				np.save(bin_file, write_array)
+				# pdb.set_trace()
+	bin_file.close()
 
 sys.exit(0)
