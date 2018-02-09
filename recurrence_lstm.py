@@ -15,19 +15,6 @@
 
 """Example / benchmark for building a PTB LSTM model.
 
-Trains the model described in:
-(Zaremba, et. al.) Recurrent Neural Network Regularization
-http://arxiv.org/abs/1409.2329
-
-There are 3 supported model configurations:
-===========================================
-| config | epochs | train | valid  | test
-===========================================
-| small  | 13     | 37.99 | 121.39 | 115.91
-| medium | 39     | 48.45 |  86.16 |  82.07
-| large  | 55     | 37.87 |  82.62 |  78.29
-The exact results may vary depending on the random initialization.
-
 The hyperparameters used in the model:
 - init_scale - the initial scale of the weights
 - learning_rate - the initial value of the learning rate
@@ -55,6 +42,7 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import os
+import sys
 
 import reader
 import util
@@ -68,8 +56,8 @@ flags = tf.flags
 logging = tf.logging
 
 flags.DEFINE_string(
-    "model", "small",
-    "A type of model. Possible options are: small, medium, large.")
+    "model", "color",
+    "Configuration for the current run. Can be small, medium, large, test, or (default) color.")
 flags.DEFINE_string("recur_data_path", None,
                     "Where the recurrence binary file is stored.")
 flags.DEFINE_string("nonrecur_data_path", None,
@@ -102,10 +90,10 @@ def data_type():
   return tf.float16 if FLAGS.use_fp16 else tf.float32
 
 def epoch_size(mode, batch_size, num_steps):
-  total_recur_patches = os.path.getsize(os.path.join(FLAGS.recur_data_path, 'recurrence_' + mode + '.bin')) // 30140
-  total_nonrecur_patches = os.path.getsize(os.path.join(FLAGS.nonrecur_data_path, 'nonrecurrence_' + mode + '.bin')) // 30140
-  return ((total_nonrecur_patches + total_recur_patches) // batch_size - 1) // num_steps
-
+  total_recur_patches = os.path.getsize(os.path.join(FLAGS.recur_data_path, 'recurrence_' + mode + '.bin')) // 30000
+  total_nonrecur_patches = os.path.getsize(os.path.join(FLAGS.nonrecur_data_path, 'nonrecurrence_' + mode + '.bin')) // 30000
+  max_patch = max(total_recur_patches, total_nonrecur_patches)
+  return ((max_patch * 2) // (num_steps * batch_size))
 
 class SeqInput(object):
   """The input data."""
@@ -124,7 +112,7 @@ class SeqInput(object):
     # else:
     #   epoch_mode = ((40680  // batch_size) - 1) // num_steps#int(epoch_max*(1/3))
     #pdb.set_trace()
-    self.epoch_size = epoch_mode #150
+    self.epoch_size = epoch_mode
     self.input_data, self.targets = reader.read_data([os.path.join(FLAGS.recur_data_path, str("recurrence_" + mode + ".bin"))],
                                                     [os.path.join(FLAGS.nonrecur_data_path, str("nonrecurrence_" + mode + ".bin"))],
                                                     config)
@@ -185,9 +173,9 @@ class SeqModel(object):
     value, indice = tf.nn.top_k(logits_scaled, 1)
 
     labels = tf.Variable(tf.to_int32(tf.ones([self.batch_size])))
-    batch = tf.Variable(tf.zeros([self._num_steps, config.image_size*config.image_size*config.image_depth]),tf.float32)
+    batch = tf.Variable(tf.zeros([self.batch_size, self._num_steps, config.image_size*config.image_size*config.image_depth]),tf.float32)
     self._labels = tf.assign(labels, input_.targets)
-    self._input_data = tf.assign(batch, input_.input_data[0,:,:])
+    self._input_data = tf.assign(batch, input_.input_data)
     self._output = indice
     # Update the cost
     self._cost = tf.reduce_sum(loss)
@@ -471,16 +459,17 @@ class ColorConfig(object):
   num_steps = 20 #50-500
   hidden_size = 100
   max_epoch = 5 
-  max_max_epoch = 20 #100 #50
+  max_max_epoch = 50 #100 #50
   keep_prob = 0.50 # 0.2-0.8 #parameter
   lr_decay = 1 #/ 1.15
-  batch_size = 10 #30 #10-100
+  batch_size = 30 #30 #10-100
   num_classes = 2
   rnn_mode = BLOCK
   image_size = 100
   image_depth = 3
   num_cnn_layers = 8
   cnn_filters = 20 # not used
+  test_mode = 0
 
 class MediumConfig(object):
   """Medium config."""
@@ -536,16 +525,18 @@ class TestConfig(object):
   rnn_mode = BLOCK
   image_size = 100
   image_depth = 3
+  test_mode = 1
 
-def save_sample_image(sequence_input, model, step):
-  arr = np.array(sequence_input)
+def save_sample_image(batch, label, model, step, epoch_count):
+  arr = batch
   seq_pixels = model.num_steps * model.image_size
-  arr = np.reshape(arr, (seq_pixels, model.image_size, model.image_depth))
-  img_name = "../samples/sample_sequence_" + str(step) + ".tif"
-  imsave(img_name, arr)
+  arr = np.reshape(arr, (model.batch_size, seq_pixels, model.image_size, model.image_depth))
+  for x in range(model.batch_size):
+    img_name = "../samples/" + model.mode + "_batch/epoch" + str(epoch_count) + "_batch" + str(step+1)  + "_seq" + str(x+1) + "_label" + str(np.array(label)[0,x])+ ".tif"
+    imsave(img_name, arr[x,:,:,:])
 
 
-def run_epoch(session, model, results_file, loss_file, eval_op=None, verbose=False):
+def run_epoch(session, model, results_file, loss_file, epoch_count, eval_op=None, verbose=False):
   """Runs the model on the given data."""
   start_time = time.time()
   costs = 0.0
@@ -576,7 +567,10 @@ def run_epoch(session, model, results_file, loss_file, eval_op=None, verbose=Fal
     output = vals["output"]
     labels = vals["labels"]
     input_data = vals["input_data"]
-    save_sample_image(input_data, model, step)
+
+    arr = np.array(input_data)
+    batch = arr[0,:,:,:]
+    # save_sample_image(batch, labels, model, step, epoch_count)
 
     costs += cost
     iters += model.input.num_steps
@@ -669,18 +663,24 @@ def create_log_directory(eval_dir):
 
 
 def main(_):
+  
+  stdout_backup = sys.stdout
+
+  config = get_config()
+
   if not FLAGS.recur_data_path:
     raise ValueError("Must set --recur_data_path to recurrence data directory")
 
   if not FLAGS.nonrecur_data_path:
     raise ValueError("Must set --nonrecur_data_path to recurrence data directory")
+  if config.test_mode == 0:
+    if not FLAGS.learning_rate:
+      raise ValueError("Must set --learning_rate hyperparameter")
 
-  if not FLAGS.learning_rate:
-    raise ValueError("Must set --learning_rate hyperparameter")
-
-  if not FLAGS.keep_prob:
-    raise ValueError("Must set --keep_prob hyperparameter (dropout rate)")
-  
+    if not FLAGS.keep_prob:
+      raise ValueError("Must set --keep_prob hyperparameter (dropout rate)")
+    config.learning_rate = FLAGS.learning_rate
+    config.keep_prob = FLAGS.keep_prob
   # gpus = [
   #     x.name for x in device_lib.list_local_devices() if x.device_type == "GPU"
   # ]
@@ -690,18 +690,13 @@ def main(_):
   #       "which is fewer than the requested --num_gpus=%d."
   #       % (len(gpus), FLAGS.num_gpus))
   
-  config = get_config()
-  
-  config.learning_rate = FLAGS.learning_rate
-  config.keep_prob = FLAGS.keep_prob
-
   results_prepend = FLAGS.results_prepend
 
   results_directory = "results/" + results_prepend + "_lr" + str(config.learning_rate) + "_kp" + str(int(config.keep_prob*100))
   base_directory = "/home/wanglab/Desktop/recurrence_seq_lstm"
   os.makedirs(base_directory, exist_ok=True)
   os.makedirs(os.path.join(base_directory, results_directory), exist_ok=True)
-  os.makedirs(os.path.join(base_directory,"samples"), exist_ok=True)
+  # os.makedirs(os.path.join(base_directory,"samples"), exist_ok=True)
   train_file = open(os.path.join(base_directory, results_directory,"train_results.txt"), 'at+')
   valid_file = open(os.path.join(base_directory, results_directory,"valid_results.txt"), 'at+')
   test_file = open(os.path.join(base_directory, results_directory,"test_results.txt"), 'at+')
@@ -768,7 +763,7 @@ def main(_):
     for model in models.values():
       model.import_ops()
     
-    sv = tf.train.Supervisor(logdir=FLAGS.save_path)
+    sv = tf.train.Supervisor(logdir=os.path.join(base_directory, results_directory, "model"))
     
     gpu_options = tf.GPUOptions(allow_growth=True) #per_process_gpu_memory_fraction=1.0)
     config_proto = tf.ConfigProto(allow_soft_placement=soft_placement, gpu_options=gpu_options)
@@ -791,32 +786,36 @@ def main(_):
     #pdb.set_trace()
 
     with sv.managed_session(config=config_proto) as session:
-      training_loss=[]
-      #pdb.set_trace()
-      for i in range(config.max_max_epoch):
-        lr_decay = config.lr_decay ** max(i + 1 - config.max_epoch, 0.0)
-        m.assign_lr(session, config.learning_rate * lr_decay)
+      if config.test_mode == 0:
+        training_loss=[]
+        #pdb.set_trace()
+        for i in range(config.max_max_epoch):
+          lr_decay = config.lr_decay ** max(i + 1 - config.max_epoch, 0.0)
+          m.assign_lr(session, config.learning_rate * lr_decay)
 
-        print("Epoch: %d Learning rate: %.4f" % (i + 1, session.run(m.lr)))
-        
-        avg_train_cost = run_epoch(session, m, train_file, loss_file, eval_op=m.train_op, verbose=True)
-        print("Train Epoch: %d Avg Train Cost: %.3f" % (i + 1, avg_train_cost))
-        avg_valid_cost = run_epoch(session, mvalid, valid_file, loss_file, verbose=True)
-        print("Valid Epoch: %d Avg Valid Cost: %.3f" % (i + 1, avg_valid_cost))
+          print("Epoch: %d Learning rate: %.6f" % (i + 1, session.run(m.lr)))
+          
+          avg_train_cost = run_epoch(session, m, train_file, loss_file, i + 1, eval_op=m.train_op, verbose=True)
+          print("Train Epoch: %d Avg Train Cost: %.3f" % (i + 1, avg_train_cost))
+          avg_valid_cost = run_epoch(session, mvalid, valid_file, loss_file, i + 1, verbose=True)
+          print("Valid Epoch: %d Avg Valid Cost: %.3f" % (i + 1, avg_valid_cost))
 
-        training_loss.append(avg_train_cost)
+          training_loss.append(avg_train_cost)
 
-        avg_test_cost = run_epoch(session, mtest, test_file, loss_file, verbose=True)
-        print("Avg Test Cost: %.3f" % avg_test_cost)
-   
-      train_file.close()
-      valid_file.close()
-      test_file.close()
-      loss_file.close()
+          avg_test_cost = run_epoch(session, mtest, test_file, loss_file, i + 1, verbose=True)
+          print("Avg Test Cost: %.3f" % avg_test_cost)
+     
+        train_file.close()
+        valid_file.close()
+        test_file.close()
+        loss_file.close()
 
-      if FLAGS.save_path:
-        print("Saving model to %s." % FLAGS.save_path)
-        sv.saver.save(session, FLAGS.save_path, global_step=sv.global_step)
-
+        print("Saving model to %s." % results_directory)
+        sv.saver.save(session, os.path.join(base_directory, results_directory, "model"), global_step=sv.global_step)
+      else:
+        sv.saver.restore(session, tf.train.latest_checkpoint(os.path.join(base_directory, results_directory, "model")))
+        test_loss = run_epoch(session, mtest, test_file, loss_file, verbose=False)
+        print("Test Loss: %.3f" % test_loss)
+  sys.stdout = stdout_backup
 if __name__ == "__main__":
   tf.app.run()

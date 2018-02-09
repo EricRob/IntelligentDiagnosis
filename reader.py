@@ -23,11 +23,11 @@ def _generate_half_batch(sequence, label, min_queue_examples, batch_size):
 
 	# Create a batch of this data type's sequences, half the size of the
 	# batch that will be used in the RNN 
-	#sequences, label_batch = tf.train.batch(
-	#	[sequence, label],
-	#	batch_size = (batch_size // 2),
-	#	num_threads = num_preprocess_threads,
-	#	capacity = (min_queue_examples + 3 * batch_size) // 2)
+	# sequences, label_batch = tf.train.batch(
+	# 	[sequence, label],
+	# 	batch_size = (batch_size // 2),
+	# 	num_threads = num_preprocess_threads,
+	# 	capacity = (min_queue_examples + 3 * batch_size) // 2)
 
 	sequences, label_batch = tf.train.shuffle_batch(
 		[sequence, label],
