@@ -7,6 +7,7 @@ import os
 import sys
 import math
 from PIL import Image
+from tensorflow import flags
 from skimage import io
 from random import shuffle
 import pdb
@@ -15,10 +16,14 @@ import tiff_patching
 
 warnings.simplefilter('ignore', Image.DecompressionBombWarning)
 
-# flags = tf.flags
+flags.DEFINE_integer("r_overlap", 0, "Percentage of overlap of recurrence samples")
+flags.DEFINE_integer("nr_overlap", 0, "Percentage of overlap of nonrecurrence samples")
+flags.DEFINE_integer("num_steps", None, "Number of steps in RNN sequence")
+flags.DEFINE_bool("recurrence_only", False, "Generate only recurrence binary file")
+flags.DEFINE_bool("nonrecurrence_only", False, "Generate nonrecurrence binary file only")
 
-# FLAGS = flags.FLAGS
 
+FLAGS = flags.FLAGS
 
 class PatchConfig(object):
 	original_path = "/home/wanglab/Desktop/recurrence_seq_lstm/image_data" # Location of image to be split into patches
@@ -29,9 +34,9 @@ class PatchConfig(object):
 	image_height = sample_size
 	image_width = sample_size
 	image_depth = 3
-	recurrence_overlap_percentage = 0
-	nonrecurrence_overlap_percentage = 0
-	num_steps = 20
+	recurrence_overlap_percentage = FLAGS.r_overlap
+	nonrecurrence_overlap_percentage = FLAGS.nr_overlap
+	num_steps = FLAGS.num_steps
 
 def create_patch_folder(filename, label, config):
 	
@@ -46,7 +51,7 @@ def create_patch_folder(filename, label, config):
 	sample_size = config.sample_size
 	keep_percentage = config.keep_percentage
 
-	file_path = os.path.join(config.original_path, filename)
+	file_path = os.path.join(config.original_path, "original_images", filename)
 
 	mask_path = "mask_" + filename
 	mask_path = os.path.join(config.original_path,"masks", mask_path)
@@ -170,8 +175,8 @@ def get_config():
 
 if __name__ == '__main__':
 
-	# if not FLAGS.data_dir:
-	# 	raise ValueError("Must set --data_dir to directory of original and mask images")
+	if not FLAGS.num_steps:
+		raise ValueError("Must set --num_steps to integer for number of steps in RNN sequence")
 
 	# if not FLAGS.num_steps:
 	# 	raise ValueError("must set --num_steps to the length of RNN sequence")
@@ -198,7 +203,9 @@ if __name__ == '__main__':
 			else:
 				print("Unable to find label for " + filename)
 
-	create_binary_mode_files("recurrence", config)
-	create_binary_mode_files("nonrecurrence", config)
+	if not FLAGS.nonrecurrence_only:
+		create_binary_mode_files("recurrence", config)
+	if not FLAGS.recurrence_only:
+		create_binary_mode_files("nonrecurrence", config)
 
 sys.exit(0)
