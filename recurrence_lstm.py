@@ -80,6 +80,8 @@ flags.DEFINE_string("rnn_mode", None,
                     "The low level implementation of lstm cell: one of CUDNN, "
                     "BASIC, and BLOCK, representing cudnn_lstm, basic_lstm, "
                     "and lstm_block_cell classes.")
+flags.DEFINE_integer("epochs", None, "Number of epochs to run")
+
 FLAGS = flags.FLAGS
 BASIC = "basic"
 CUDNN = "cudnn"
@@ -189,6 +191,7 @@ class SeqModel(object):
     grads, _ = tf.clip_by_global_norm(tf.gradients(self._cost, tvars),
                                       config.max_grad_norm)
     optimizer = tf.train.GradientDescentOptimizer(self._lr)
+    #optimizer = tf.train.RMSPropOptimizer(self._lr)
     self._train_op = optimizer.apply_gradients(
         zip(grads, tvars),
         global_step=tf.train.get_or_create_global_step())
@@ -251,7 +254,7 @@ class SeqModel(object):
 
     cell = tf.contrib.rnn.MultiRNNCell(
         [make_cell() for _ in range(config.num_layers)], state_is_tuple=True)
-
+    
     self._initial_state = cell.zero_state(config.batch_size, data_type())
     state = self._initial_state
     # Simplified version of tensorflow_models/tutorials/rnn/rnn.py's rnn().
@@ -274,7 +277,7 @@ class SeqModel(object):
 
   def _add_conv_layers(self, inputs, config, is_training):
 
-    filters = [32, 32] #[64, 128, 256, 256, 512, 512, 512, 512]
+    filters = [32, 32, 32, 32, 32, 32] #, 512, 512, 512, 512] #[64, 128, 256, 256, 512, 512, 512, 512]
     pools = [1, 2, 6, 8]
     
     cnn_batch_size = config.num_steps * config.batch_size
@@ -300,7 +303,7 @@ class SeqModel(object):
         #pdb.set_trace()  
         convolved = pool
 
-
+    #pdb.set_trace()
     return convolved
 
 
@@ -455,11 +458,11 @@ class ColorConfig(object):
   init_scale = 0.1
   learning_rate = 0.001 # 10e-5 to 5e-3 #parameter
   max_grad_norm = 5
-  num_layers = 1
+  num_layers = 2
   num_steps = 20 #50-500
-  hidden_size = 100
+  hidden_size = 500 #100
   max_epoch = 5 
-  max_max_epoch = 50 #100 #50
+  max_max_epoch = 20 #100 #50
   keep_prob = 0.50 # 0.2-0.8 #parameter
   lr_decay = 1 #/ 1.15
   batch_size = 30 #30 #10-100
@@ -692,6 +695,9 @@ def main(_):
   
   results_prepend = FLAGS.results_prepend
 
+  if FLAGS.epochs:
+    config.max_max_epoch = FLAGS.epochs
+
   results_directory = "results/" + results_prepend + "_lr" + str(config.learning_rate) + "_kp" + str(int(config.keep_prob*100))
   base_directory = "/home/wanglab/Desktop/recurrence_seq_lstm"
   os.makedirs(base_directory, exist_ok=True)
@@ -701,6 +707,10 @@ def main(_):
   valid_file = open(os.path.join(base_directory, results_directory,"valid_results.txt"), 'at+')
   test_file = open(os.path.join(base_directory, results_directory,"test_results.txt"), 'at+')
   loss_file = open(os.path.join(base_directory, results_directory,"loss_results.txt"), 'at+')
+
+  model_directory = os.path.join(base_directory, results_directory, "model")
+  #pdb.set_trace()
+  FLAGS.save_path = model_directory
 
   eval_config = get_config()
   #eval_config.batch_size = 10
@@ -713,12 +723,10 @@ def main(_):
                                                 config.init_scale)
     # summary_op = tf.summary.merge_all()
     # summary_writer = tf.summary.FileWriter(FLAGS.eval_dir, GRAPH)
-
+    #init_op = tf.global_variables_initializer()
     with tf.name_scope("Train"):
-      train_input = SeqInput(
-        config=config,
-        mode="train",
-        name="TrainInput")
+      train_input = SeqInput(config=config, mode="train", name="TrainInput")
+
       with tf.variable_scope("Model", reuse=None, initializer=initializer):
         m = SeqModel(is_training=True, config=config, input_=train_input)
       tf.summary.scalar("Training Loss", m.cost)
@@ -763,7 +771,7 @@ def main(_):
     for model in models.values():
       model.import_ops()
     
-    sv = tf.train.Supervisor(logdir=os.path.join(base_directory, results_directory, "model"))
+    sv = tf.train.Supervisor(logdir=FLAGS.save_path)
     
     gpu_options = tf.GPUOptions(allow_growth=True) #per_process_gpu_memory_fraction=1.0)
     config_proto = tf.ConfigProto(allow_soft_placement=soft_placement, gpu_options=gpu_options)
@@ -786,8 +794,10 @@ def main(_):
     #pdb.set_trace()
 
     with sv.managed_session(config=config_proto) as session:
+      #pdb.set_trace()
       if config.test_mode == 0:
         training_loss=[]
+        #session.run(init_op)
         #pdb.set_trace()
         for i in range(config.max_max_epoch):
           lr_decay = config.lr_decay ** max(i + 1 - config.max_epoch, 0.0)
@@ -809,10 +819,13 @@ def main(_):
         valid_file.close()
         test_file.close()
         loss_file.close()
-
-        print("Saving model to %s." % results_directory)
-        sv.saver.save(session, os.path.join(base_directory, results_directory, "model"), global_step=sv.global_step)
+      
+        if FLAGS.save_path:
+          print("Saving model to %s." % FLAGS.save_path)
+          sv.saver.save(session, FLAGS.save_path, global_step=sv.global_step)
+      
       else:
+        pdb.set_trace()
         sv.saver.restore(session, tf.train.latest_checkpoint(os.path.join(base_directory, results_directory, "model")))
         test_loss = run_epoch(session, mtest, test_file, loss_file, verbose=False)
         print("Test Loss: %.3f" % test_loss)

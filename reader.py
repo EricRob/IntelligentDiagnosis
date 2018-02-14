@@ -131,7 +131,7 @@ def read_data(r_filename, nr_filename, config):
 	r_result = _read_from_file(r_queue, config, class_label = 1)
 	nr_result = _read_from_file(nr_queue, config, class_label = 0)
 
-	min_queue_examples = 100 #000 # Currently an arbitrary number
+	min_queue_examples = 100 # Currently an arbitrary number
 
 	r_sequences, r_label_batch = _generate_half_batch(
 												r_result.sequence,
@@ -146,5 +146,6 @@ def read_data(r_filename, nr_filename, config):
 
 	sequence_batches_joined = tf.concat([r_sequences, nr_sequences], 0)
 	label_batches_joined = tf.concat([r_label_batch, nr_label_batch], 0)
+	#pdb.set_trace()
 
 	return sequence_batches_joined, label_batches_joined
