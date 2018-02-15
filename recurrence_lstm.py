@@ -82,6 +82,8 @@ flags.DEFINE_string("rnn_mode", None,
                     "BASIC, and BLOCK, representing cudnn_lstm, basic_lstm, "
                     "and lstm_block_cell classes.")
 flags.DEFINE_integer("epochs", None, "Number of epochs to run")
+flags.DEFINE_string("model_path", None, "Location of model to load from last checkpoint")
+flags.DEFINE_bool("save_model", False, "Save model and checkpoints for future testing")
 
 FLAGS = flags.FLAGS
 BASIC = "basic"
@@ -164,15 +166,15 @@ class SeqModel(object):
     output = tf.reshape(output, [self.batch_size, -1])
     fc_o = tf.layers.dense(output, class_size)	
 
-    subj_ids = tf.Variable(tf.zeros([self.batch_size]), tf.string)
+    subj_ids = tf.Variable(tf.zeros([self.batch_size], dtype=tf.string), name="subject_ids",dtype=tf.string)
     self.subject_ids = subj_ids # Need to update once reader takes in subject ids
     
     logits = fc_o	
-    unsc_logits = tf.Variable(tf.zeros([self.batch_size, config.num_classes]), tf.float32)
+    unsc_logits = tf.Variable(tf.zeros([self.batch_size, config.num_classes]), name="unscaled_logits",dtype=tf.float32)
     self.unscaled_logits = tf.assign(unsc_logits, logits)
 
     logits_scaled = tf.nn.softmax(logits)
-    sc_logits = tf.Variable(tf.zeros([self.batch_size, config.num_classes]), tf.float32)
+    sc_logits = tf.Variable(tf.zeros([self.batch_size, config.num_classes]), name="scaled_logits",dtype=tf.float32)
     self.scaled_logits = tf.assign(sc_logits, logits_scaled)
 
     # Loss:
@@ -526,22 +528,24 @@ class LargeConfig(object):
 
 
 class TestConfig(object):
-  """Tiny config, for testing."""
+  """Color config."""
   init_scale = 0.1
-  learning_rate = 1.0
-  max_grad_norm = 1
-  num_layers = 1
-  num_steps = 2
-  hidden_size = 2
-  max_epoch = 1
-  max_max_epoch = 1
-  keep_prob = 1.0
-  lr_decay = 0.5
-  batch_size = 20
+  learning_rate = 0.001 # 10e-5 to 5e-3 #parameter
+  max_grad_norm = 5
+  num_layers = 2
+  num_steps = 20 #50-500
+  hidden_size = 500 #100
+  max_epoch = 5 
+  max_max_epoch = 50 #100 #50
+  keep_prob = 0.50 # 0.2-0.8 #parameter
+  lr_decay = 1 #/ 1.15
+  batch_size = 10 #30 #10-100
   num_classes = 2
   rnn_mode = BLOCK
   image_size = 100
   image_depth = 3
+  num_cnn_layers = 8
+  cnn_filters = 20 # not used
   test_mode = 1
 
 def create_voting_file(subject_ids, labels, unscaled_logits, scaled_logits, output, csv_file):
@@ -576,7 +580,7 @@ def save_sample_image(input_data, label, model, step, epoch_count):
     imsave(img_name, arr[x,:,:,:])
 
 
-def run_epoch(session, model, results_file, csv_file, epoch_count, eval_op=None, verbose=False):
+def run_epoch(session, model, results_file, epoch_count, csv_file=None, eval_op=None, verbose=False, test_mode=False):
   """Runs the model on the given data."""
   start_time = time.time()
   costs = 0.0
@@ -614,10 +618,10 @@ def run_epoch(session, model, results_file, csv_file, epoch_count, eval_op=None,
     scaled_logits = vals["scaled_logits"]
     subject_ids = vals["subject_ids"]
 
-    create_voting_file(subject_ids, labels, unscaled_logits, scaled_logits, output, csv_file)
+    if test_mode:
+      create_voting_file(subject_ids, labels, unscaled_logits, scaled_logits, output, csv_file)
 
     # save_sample_image(input_data, labels, model, step, epoch_count)
-    pdb.set_trace()
     costs += cost
     iters += model.input.num_steps
 
@@ -741,20 +745,17 @@ def main(_):
   if FLAGS.epochs:
     config.max_max_epoch = FLAGS.epochs
 
-  results_directory = "results/" + results_prepend + "_lr" + str(config.learning_rate) + "_kp" + str(int(config.keep_prob*100))
   base_directory = "/home/wanglab/Desktop/recurrence_seq_lstm"
-  os.makedirs(base_directory, exist_ok=True)
-  os.makedirs(os.path.join(base_directory, results_directory), exist_ok=True)
-  # os.makedirs(os.path.join(base_directory,"samples"), exist_ok=True)
-  train_file = open(os.path.join(base_directory, results_directory,"train_results.txt"), 'at+')
-  valid_file = open(os.path.join(base_directory, results_directory,"valid_results.txt"), 'at+')
-  test_file = open(os.path.join(base_directory, results_directory,"test_results.txt"), 'at+')
-  csv_file = open(os.path.join(base_directory, results_directory,"voting_file.csv"), 'at+')
-  csv_file.write("output, label, unscaled_nr, unscaled_re, scaled_nr, scaled_re\n")
-
-  model_directory = os.path.join(base_directory, results_directory, "model")
-  #pdb.set_trace()
-  FLAGS.save_path = model_directory
+  if config.test_mode == 0:
+    results_directory = "results/" + results_prepend + "_lr" + str(config.learning_rate) + "_kp" + str(int(config.keep_prob*100))
+    os.makedirs(os.path.join(base_directory, results_directory), exist_ok=True)
+    # os.makedirs(os.path.join(base_directory,"samples"), exist_ok=True)
+    train_file = open(os.path.join(base_directory, results_directory,"train_results.txt"), 'at+')
+    valid_file = open(os.path.join(base_directory, results_directory,"valid_results.txt"), 'at+')
+    test_file = open(os.path.join(base_directory, results_directory,"test_results.txt"), 'at+')
+  else:
+    csv_file = open(os.path.join(FLAGS.recur_data_path,"../voting_file.csv"), 'at+')
+    csv_file.write("output, label, unscaled_nr, unscaled_re, scaled_nr, scaled_re\n")
 
   eval_config = get_config()
   #eval_config.batch_size = 10
@@ -814,8 +815,12 @@ def main(_):
     
     for model in models.values():
       model.import_ops()
+    if FLAGS.save_model:
+      model_save_directory = results_directory
+    else:
+      model_save_directory = ""
     
-    sv = tf.train.Supervisor(logdir=FLAGS.save_path)
+    sv = tf.train.Supervisor(logdir=model_save_directory)
     
     gpu_options = tf.GPUOptions(allow_growth=True) #per_process_gpu_memory_fraction=1.0)
     config_proto = tf.ConfigProto(allow_soft_placement=soft_placement, gpu_options=gpu_options)
@@ -835,7 +840,6 @@ def main(_):
         total_parameters += variable_parameters
     print(total_parameters)  
 
-    #pdb.set_trace()
 
     with sv.managed_session(config=config_proto) as session:
       #pdb.set_trace()
@@ -849,14 +853,14 @@ def main(_):
 
           print("Epoch: %d Learning rate: %.6f" % (i + 1, session.run(m.lr)))
           
-          avg_train_cost = run_epoch(session, m, train_file, csv_file, i + 1, eval_op=m.train_op, verbose=True)
+          avg_train_cost = run_epoch(session, m, train_file, i + 1, eval_op=m.train_op, verbose=True)
           print("Train Epoch: %d Avg Train Cost: %.3f" % (i + 1, avg_train_cost))
-          avg_valid_cost = run_epoch(session, mvalid, valid_file, csv_file, i + 1, verbose=True)
+          avg_valid_cost = run_epoch(session, mvalid, valid_file, i + 1, verbose=True)
           print("Valid Epoch: %d Avg Valid Cost: %.3f" % (i + 1, avg_valid_cost))
 
           training_loss.append(avg_train_cost)
 
-          avg_test_cost = run_epoch(session, mtest, test_file, csv_file, i + 1, verbose=True)
+          avg_test_cost = run_epoch(session, mtest, test_file, i + 1, verbose=True)
           print("Avg Test Cost: %.3f" % avg_test_cost)
      
         train_file.close()
@@ -869,9 +873,11 @@ def main(_):
           sv.saver.save(session, FLAGS.save_path, global_step=sv.global_step)
       
       else:
+        if not FLAGS.model_path:
+          raise ValueError("If running in test mode, must set --model_path flag to checkpoint directory")
         pdb.set_trace()
-        sv.saver.restore(session, tf.train.latest_checkpoint(os.path.join(base_directory, results_directory, "model")))
-        test_loss = run_epoch(session, mtest, test_file, csv_file, verbose=False)
+        sv.saver.restore(session, tf.train.latest_checkpoint(FLAGS.model_path))
+        test_loss = run_epoch(session, mtest, test_file, csv_file=csv_file, verbose=False, test_mode=True)
         print("Test Loss: %.3f" % test_loss)
   sys.stdout = stdout_backup
 if __name__ == "__main__":
