@@ -47,6 +47,7 @@ import sys
 import reader
 import util
 from scipy.misc import imsave
+import csv
 import pdb
 from IPython import embed
 
@@ -162,10 +163,17 @@ class SeqModel(object):
     output = tf.reshape(output, [self.batch_size, self.num_steps, size])
     output = tf.reshape(output, [self.batch_size, -1])
     fc_o = tf.layers.dense(output, class_size)	
+
+    subj_ids = tf.Variable(tf.zeros([self.batch_size]), tf.string)
+    self.subject_ids = subj_ids # Need to update once reader takes in subject ids
     
     logits = fc_o	
-    logits_scaled = tf.nn.softmax(logits)
+    unsc_logits = tf.Variable(tf.zeros([self.batch_size, config.num_classes]), tf.float32)
+    self.unscaled_logits = tf.assign(unsc_logits, logits)
 
+    logits_scaled = tf.nn.softmax(logits)
+    sc_logits = tf.Variable(tf.zeros([self.batch_size, config.num_classes]), tf.float32)
+    self.scaled_logits = tf.assign(sc_logits, logits_scaled)
 
     # Loss:
     loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
@@ -337,6 +345,9 @@ class SeqModel(object):
     tf.add_to_collection(util.with_prefix(self._name, "output"),self._output)
     tf.add_to_collection(util.with_prefix(self._name, "labels"),self._labels)
     tf.add_to_collection(util.with_prefix(self._name, "input_data"),self._input_data)
+    tf.add_to_collection(util.with_prefix(self._name, "unscaled_logits"), self.unscaled_logits)
+    tf.add_to_collection(util.with_prefix(self._name, "scaled_logits"), self.scaled_logits)
+    tf.add_to_collection(util.with_prefix(self._name, "subject_ids"), self.subject_ids)
     if self._is_training:
       ops.update(lr=self._lr, new_lr=self._new_lr, lr_update=self._lr_update)
       if self._rnn_params:
@@ -368,6 +379,9 @@ class SeqModel(object):
     self._output = tf.get_collection_ref(util.with_prefix(self._name, "output"))
     self._labels = tf.get_collection_ref(util.with_prefix(self._name, "labels"))
     self._input_data = tf.get_collection_ref(util.with_prefix(self._name, "input_data"))
+    self.unscaled_logits = tf.get_collection_ref(util.with_prefix(self._name, "unscaled_logits"))
+    self.scaled_logits = tf.get_collection_ref(util.with_prefix(self._name, "scaled_logits"))
+    self.subject_ids = tf.get_collection_ref(util.with_prefix(self._name, "subject_ids"))
     num_replicas = FLAGS.num_gpus if self._name == "Train" else 1
     self._initial_state = util.import_state_tuples(
         self._initial_state, self._initial_state_name, num_replicas)
@@ -462,10 +476,10 @@ class ColorConfig(object):
   num_steps = 20 #50-500
   hidden_size = 500 #100
   max_epoch = 5 
-  max_max_epoch = 20 #100 #50
+  max_max_epoch = 50 #100 #50
   keep_prob = 0.50 # 0.2-0.8 #parameter
   lr_decay = 1 #/ 1.15
-  batch_size = 30 #30 #10-100
+  batch_size = 10 #30 #10-100
   num_classes = 2
   rnn_mode = BLOCK
   image_size = 100
@@ -530,8 +544,31 @@ class TestConfig(object):
   image_depth = 3
   test_mode = 1
 
-def save_sample_image(batch, label, model, step, epoch_count):
-  arr = batch
+def create_voting_file(subject_ids, labels, unscaled_logits, scaled_logits, output, csv_file):
+  # output[0][x][0]
+  # labels[0][x]
+  # unscaled_logits[0][x][0,1]
+  # scaled_logits[0][x][0,1]
+  x = 0
+  writer = csv.writer(csv_file)
+  new_row = []
+  for subject in subject_ids[0]:
+    new_row = [output[0][x][0],
+              labels[0][x],
+              unscaled_logits[0][x][0],
+              unscaled_logits[0][x][1],
+              scaled_logits[0][x][0],
+              scaled_logits[0][x][1]
+              ]
+    writer.writerow(new_row)
+    x += 1
+  pdb.set_trace()
+
+
+
+def save_sample_image(input_data, label, model, step, epoch_count):
+  batch = np.array(input_data)
+  arr = batch[0,:,:,:]
   seq_pixels = model.num_steps * model.image_size
   arr = np.reshape(arr, (model.batch_size, seq_pixels, model.image_size, model.image_depth))
   for x in range(model.batch_size):
@@ -539,7 +576,7 @@ def save_sample_image(batch, label, model, step, epoch_count):
     imsave(img_name, arr[x,:,:,:])
 
 
-def run_epoch(session, model, results_file, loss_file, epoch_count, eval_op=None, verbose=False):
+def run_epoch(session, model, results_file, csv_file, epoch_count, eval_op=None, verbose=False):
   """Runs the model on the given data."""
   start_time = time.time()
   costs = 0.0
@@ -551,7 +588,10 @@ def run_epoch(session, model, results_file, loss_file, epoch_count, eval_op=None
       "final_state": model.final_state,
       "output": model.output,
       "labels": model.labels,
-      "input_data": model.input_data
+      "input_data": model.input_data,
+      "unscaled_logits": model.unscaled_logits,
+      "scaled_logits": model.scaled_logits,
+      "subject_ids": model.subject_ids
   }
   if eval_op is not None:
     fetches["eval_op"] = eval_op
@@ -570,11 +610,14 @@ def run_epoch(session, model, results_file, loss_file, epoch_count, eval_op=None
     output = vals["output"]
     labels = vals["labels"]
     input_data = vals["input_data"]
+    unscaled_logits = vals["unscaled_logits"]
+    scaled_logits = vals["scaled_logits"]
+    subject_ids = vals["subject_ids"]
 
-    arr = np.array(input_data)
-    batch = arr[0,:,:,:]
-    # save_sample_image(batch, labels, model, step, epoch_count)
+    create_voting_file(subject_ids, labels, unscaled_logits, scaled_logits, output, csv_file)
 
+    # save_sample_image(input_data, labels, model, step, epoch_count)
+    pdb.set_trace()
     costs += cost
     iters += model.input.num_steps
 
@@ -706,7 +749,8 @@ def main(_):
   train_file = open(os.path.join(base_directory, results_directory,"train_results.txt"), 'at+')
   valid_file = open(os.path.join(base_directory, results_directory,"valid_results.txt"), 'at+')
   test_file = open(os.path.join(base_directory, results_directory,"test_results.txt"), 'at+')
-  loss_file = open(os.path.join(base_directory, results_directory,"loss_results.txt"), 'at+')
+  csv_file = open(os.path.join(base_directory, results_directory,"voting_file.csv"), 'at+')
+  csv_file.write("output, label, unscaled_nr, unscaled_re, scaled_nr, scaled_re\n")
 
   model_directory = os.path.join(base_directory, results_directory, "model")
   #pdb.set_trace()
@@ -805,20 +849,20 @@ def main(_):
 
           print("Epoch: %d Learning rate: %.6f" % (i + 1, session.run(m.lr)))
           
-          avg_train_cost = run_epoch(session, m, train_file, loss_file, i + 1, eval_op=m.train_op, verbose=True)
+          avg_train_cost = run_epoch(session, m, train_file, csv_file, i + 1, eval_op=m.train_op, verbose=True)
           print("Train Epoch: %d Avg Train Cost: %.3f" % (i + 1, avg_train_cost))
-          avg_valid_cost = run_epoch(session, mvalid, valid_file, loss_file, i + 1, verbose=True)
+          avg_valid_cost = run_epoch(session, mvalid, valid_file, csv_file, i + 1, verbose=True)
           print("Valid Epoch: %d Avg Valid Cost: %.3f" % (i + 1, avg_valid_cost))
 
           training_loss.append(avg_train_cost)
 
-          avg_test_cost = run_epoch(session, mtest, test_file, loss_file, i + 1, verbose=True)
+          avg_test_cost = run_epoch(session, mtest, test_file, csv_file, i + 1, verbose=True)
           print("Avg Test Cost: %.3f" % avg_test_cost)
      
         train_file.close()
         valid_file.close()
         test_file.close()
-        loss_file.close()
+        csv_file.close()
       
         if FLAGS.save_path:
           print("Saving model to %s." % FLAGS.save_path)
@@ -827,7 +871,7 @@ def main(_):
       else:
         pdb.set_trace()
         sv.saver.restore(session, tf.train.latest_checkpoint(os.path.join(base_directory, results_directory, "model")))
-        test_loss = run_epoch(session, mtest, test_file, loss_file, verbose=False)
+        test_loss = run_epoch(session, mtest, test_file, csv_file, verbose=False)
         print("Test Loss: %.3f" % test_loss)
   sys.stdout = stdout_backup
 if __name__ == "__main__":
