@@ -107,16 +107,7 @@ class SeqInput(object):
     self.batch_size = batch_size = config.batch_size
     self.num_steps = num_steps = config.num_steps
     self.mode = mode
-    # epoch_max = ((270780 // batch_size) - 1) // num_steps #2000000 for ALL data
     epoch_mode = epoch_size(mode, batch_size, num_steps)
-    # if(mode == "train"):
-    #   # epoch_mode = (os.path.getsize(os.path.join(FLAGS.recur_data_path, 'recurrence_' + mode + '.bin')) + os.path.getsize(os.path.join(FLAGS.nonrecur_data_path, 'nonrecurrence_' + mode + '.bin'))) // 30000
-    #   epoch_mode = ((270780 // batch_size) - 1) // num_steps #int(epoch_max*(2/3))
-    # elif(mode == "valid"):
-    #   epoch_mode = ((151920 // batch_size) - 1) // num_steps #int(epoch_max*(1/3))
-    # else:
-    #   epoch_mode = ((40680  // batch_size) - 1) // num_steps#int(epoch_max*(1/3))
-    #pdb.set_trace()
     self.epoch_size = epoch_mode
     self.input_data, self.targets = reader.read_data([os.path.join(FLAGS.recur_data_path, str("recurrence_" + mode + ".bin"))],
                                                     [os.path.join(FLAGS.nonrecur_data_path, str("nonrecurrence_" + mode + ".bin"))],
@@ -481,7 +472,7 @@ class ColorConfig(object):
   max_max_epoch = 50 #100 #50
   keep_prob = 0.50 # 0.2-0.8 #parameter
   lr_decay = 1 #/ 1.15
-  batch_size = 10 #30 #10-100
+  batch_size = 30 #30 #10-100
   num_classes = 2
   rnn_mode = BLOCK
   image_size = 100
@@ -866,11 +857,10 @@ def main(_):
         train_file.close()
         valid_file.close()
         test_file.close()
-        csv_file.close()
       
-        if FLAGS.save_path:
-          print("Saving model to %s." % FLAGS.save_path)
-          sv.saver.save(session, FLAGS.save_path, global_step=sv.global_step)
+        if FLAGS.save_model:
+          print("Saving model to %s." % model_save_directory)
+          sv.saver.save(session, model_save_directory, global_step=sv.global_step)
       
       else:
         if not FLAGS.model_path:
