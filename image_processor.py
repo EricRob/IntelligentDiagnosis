@@ -11,16 +11,18 @@ from tensorflow import flags
 from skimage import io
 from random import shuffle
 import pdb
+import csv
 
 import tiff_patching
 
 warnings.simplefilter('ignore', Image.DecompressionBombWarning)
 
-flags.DEFINE_integer("r_overlap", 0, "Percentage of overlap of recurrence samples")
-flags.DEFINE_integer("nr_overlap", 0, "Percentage of overlap of nonrecurrence samples")
-flags.DEFINE_integer("num_steps", None, "Number of steps in RNN sequence")
+flags.DEFINE_integer("r_overlap", 75, "Percentage of overlap of recurrence samples")
+flags.DEFINE_integer("nr_overlap", 50, "Percentage of overlap of nonrecurrence samples")
+flags.DEFINE_integer("num_steps", 20, "Number of steps in RNN sequence")
 flags.DEFINE_bool("recurrence_only", False, "Generate only recurrence binary file")
 flags.DEFINE_bool("nonrecurrence_only", False, "Generate nonrecurrence binary file only")
+flags.DEFINE_string("mode", None, "Create binary file for a specific mode between train, validation, or test")
 
 
 FLAGS = flags.FLAGS
@@ -93,9 +95,9 @@ def create_binary_file(label, mode, config):
 	bin_path = os.path.join(os.path.abspath(config.original_path), label, bin_name)
 
 	if label == "recurrence" :
-		sequence_overlap_percentage = config.recurrence_overlap_percentage / 100
+		sequence_overlap_percentage = FLAGS.r_overlap / 100
 	else:
-		sequence_overlap_percentage = config.nonrecurrence_overlap_percentage / 100
+		sequence_overlap_percentage = FLAGS.nr_overlap / 100
 
 	num_steps = config.num_steps
 	print("*********" + label + " " + mode + "*************")
@@ -109,6 +111,7 @@ def create_binary_file(label, mode, config):
 	image_bytes = IMAGE_HEIGHT * IMAGE_WIDTH * IMAGE_DEPTH
 
 	write_array = np.zeros([num_steps, image_bytes], dtype=np.uint8)
+	patch_coord_array = np.zeros([num_steps, 2], dtype=np.uint32)
 	write_stride = int(math.floor(num_steps * (1-sequence_overlap_percentage)))
 
 	total_files = sum([len(files) for r, d, files in os.walk(".")])
@@ -120,12 +123,21 @@ def create_binary_file(label, mode, config):
 	# walk over all files in starting directory and sub-directories
 	subjects_file = open(os.path.join(config.original_path, "per_mode_subjects", subjects_file), "r")
 	subjects_list = subjects_file.read().splitlines()
-	
+	subject_to_ID_csv_file = open(os.path.join(config.original_path,"filename_to_patient_ID.csv"),"r")
+	reader = csv.reader(subject_to_ID_csv_file, delimiter=",")
+	subject_to_ID_dict = {}
+	for line in reader:
+		subject_to_ID_dict[line[0]] = line[1]
+
 	for subject in subjects_list:
 		dir_counter +=1
 		print("Writing " + subject + " -- %i/%i" % (dir_counter, len(subjects_list)))
 		patch_folder_path = os.path.join(os.path.abspath(config.original_path), label, subject)
 		image_list = os.listdir(patch_folder_path)
+
+		patient_ID_byte_string = str.encode(subject_to_ID_dict[subject])
+		padded_subject_file_name = "{:<100}".format(subject[:-8])
+		image_base_name = str.encode(padded_subject_file_name)
 				
 		img_dict = {}	
 		for image_name in image_list:
@@ -146,22 +158,44 @@ def create_binary_file(label, mode, config):
 
 				if(counter <= num_steps):
 					write_array[counter-1,:] = arr
+					patch_coord_array[counter-1, 0] = x_key
+					patch_coord_array[counter-1, 1] = y_key
 				else: # Shift all images in the write_array to the left one step, then replace the last value with the new image data
 					write_array = np.roll(write_array, -1, axis=0)
+					patch_coord_array = np.roll(patch_coord_array, -1, axis=0)
+
 					write_array[num_steps - 1,:] = arr
+					patch_coord_array[num_steps-1, 0] = x_key
+					patch_coord_array[num_steps-1, 1] = y_key
+
 
 				write_count = counter - num_steps
 
 				# After the a new portion of the sequence has been added, add the write_array to the binary file
 				if(write_count >= 0) & (write_count % write_stride == 0):
 					writing = np.reshape(write_array, (num_steps, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_DEPTH))
-					bin_file.write(writing)					
+					coord_str = create_string_from_coord_array(patch_coord_array, config.num_steps)
+					bin_file.write(patient_ID_byte_string)
+					bin_file.write(image_base_name)
+					bin_file.write(str.encode(coord_str))
+					bin_file.write(writing)
 	bin_file.close()
 
 def create_binary_mode_files(label, config):
-	create_binary_file(label, "train", config)
-	create_binary_file(label, "valid", config)
-	create_binary_file(label, "test", config)
+	if not FLAGS.mode:
+		create_binary_file(label, "train", config)
+		create_binary_file(label, "valid", config)
+		create_binary_file(label, "test", config)
+	else:
+		create_binary_file(label, FLAGS.mode, config)
+
+def create_string_from_coord_array(coord_array, num_steps):
+	coord_string = ""
+	for y in np.arange(num_steps):
+		for x in np.arange(2):
+			coord = "{:<6}".format(coord_array[y][x])
+			coord_string = coord_string + coord
+	return coord_string
 
 def get_config():
   # """Get model config."""
@@ -193,15 +227,13 @@ if __name__ == '__main__':
 	nr_list = nr_file.read().splitlines()
 	
 
-	for file in os.listdir(og_images_directory):
+	for file in sorted(os.listdir(og_images_directory)):
 		if file.endswith(".tif"):
 			filename = os.fsdecode(file)
 			if filename in r_list:
 				create_patch_folder(filename, "recurrence", config)
 			elif filename in nr_list:
 				create_patch_folder(filename, "nonrecurrence", config)
-			else:
-				print("Unable to find label for " + filename)
 
 	if not FLAGS.nonrecurrence_only:
 		create_binary_mode_files("recurrence", config)

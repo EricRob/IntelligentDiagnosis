@@ -6,7 +6,7 @@ from IPython import embed
 Py3 = sys.version_info[0] == 3
 
 
-def _generate_half_batch(sequence, label, min_queue_examples, batch_size):
+def _generate_half_batch(record_data, min_queue_examples, batch_size, num_steps, test_mode):
 	""" Construct half of a queued batch, all of the same label
 	Args:
 		sequence: 2-D tensor of [sequence_length, sequence_length*image_bytes]
@@ -20,28 +20,36 @@ def _generate_half_batch(sequence, label, min_queue_examples, batch_size):
 	"""
 
 	num_preprocess_threads = 16
-
+	
+	sequence = record_data.sequence
+	label = record_data.label
+	subject = record_data.subject_id
+	name = record_data.image_name
+	coords = record_data.patch_coords
 	# Create a batch of this data type's sequences, half the size of the
 	# batch that will be used in the RNN 
-	# sequences, label_batch = tf.train.batch(
-	# 	[sequence, label],
-	# 	batch_size = (batch_size // 2),
-	# 	num_threads = num_preprocess_threads,
-	# 	capacity = (min_queue_examples + 3 * batch_size) // 2)
-
-	sequences, label_batch = tf.train.shuffle_batch(
-		[sequence, label],
-		batch_size = (batch_size // 2),
-		num_threads = num_preprocess_threads,
-		capacity = (min_queue_examples + 3 * batch_size) // 2,
-		min_after_dequeue = min_queue_examples // 2)
+	if test_mode:
+		sequences, label_half_batch, subjects, names, coordss = tf.train.batch(
+			[sequence, label, subject, name, coords],
+			batch_size = (batch_size // 2),
+			num_threads = num_preprocess_threads,
+			capacity = (min_queue_examples + 3 * batch_size) // 2)
+	else:
+		sequences, label_half_batch, subjects, names, coordss = tf.train.shuffle_batch(
+			[sequence, label, subject, name, coords],
+			batch_size = (batch_size // 2),
+			num_threads = num_preprocess_threads,
+			capacity = (min_queue_examples + 3 * batch_size) // 2,
+			min_after_dequeue = min_queue_examples // 2)
 
 	# Remove one dimension from label_batch
-	#pdb.set_trace()
-	label_batch = tf.reshape(label_batch, [batch_size // 2])
+	label_half_batch = tf.reshape(label_half_batch, [batch_size // 2])
+	subjects = tf.reshape(subjects, [batch_size // 2, record_data.patient_ID_bytes])
+	names = tf.reshape(names, [batch_size // 2, record_data.image_name_bytes])
+	coordss = tf.reshape(coordss, [batch_size // 2, record_data.coord_bytes])
 
 
-	return sequences, label_batch
+	return sequences, label_half_batch, subjects, names, coordss
 
 
 def _read_from_file(queue, config, class_label):
@@ -77,13 +85,13 @@ def _read_from_file(queue, config, class_label):
 	result.width = config.image_size
 	result.depth = config.image_depth
 	result.sequence_length = config.num_steps
-	#
-	# ***** This is where the 30140 would be specified ******
-	#
-	# ***** The reshaping across the script becomes difficult, particularly with the normalization. ******
-	#
-	result.image_bytes = (result.height * result.width * result.depth) #+ 140
-	record_bytes = result.image_bytes * result.sequence_length
+	result.image_bytes = (result.height * result.width * result.depth)
+
+	result.patient_ID_bytes = 5
+	result.image_name_bytes = 100
+	result.coord_bytes = config.num_steps*2*6 # x and y coords, each are uint32 rather than uint8
+
+	record_bytes = result.image_bytes * result.sequence_length + result.coord_bytes + result.patient_ID_bytes + result.image_name_bytes
 	
 	# Create reader with the fixed record length and
 	# read off one record
@@ -91,7 +99,23 @@ def _read_from_file(queue, config, class_label):
 	result.key, value = reader.read(queue)
 
 	# Convert from a string to a vector of uint8 that is record_bytes long.
-	sequence_data = tf.decode_raw(value, tf.uint8)
+	record_data = tf.decode_raw(value, tf.uint8)
+	result.subject_id = tf.reshape(tf.strided_slice(record_data,
+		[0],
+		[result.patient_ID_bytes]),
+		[result.patient_ID_bytes])
+	result.image_name = tf.reshape(tf.strided_slice(record_data,
+		[result.patient_ID_bytes],
+		[result.patient_ID_bytes + result.image_name_bytes]),
+		[result.image_name_bytes])
+	result.patch_coords = tf.reshape(tf.strided_slice(record_data,
+		[result.patient_ID_bytes + result.image_name_bytes],
+		[result.patient_ID_bytes + result.image_name_bytes + result.coord_bytes]),
+		[result.coord_bytes])
+
+	sequence_data = tf.strided_slice(record_data,
+		[result.patient_ID_bytes + result.image_name_bytes + result.coord_bytes],
+		[record_bytes])
 
 	# Treat sequence as an image of dimensions [(steps * patch height), width, depth] and normalize per image
 	# Then reshape back to a single sequence
@@ -103,14 +127,11 @@ def _read_from_file(queue, config, class_label):
 
 		result.sequence = tf.reshape(normalized_sequence,
 								[result.sequence_length, result.height * result.width * result.depth]) #result.image_bytes])
-
-	#pdb.set_trace()								
+								
 	# result.sequence = tf.cast(result.sequence,tf.float32)
 	result.label = tf.constant(class_label, shape=[1])
 
 	return result
-
-
 
 def read_data(r_filename, nr_filename, config):
 	"""Construct input for Sequence RNN using reader ops.
@@ -133,19 +154,23 @@ def read_data(r_filename, nr_filename, config):
 
 	min_queue_examples = 100 # Currently an arbitrary number
 
-	r_sequences, r_label_batch = _generate_half_batch(
-												r_result.sequence,
-												r_result.label,
+	r_sequences, r_label_batch, r_subjects, r_names, r_coords = _generate_half_batch(
+												r_result,
 												min_queue_examples,
-												batch_size = config.batch_size)
-	nr_sequences, nr_label_batch = _generate_half_batch(
-												nr_result.sequence,
-												nr_result.label,
+												batch_size = config.batch_size,
+												num_steps = config.num_steps,
+												test_mode = config.test_mode)
+	nr_sequences, nr_label_batch, nr_subjects, nr_names, nr_coords = _generate_half_batch(
+												nr_result,
 												min_queue_examples,
-												batch_size = config.batch_size)
+												batch_size = config.batch_size,
+												num_steps = config.num_steps,
+												test_mode = config.test_mode)
 
 	sequence_batches_joined = tf.concat([r_sequences, nr_sequences], 0)
 	label_batches_joined = tf.concat([r_label_batch, nr_label_batch], 0)
-	#pdb.set_trace()
+	subjects_batches_joined = tf.concat([r_subjects, nr_subjects], 0)
+	names_batches_joined = tf.concat([r_names, nr_names], 0)
+	coords_batches_joined = tf.concat([r_coords, nr_coords], 0)
 
-	return sequence_batches_joined, label_batches_joined
+	return sequence_batches_joined, label_batches_joined, subjects_batches_joined, names_batches_joined, coords_batches_joined

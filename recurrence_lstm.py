@@ -94,11 +94,11 @@ BLOCK = "block"
 def data_type():
   return tf.float16 if FLAGS.use_fp16 else tf.float32
 
-def epoch_size(mode, batch_size, num_steps):
-  total_recur_patches = os.path.getsize(os.path.join(FLAGS.recur_data_path, 'recurrence_' + mode + '.bin')) // 30000
-  total_nonrecur_patches = os.path.getsize(os.path.join(FLAGS.nonrecur_data_path, 'nonrecurrence_' + mode + '.bin')) // 30000
-  max_patch = max(total_recur_patches, total_nonrecur_patches)
-  return ((max_patch * 2) // (num_steps * batch_size))
+def epoch_size(mode, batch_size, num_steps, image_size):
+  total_recur_sequences = os.path.getsize(os.path.join(FLAGS.recur_data_path, 'recurrence_' + mode + '.bin')) // (image_size * image_size * 3 * num_steps + 345)
+  total_nonrecur_sequences = os.path.getsize(os.path.join(FLAGS.nonrecur_data_path, 'nonrecurrence_' + mode + '.bin')) // (image_size * image_size * 3 * num_steps + 345)
+  max_sequences_per_label = max(total_recur_sequences, total_nonrecur_sequences)
+  return ((max_sequences_per_label * 2) //  batch_size)
 
 class SeqInput(object):
   """The input data."""
@@ -107,9 +107,9 @@ class SeqInput(object):
     self.batch_size = batch_size = config.batch_size
     self.num_steps = num_steps = config.num_steps
     self.mode = mode
-    epoch_mode = epoch_size(mode, batch_size, num_steps)
+    epoch_mode = epoch_size(mode, batch_size, num_steps, config.image_size)
     self.epoch_size = epoch_mode
-    self.input_data, self.targets = reader.read_data([os.path.join(FLAGS.recur_data_path, str("recurrence_" + mode + ".bin"))],
+    self.input_data, self.targets, self.subjects, self.names, self.coords = reader.read_data([os.path.join(FLAGS.recur_data_path, str("recurrence_" + mode + ".bin"))],
                                                     [os.path.join(FLAGS.nonrecur_data_path, str("nonrecurrence_" + mode + ".bin"))],
                                                     config)
 
@@ -143,8 +143,6 @@ class SeqModel(object):
     fc1 = tf.layers.dense(fc_in, fc_size[0], activation=tf.nn.relu)
     #fc2 = tf.layers.dense(fc1, fc_size[1], activation=tf.nn.relu)
 
-    #pdb.set_trace()
-
     inputs = tf.reshape(fc1, [self.batch_size, self._num_steps, fc_size[len(fc_size)-1]])
     if is_training and config.keep_prob < 1:
       inputs = tf.layers.dropout(tf.cast(inputs, tf.float32), 1-config.keep_prob, training=is_training)
@@ -152,13 +150,14 @@ class SeqModel(object):
     output, state = self._build_rnn_graph(inputs, config, is_training)
 
     # Fully connected layer after rnn
-    #pdb.set_trace()
     output = tf.reshape(output, [self.batch_size, self.num_steps, size])
     output = tf.reshape(output, [self.batch_size, -1])
     fc_o = tf.layers.dense(output, class_size)	
 
-    subj_ids = tf.Variable(tf.zeros([self.batch_size], dtype=tf.string), name="subject_ids",dtype=tf.string)
-    self.subject_ids = subj_ids # Need to update once reader takes in subject ids
+
+    self.subject_ids = input_.subjects
+    self.names = input_.names
+    self.coords = input_.coords
     
     logits = fc_o	
     unsc_logits = tf.Variable(tf.zeros([self.batch_size, config.num_classes]), name="unscaled_logits",dtype=tf.float32)
@@ -300,11 +299,9 @@ class SeqModel(object):
         if i+1 in pools:
           pool = tf.layers.max_pooling2d(conv, pool_size=2, strides=2, padding="same", name="pool1")
         else:
-          pool = conv
-        #pdb.set_trace()  
+          pool = conv 
         convolved = pool
 
-    #pdb.set_trace()
     return convolved
 
 
@@ -341,6 +338,8 @@ class SeqModel(object):
     tf.add_to_collection(util.with_prefix(self._name, "unscaled_logits"), self.unscaled_logits)
     tf.add_to_collection(util.with_prefix(self._name, "scaled_logits"), self.scaled_logits)
     tf.add_to_collection(util.with_prefix(self._name, "subject_ids"), self.subject_ids)
+    tf.add_to_collection(util.with_prefix(self._name, "names"), self.names)
+    tf.add_to_collection(util.with_prefix(self._name, "coords"), self.coords)
     if self._is_training:
       ops.update(lr=self._lr, new_lr=self._new_lr, lr_update=self._lr_update)
       if self._rnn_params:
@@ -375,6 +374,8 @@ class SeqModel(object):
     self.unscaled_logits = tf.get_collection_ref(util.with_prefix(self._name, "unscaled_logits"))
     self.scaled_logits = tf.get_collection_ref(util.with_prefix(self._name, "scaled_logits"))
     self.subject_ids = tf.get_collection_ref(util.with_prefix(self._name, "subject_ids"))
+    self.names = tf.get_collection_ref(util.with_prefix(self._name, "names"))
+    self.coords = tf.get_collection_ref(util.with_prefix(self._name, "coords"))
     num_replicas = FLAGS.num_gpus if self._name == "Train" else 1
     self._initial_state = util.import_state_tuples(
         self._initial_state, self._initial_state_name, num_replicas)
@@ -472,7 +473,7 @@ class ColorConfig(object):
   max_max_epoch = 50 #100 #50
   keep_prob = 0.50 # 0.2-0.8 #parameter
   lr_decay = 1 #/ 1.15
-  batch_size = 30 #30 #10-100
+  batch_size = 2 #30 #10-100
   num_classes = 2
   rnn_mode = BLOCK
   image_size = 100
@@ -530,7 +531,7 @@ class TestConfig(object):
   max_max_epoch = 50 #100 #50
   keep_prob = 0.50 # 0.2-0.8 #parameter
   lr_decay = 1 #/ 1.15
-  batch_size = 10 #30 #10-100
+  batch_size = 30 #30 #10-100
   num_classes = 2
   rnn_mode = BLOCK
   image_size = 100
@@ -539,7 +540,7 @@ class TestConfig(object):
   cnn_filters = 20 # not used
   test_mode = 1
 
-def create_voting_file(subject_ids, labels, unscaled_logits, scaled_logits, output, csv_file):
+def create_voting_file(subject_ids, names, labels, unscaled_logits, scaled_logits, output, coords, csv_file):
   # output[0][x][0]
   # labels[0][x]
   # unscaled_logits[0][x][0,1]
@@ -548,16 +549,18 @@ def create_voting_file(subject_ids, labels, unscaled_logits, scaled_logits, outp
   writer = csv.writer(csv_file)
   new_row = []
   for subject in subject_ids[0]:
-    new_row = [output[0][x][0],
+    new_row = [subject_ids[0][x].tobytes().decode("utf-8") ,
+                names[0][x].tobytes().decode("utf-8").rstrip() ,
+              output[0][x][0],
               labels[0][x],
               unscaled_logits[0][x][0],
               unscaled_logits[0][x][1],
               scaled_logits[0][x][0],
-              scaled_logits[0][x][1]
+              scaled_logits[0][x][1],
+              coords[0][x].tobytes().decode("utf-8") 
               ]
     writer.writerow(new_row)
     x += 1
-  pdb.set_trace()
 
 
 
@@ -566,6 +569,7 @@ def save_sample_image(input_data, label, model, step, epoch_count):
   arr = batch[0,:,:,:]
   seq_pixels = model.num_steps * model.image_size
   arr = np.reshape(arr, (model.batch_size, seq_pixels, model.image_size, model.image_depth))
+  os.makedirs("../samples/" + model.mode + "_batch", exist_ok=True)
   for x in range(model.batch_size):
     img_name = "../samples/" + model.mode + "_batch/epoch" + str(epoch_count) + "_batch" + str(step+1)  + "_seq" + str(x+1) + "_label" + str(np.array(label)[0,x])+ ".tif"
     imsave(img_name, arr[x,:,:,:])
@@ -586,7 +590,9 @@ def run_epoch(session, model, results_file, epoch_count, csv_file=None, eval_op=
       "input_data": model.input_data,
       "unscaled_logits": model.unscaled_logits,
       "scaled_logits": model.scaled_logits,
-      "subject_ids": model.subject_ids
+      "subject_ids": model.subject_ids,
+      "names": model.names,
+      "coords": model.coords
   }
   if eval_op is not None:
     fetches["eval_op"] = eval_op
@@ -608,11 +614,12 @@ def run_epoch(session, model, results_file, epoch_count, csv_file=None, eval_op=
     unscaled_logits = vals["unscaled_logits"]
     scaled_logits = vals["scaled_logits"]
     subject_ids = vals["subject_ids"]
-
+    names = vals["names"]
+    coords = vals["coords"]
     if test_mode:
-      create_voting_file(subject_ids, labels, unscaled_logits, scaled_logits, output, csv_file)
-
-    # save_sample_image(input_data, labels, model, step, epoch_count)
+      create_voting_file(subject_ids, names, labels, unscaled_logits, scaled_logits, output, coords, csv_file)
+      save_sample_image(input_data, labels, model, step, epoch_count)
+    
     costs += cost
     iters += model.input.num_steps
 
@@ -638,8 +645,7 @@ def run_epoch(session, model, results_file, epoch_count, csv_file=None, eval_op=
             result[2] += 1  # TN
           else:
             result[3] += 1  # FP
-    
-    #pdb.set_trace()        
+         
     if verbose and step % (model.input.epoch_size // 10) == 10 and model.mode == "train":
       print("%.3f loss: %.3f" %
             (step * 1.0 / model.input.epoch_size,
@@ -737,16 +743,18 @@ def main(_):
     config.max_max_epoch = FLAGS.epochs
 
   base_directory = "/home/wanglab/Desktop/recurrence_seq_lstm"
-  if config.test_mode == 0:
-    results_directory = "results/" + results_prepend + "_lr" + str(config.learning_rate) + "_kp" + str(int(config.keep_prob*100))
-    os.makedirs(os.path.join(base_directory, results_directory), exist_ok=True)
+  results_directory = "results/" + results_prepend + "_lr" + str(config.learning_rate) + "_kp" + str(int(config.keep_prob*100))
+  results_path = os.path.join(base_directory, results_directory)
+  os.makedirs(os.path.join(base_directory, results_directory), exist_ok=True)
+  if config.test_mode == 0:  
     # os.makedirs(os.path.join(base_directory,"samples"), exist_ok=True)
-    train_file = open(os.path.join(base_directory, results_directory,"train_results.txt"), 'at+')
-    valid_file = open(os.path.join(base_directory, results_directory,"valid_results.txt"), 'at+')
-    test_file = open(os.path.join(base_directory, results_directory,"test_results.txt"), 'at+')
+    train_file = open(os.path.join(results_path,"train_results.txt"), 'at+')
+    valid_file = open(os.path.join(results_path,"valid_results.txt"), 'at+')
+    test_file = open(os.path.join(results_path,"test_results.txt"), 'at+')
   else:
-    csv_file = open(os.path.join(FLAGS.recur_data_path,"../voting_file.csv"), 'at+')
-    csv_file.write("output, label, unscaled_nr, unscaled_re, scaled_nr, scaled_re\n")
+    test_file = open(os.path.join(results_path,"secondary_test_results.txt"), 'at+')
+    csv_file = open(os.path.join(results_path,"voting_file.csv"), 'at+')
+    csv_file.write("ID,names,output,label,unscaled_nr,unscaled_rec,scaled_nr,scaled_rec,coords\n")
 
   eval_config = get_config()
   #eval_config.batch_size = 10
@@ -807,11 +815,9 @@ def main(_):
     for model in models.values():
       model.import_ops()
     if FLAGS.save_model:
-      model_save_directory = results_directory
-    else:
-      model_save_directory = ""
+      FLAGS.save_path = os.path.join(results_path,"model")
     
-    sv = tf.train.Supervisor(logdir=model_save_directory)
+    sv = tf.train.Supervisor(logdir=FLAGS.save_path)
     
     gpu_options = tf.GPUOptions(allow_growth=True) #per_process_gpu_memory_fraction=1.0)
     config_proto = tf.ConfigProto(allow_soft_placement=soft_placement, gpu_options=gpu_options)
@@ -833,11 +839,8 @@ def main(_):
 
 
     with sv.managed_session(config=config_proto) as session:
-      #pdb.set_trace()
       if config.test_mode == 0:
         training_loss=[]
-        #session.run(init_op)
-        #pdb.set_trace()
         for i in range(config.max_max_epoch):
           lr_decay = config.lr_decay ** max(i + 1 - config.max_epoch, 0.0)
           m.assign_lr(session, config.learning_rate * lr_decay)
@@ -859,15 +862,14 @@ def main(_):
         test_file.close()
       
         if FLAGS.save_model:
-          print("Saving model to %s." % model_save_directory)
-          sv.saver.save(session, model_save_directory, global_step=sv.global_step)
+          print("Saving model to %s." % FLAGS.save_path)
+          sv.saver.save(session, FLAGS.save_path, global_step=sv.global_step)
       
       else:
         if not FLAGS.model_path:
           raise ValueError("If running in test mode, must set --model_path flag to checkpoint directory")
-        pdb.set_trace()
         sv.saver.restore(session, tf.train.latest_checkpoint(FLAGS.model_path))
-        test_loss = run_epoch(session, mtest, test_file, csv_file=csv_file, verbose=False, test_mode=True)
+        test_loss = run_epoch(session, mtest, test_file, 1, csv_file=csv_file, verbose=False, test_mode=True)
         print("Test Loss: %.3f" % test_loss)
   sys.stdout = stdout_backup
 if __name__ == "__main__":
