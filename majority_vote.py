@@ -5,13 +5,17 @@ Module documentation.
 
 # Imports
 import sys
+import os
 import csv
 import pdb
 import collections
 import numpy as np
-#import os
+from termcolor import cprint
+from tensorflow import flags
 
 # Global variables
+flags.DEFINE_string("info","subject","Display per subject or per image info")
+FLAGS = flags.FLAGS
 
 # Function declarations
 
@@ -22,7 +26,7 @@ def softmax(x):
 	e_x = np.exp(x - np.max(x))
 	return e_x / e_x.sum(axis=0)
 
-def initialize_subject(data, row):
+def initialize_image(data, row):
     data["id"]=row[0]
     data["name"]=row[1]
     data["output"]=[row[2]]
@@ -32,7 +36,10 @@ def initialize_subject(data, row):
     data["scaled_nr"]=[float(row[6])]
     data["scaled_rec"]=[float(row[7])]
 
-def add_data_to_existing_subect(data, row):
+def initialize_subject(subj_dict, row):
+    subj_dict[row[0]]=[row[1]]
+
+def add_data_to_existing_image(data, row):
     data["output"].append(row[2])
     data["labels"].append(row[3])
     data["unscaled_nr"].append(float(row[4]))
@@ -40,45 +47,111 @@ def add_data_to_existing_subect(data, row):
     data["scaled_nr"].append(float(row[6]))
     data["scaled_rec"].append(float(row[7]))
 
+def add_data_to_existing_subject(image_list, row):
+    if row[1] not in image_list:
+        image_list.append(row[1])
+
 def give_string_label(label):
     if label == '1':
         return "RECURRENT"
     else:
         return "NONRECURRENT"
 
+def across_image_avg(sums, lens):
+    return sums / lens
+
+def print_info_per_image(image_dict):
+    for image_name in image_dict:
+        c1 = collections.Counter(image_dict[image_name]["output"]).most_common(1)
+        truth_label = give_string_label(image_dict[image_name]["labels"][0])
+        network_label = give_string_label(c1[0][0])
+        if truth_label == network_label:
+            color = 'on_green'
+        else:
+            color = 'on_red'
+        cprint("\n" + image_name, 'white', color, attrs=['bold'])
+        print("Label: " + truth_label)
+        print("Network majority vote: %s, %i%% (%i/%i) " % (network_label, int((c1[0][1])/len(image_dict[image_name]["output"])*100), int(c1[0][1]), len(image_dict[image_name]["output"])))
+        unscaled_nr = average_value(image_dict[image_name], "unscaled_nr")
+        unscaled_rec = average_value(image_dict[image_name], "unscaled_rec")
+        scaled_nr = average_value(image_dict[image_name], "scaled_nr")
+        scaled_rec = average_value(image_dict[image_name], "scaled_rec")
+        smax1 = softmax([unscaled_nr, unscaled_rec])
+
+        print("Unscaled average: %.3f, %.3f" % (unscaled_nr, unscaled_rec) )
+        print("Softmax of unscaled average: " + str(smax1))
+        print("Scaled Average: %.3f, %.3f" % (scaled_nr, scaled_rec))
+
+def print_info_per_subject(subject_dict, image_dict):
+    for subject in subject_dict:
+            unscaled_nr_sum = 0
+            unscaled_rec_sum = 0
+            scaled_nr_sum = 0
+            scaled_rec_sum = 0
+            unscaled_nr_len = 0
+            unscaled_rec_len = 0
+            scaled_nr_len = 0
+            scaled_rec_len = 0
+            network_outputs = []
+
+            for image in subject_dict[subject]:
+                network_outputs = network_outputs + image_dict[image]["output"]
+                unscaled_nr_sum += sum(image_dict[image]["unscaled_nr"])
+                unscaled_nr_len += len(image_dict[image]["unscaled_nr"])
+                unscaled_rec_sum += sum(image_dict[image]["unscaled_rec"])
+                unscaled_rec_len += len(image_dict[image]["unscaled_rec"])
+                scaled_rec_sum += sum(image_dict[image]["scaled_rec"])
+                scaled_rec_len += len(image_dict[image]["scaled_rec"])
+                scaled_nr_sum += sum(image_dict[image]["scaled_nr"])
+                scaled_nr_len += len(image_dict[image]["scaled_nr"])
+            c2 = collections.Counter(network_outputs).most_common(1)
+            avg_unscaled_nr = across_image_avg(unscaled_nr_sum, unscaled_nr_len)
+            avg_unscaled_rec = across_image_avg(unscaled_rec_sum, unscaled_rec_len)
+            avg_scaled_nr = across_image_avg(scaled_nr_sum, scaled_nr_len)
+            avg_scaled_rec = across_image_avg(scaled_rec_sum, scaled_rec_len)
+            subject_truth_label = give_string_label(image_dict[image]["labels"][0])
+            subject_network_label = give_string_label(c2[0][0])
+            smax_subject = softmax([avg_unscaled_nr, avg_unscaled_rec])
+            if subject_truth_label == subject_network_label:
+                color = 'on_green'
+            else:
+                color = 'on_red'
+            header_line = "\n"+subject + " -- " + str(len(subject_dict[subject])) + " images"
+            cprint(header_line, 'white', color, attrs=['bold'])
+            print("Label: "+ subject_truth_label)
+            print("Network majority vote: %s, %i%% (%i/%i) " % (subject_network_label, int((c2[0][1])/len(network_outputs)*100), int(c2[0][1]), len(network_outputs)))
+            print("Unscaled average: %.3f, %.3f" % (avg_unscaled_nr, avg_unscaled_rec) )
+            print("Softmax of unscaled average: " + str(smax_subject))
+            print("Scaled Average: %.3f, %.3f" % (avg_scaled_nr, avg_scaled_rec))
 def main():
     args = sys.argv[1:]
     filename = args[0]
+    image_dict={}
     subject_dict={}
 
     with open(filename, newline="") as csvfile:
-    	csvreader = csv.reader(csvfile, delimiter=",")
-    	header = next(csvreader) # Discard header line
-    	for row in csvreader:
-    		if row[1] not in subject_dict:
-    			subject_dict[row[1]]={}
-    			initialize_subject(subject_dict[row[1]], row)
-    		else:
-    			add_data_to_existing_subect(subject_dict[row[1]], row)
-    for image_name in subject_dict:
-    	print("\n******  " + image_name + "  ******")
-    	print("Label: " + give_string_label(subject_dict[image_name]["labels"][0]))
-    	c1 = collections.Counter(subject_dict[image_name]["output"]).most_common(1)
+        csvreader = csv.reader(csvfile, delimiter=",")
+        header = next(csvreader) # Discard header line
+        for row in csvreader:
+            if row[1] not in image_dict:
+                image_dict[row[1]]={}
+                initialize_image(image_dict[row[1]], row)
+            else:
+                add_data_to_existing_image(image_dict[row[1]], row)
+            if row[0] not in subject_dict:
+                initialize_subject(subject_dict, row)
+            else:
+                add_data_to_existing_subject(subject_dict[row[0]], row)
+    if FLAGS.info == "subject":
+        print_info_per_subject(subject_dict, image_dict)
+    elif FLAGS.info == "image":
+        print_info_per_image(image_dict)
+    else:
+        print_info_per_subject(subject_dict, image_dict)
+        print_info_per_image(image_dict)
 
-    	print("Network majority vote: %s, %i%% (%i/%i) " % (give_string_label(c1[0][0]), int((c1[0][1])/len(subject_dict[image_name]["output"])*100), int(c1[0][1]), len(subject_dict[image_name]["output"])))
-    	unscaled_nr = average_value(subject_dict[image_name], "unscaled_nr")
-    	unscaled_rec = average_value(subject_dict[image_name], "unscaled_rec")
-    	scaled_nr = average_value(subject_dict[image_name], "scaled_nr")
-    	scaled_rec = average_value(subject_dict[image_name], "scaled_rec")
-    	smax1 = softmax([unscaled_nr, unscaled_rec])
-    	smax2 = softmax([scaled_nr, scaled_rec])
-
-    	print("Unscaled average: %.3f, %.3f" % (unscaled_nr, unscaled_rec) )
-    	print("Softmax of unscaled average: " + str(smax1))
-    	print("Scaled Average: %.3f, %.3f" % (scaled_nr, scaled_rec))
-    	    	
     if not args:
-        print('usage: enter location of csv file as first and only parameter ')
+        print('usage: enter location of csv file as first parameter, enter --info="image" for only images, "subject" for only subjects, or any other value for all info')
         sys.exit(1)
 
 
