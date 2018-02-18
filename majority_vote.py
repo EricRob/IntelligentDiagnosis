@@ -10,8 +10,10 @@ import csv
 import pdb
 import collections
 import numpy as np
+import matplotlib.pyplot as plt
 from termcolor import cprint
 from tensorflow import flags
+from IPython import embed
 
 # Global variables
 flags.DEFINE_string("info","subject","Display per subject or per image info")
@@ -72,6 +74,36 @@ def give_string_label(label):
     else:
         return "NONRECURRENT"
 
+def create_histogram(subject_image_list, image_dict, net_label):
+    scaled_hist_list = []
+    unscaled_hist_list = []
+    if net_label == "RECURRENT":
+        scaled = "scaled_rec"
+        unscaled = "unscaled_rec"
+    else:
+        scaled = "scaled_nr"
+        unscaled = "unscaled_nr"
+    for image in subject_image_list:
+        scaled_hist_list = scaled_hist_list + image_dict[image][scaled]
+        unscaled_hist_list = unscaled_hist_list + image_dict[image][unscaled]
+    scaled_arr = np.array(scaled_hist_list)
+    unscaled_arr = np.array(unscaled_hist_list)
+    plt.hist(scaled_arr, bins='auto')
+    plt.title("Scaled histogram of sequences from " + image)
+    os.makedirs("histogram", exist_ok=True)
+    plt.savefig(os.path.join("histogram", image_dict[image]["id"] + ".jpg"))
+    plt.clf()
+
+def create_heat_map(image_name):
+    pass
+def ops_within_patches(image):
+    for coord in image:
+        nr_sum = sum(image[coord]["nr"])
+        rec_sum = sum(image[coord]["rec"])
+        nr_len = len(image[coord]["nr"])
+        rec_len = len(image[coord]["rec"])
+        image[coord]["softmax"] = softmax([nr_sum, rec_sum])
+        image[coord]["avg_softmax"] = softmax([nr_sum / nr_len, rec_sum / rec_len])
 def create_coord_list(row):
     raw = row.split()
     coord_array = []
@@ -131,8 +163,11 @@ def print_info_per_subject(subject_dict, image_dict):
             avg_unscaled_rec = across_image_avg(unscaled_rec_sum, unscaled_rec_len)
             avg_scaled_nr = across_image_avg(scaled_nr_sum, scaled_nr_len)
             avg_scaled_rec = across_image_avg(scaled_rec_sum, scaled_rec_len)
+            
             subject_truth_label = give_string_label(image_dict[image]["labels"][0])
             subject_network_label = give_string_label(c2[0][0])
+            
+            create_histogram(subject_dict[subject], image_dict, subject_network_label)
             smax_subject = softmax([avg_unscaled_nr, avg_unscaled_rec])
             if subject_truth_label == subject_network_label:
                 color = 'on_green'
@@ -165,6 +200,9 @@ def main():
                 initialize_subject(subject_dict, row)
             else:
                 add_data_to_existing_subject(subject_dict[row[0]], row)
+    for image_name in image_dict:
+        image_patch_data = ops_within_patches(image_dict[image_name]["coords"])
+        create_heat_map(image_name)
     if FLAGS.info == "subject":
         print_info_per_subject(subject_dict, image_dict)
     elif FLAGS.info == "image":
