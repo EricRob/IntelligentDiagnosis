@@ -57,6 +57,13 @@ def give_string_label(label):
     else:
         return "NONRECURRENT"
 
+def create_coord_list(row):
+    raw = row.split()
+    coord_array = []
+    for x, y in zip(raw[0::2], raw[1::2]):
+        coord_array.append((int(x), int(y)))
+    return coord_array
+
 def across_image_avg(sums, lens):
     return sums / lens
 
@@ -123,6 +130,7 @@ def print_info_per_subject(subject_dict, image_dict):
             print("Unscaled average: %.3f, %.3f" % (avg_unscaled_nr, avg_unscaled_rec) )
             print("Softmax of unscaled average: " + str(smax_subject))
             print("Scaled Average: %.3f, %.3f" % (avg_scaled_nr, avg_scaled_rec))
+
 def main():
     args = sys.argv[1:]
     filename = args[0]
@@ -133,6 +141,8 @@ def main():
         csvreader = csv.reader(csvfile, delimiter=",")
         header = next(csvreader) # Discard header line
         for row in csvreader:
+            coord_array = create_coord_list(row[8])
+            pdb.set_trace()
             if row[1] not in image_dict:
                 image_dict[row[1]]={}
                 initialize_image(image_dict[row[1]], row)
@@ -149,7 +159,6 @@ def main():
     else:
         print_info_per_subject(subject_dict, image_dict)
         print_info_per_image(image_dict)
-
     if not args:
         print('usage: enter location of csv file as first parameter, enter --info="image" for only images, "subject" for only subjects, or any other value for all info')
         sys.exit(1)
