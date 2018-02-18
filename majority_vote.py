@@ -35,6 +35,12 @@ def initialize_image(data, row):
     data["unscaled_rec"]=[float(row[5])]
     data["scaled_nr"]=[float(row[6])]
     data["scaled_rec"]=[float(row[7])]
+    data["coords"] = {}
+    coord_array = create_coord_list(row[8])
+    for coord in coord_array:
+        data["coords"][coord]={}
+        data["coords"][coord]["nr"]=[float(row[4])]
+        data["coords"][coord]["rec"]=[float(row[5])]
 
 def initialize_subject(subj_dict, row):
     subj_dict[row[0]]=[row[1]]
@@ -46,6 +52,15 @@ def add_data_to_existing_image(data, row):
     data["unscaled_rec"].append(float(row[5]))
     data["scaled_nr"].append(float(row[6]))
     data["scaled_rec"].append(float(row[7]))
+    coord_array = create_coord_list(row[8])
+    for coord in coord_array:
+        if coord not in data["coords"]:
+            data["coords"][coord]={}
+            data["coords"][coord]["nr"] = [float(row[4])]
+            data["coords"][coord]["rec"] = [float(row[5])]
+        else:
+            data["coords"][coord]["nr"].append(float(row[4]))
+            data["coords"][coord]["rec"].append(float(row[5]))
 
 def add_data_to_existing_subject(image_list, row):
     if row[1] not in image_list:
@@ -141,8 +156,6 @@ def main():
         csvreader = csv.reader(csvfile, delimiter=",")
         header = next(csvreader) # Discard header line
         for row in csvreader:
-            coord_array = create_coord_list(row[8])
-            pdb.set_trace()
             if row[1] not in image_dict:
                 image_dict[row[1]]={}
                 initialize_image(image_dict[row[1]], row)
