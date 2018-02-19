@@ -11,7 +11,6 @@ from math import floor
 from PIL import Image
 import pdb
 
-
 # Create patches and load into 6-dimension array with properties:
 # (patch column, patches row, 0, patch_size, patch_size, depth of original image)
 def extract_patches (original_path, patch_size, overlap):
@@ -68,7 +67,7 @@ def save_patches (original_path, data_parent, label, sample_patches, mask_patche
         for j in range(sample_patches.shape[1]):
             single_mask_patch = mask_patches[i,j,0,:,:,:]
             
-            if (patch_threshold(single_mask_patch, keep_percentage, sample_size)):
+            if (patch_threshold(single_mask_patch, keep_percentage)):
                 # name is [orignal title]_[top left x pixel]_[top left y pixel]
                 name = folder_path + '/' +  os.path.splitext(original_path)[0] + '_' + str(x_index) + '_' + str(y_index) + '.tif'
                 img = Image.fromarray(sample_patches[i,j,0,:,:,:], 'RGB')
@@ -83,7 +82,7 @@ def save_patches (original_path, data_parent, label, sample_patches, mask_patche
     return patch_count
 
 # Determine if patch should be saved depending on the amount of background space
-def patch_threshold(single_mask_patch, keep_percentage, sample_size):
+def patch_threshold(single_mask_patch, keep_percentage):
     arr = single_mask_patch[:,:,0]
     counter = 0
     for x in np.nditer(arr):
@@ -94,3 +93,26 @@ def patch_threshold(single_mask_patch, keep_percentage, sample_size):
         return True
     
     return False
+
+def seg_threshold_list(seg_patches, config):
+    meet_threshold_list = []
+    x_index = 0
+    y_index = 0
+    for i in range(seg_patches.shape[0]):
+        for j in range(seg_patches[1]):
+            if (seg_above_threshold(seg_patches[i,j,0,:,:,0], config.keep_percentage)):
+                meet_threshold_list = meet_threshold_list + [(x_index, y_index)]
+            x_index += floor(config.patch_size*(1-config.overlap*.01))
+        x_index = 0
+        y_index += floor(config.patch_size*(1-config.overlap*.01))
+
+    return meet_threshold_list
+
+def seg_above_threshold(single_seg_patch, keep_percentage):
+    total_pixels = single_seg_patch.shape[0]*single_seg_patch.shape[1]
+    patch_sum = np.sum(single_seg_patch)
+    patch_threshold = total_pixels * (1-keep_percentage/100) * 255
+    if patch_sum <= patch_threshold:
+        return True
+    else:
+        return False

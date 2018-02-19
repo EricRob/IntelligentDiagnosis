@@ -17,6 +17,7 @@ from IPython import embed
 
 # Global variables
 flags.DEFINE_string("info","subject","Display per subject or per image info")
+flags.DEFINE_string("histogram_path", None, "Path for saving folder of histogram images")
 FLAGS = flags.FLAGS
 
 # Function declarations
@@ -74,24 +75,36 @@ def give_string_label(label):
     else:
         return "NONRECURRENT"
 
-def create_histogram(subject_image_list, image_dict, net_label):
-    scaled_hist_list = []
-    unscaled_hist_list = []
-    if net_label == "RECURRENT":
-        scaled = "scaled_rec"
-        unscaled = "unscaled_rec"
-    else:
-        scaled = "scaled_nr"
-        unscaled = "unscaled_nr"
+
+def create_histogram_data_per_subject(subject_image_list, image_dict, truth_label):
+    scaled_rec_hist_list = []
+    unscaled_rec_hist_list = []
+    
+    scaled_nr_hist_list = []
+    unscaled_nr_hist_list = []
+
     for image in subject_image_list:
-        scaled_hist_list = scaled_hist_list + image_dict[image][scaled]
-        unscaled_hist_list = unscaled_hist_list + image_dict[image][unscaled]
-    scaled_arr = np.array(scaled_hist_list)
-    unscaled_arr = np.array(unscaled_hist_list)
-    plt.hist(scaled_arr, bins='auto')
-    plt.title("Scaled histogram of sequences from " + image)
-    os.makedirs("histogram", exist_ok=True)
-    plt.savefig(os.path.join("histogram", image_dict[image]["id"] + ".jpg"))
+        scaled_rec_hist_list = scaled_rec_hist_list + image_dict[image]["scaled_rec"]
+        unscaled_rec_hist_list = unscaled_rec_hist_list + image_dict[image]["unscaled_rec"]
+
+        scaled_nr_hist_list = scaled_nr_hist_list + image_dict[image]["scaled_nr"]
+        unscaled_nr_hist_list = unscaled_nr_hist_list + image_dict[image]["unscaled_nr"]
+
+    scaled_rec_arr = np.array(scaled_rec_hist_list)
+    unscaled_rec_arr = np.array(unscaled_rec_hist_list)
+    scaled_nr_arr = np.array(scaled_nr_hist_list)
+    unscaled_nr_arr = np.array(unscaled_nr_hist_list)
+
+    bins = np.linspace(0,1,100)
+
+    if truth_label == "RECURRENT":
+        plt.hist(scaled_rec_arr, bins, alpha=0.8, label=truth_label)
+    else:
+        plt.hist(scaled_nr_arr, bins, alpha=0.8, label=truth_label)
+
+    plt.legend(loc="upper right")
+    plt.title("Scaled histogram of sequences from " + image_dict[image]["id"])
+    plt.savefig(os.path.join(FLAGS.histogram_path, image_dict[image]["id"] + ".jpg"))
     plt.clf()
 
 def create_heat_map(image_name):
@@ -167,7 +180,7 @@ def print_info_per_subject(subject_dict, image_dict):
             subject_truth_label = give_string_label(image_dict[image]["labels"][0])
             subject_network_label = give_string_label(c2[0][0])
             
-            create_histogram(subject_dict[subject], image_dict, subject_network_label)
+            create_histogram_data_per_subject(subject_dict[subject], image_dict, subject_truth_label)
             smax_subject = softmax([avg_unscaled_nr, avg_unscaled_rec])
             if subject_truth_label == subject_network_label:
                 color = 'on_green'
@@ -183,7 +196,12 @@ def print_info_per_subject(subject_dict, image_dict):
 
 def main():
     args = sys.argv[1:]
-    filename = args[0]
+    base_path = args[0]
+    filename = os.path.join(base_path, "voting_file.csv")
+    if not FLAGS.histogram_path:
+        FLAGS.histogram_path = os.path.join(base_path, "histograms")
+    os.makedirs(FLAGS.histogram_path, exist_ok=True)
+
     image_dict={}
     subject_dict={}
 

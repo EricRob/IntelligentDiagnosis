@@ -12,6 +12,7 @@ from skimage import io
 from random import shuffle
 import pdb
 import csv
+from shutil import copyfile
 
 import tiff_patching
 
@@ -22,6 +23,7 @@ flags.DEFINE_integer("nr_overlap", 50, "Percentage of overlap of nonrecurrence s
 flags.DEFINE_integer("num_steps", 20, "Number of steps in RNN sequence")
 flags.DEFINE_bool("recurrence_only", False, "Generate only recurrence binary file")
 flags.DEFINE_bool("nonrecurrence_only", False, "Generate nonrecurrence binary file only")
+flags.DEFINE_string("seg_path", None, "Location of segmentations folder")
 flags.DEFINE_string("mode", None, "Create binary file for a specific mode between train, validation, or test")
 
 
@@ -40,39 +42,73 @@ class PatchConfig(object):
 	nonrecurrence_overlap_percentage = FLAGS.nr_overlap
 	num_steps = FLAGS.num_steps
 
+def create_segmentation(seg_path, seg_folder_path, img_dict, patch_folder_path, config):
+	seg_img = io.imread(seg_path)[:,:,0]
+	os.makedirs(seg_folder_path, exist_ok=True)
+	for x_key in sorted(img_dict.keys()):
+			for y_key in sorted(img_dict[x_key].keys()):
+				filename = img_dict[x_key][y_key]
+				single_patch_path = os.path.join(patch_folder_path, filename)
+				
+				x_max = x_key + config.patch_size
+				y_max = y_key + config.patch_size
+				if (tiff_patching.seg_above_threshold(seg_img[y_key:y_max, x_key:x_max], config.keep_percentage)):
+					copyfile(single_patch_path, os.path.join(seg_folder_path, filename))
+					print("Copied %s to %s" % (single_patch_path, os.path.join(seg_folder_path, filename)))
+				else:
+					print("%s not in segmentation" % (single_patch_path))
+	
+
 def create_patch_folder(filename, label, config):
 	
-	folder_path = os.path.join(os.path.abspath(config.original_path), label, os.path.splitext(filename)[0] +'_patches')
-
-	if os.path.exists(folder_path):
-		print("Skipping " + filename)
-		return
-
+	patch_folder_path = os.path.join(os.path.abspath(config.original_path), label, os.path.splitext(filename)[0] +'_patches')
+	
 	patch_size = config.patch_size
 	overlap = config.overlap
 	sample_size = config.sample_size
 	keep_percentage = config.keep_percentage
 
-	file_path = os.path.join(config.original_path, "original_images", filename)
+	if os.path.exists(patch_folder_path):
+		if not FLAGS.seg_path:
+			print("Skipping " + filename)
+			return
+		seg_patch_folder_path = os.path.join(FLAGS.seg_path, label, os.path.splitext(filename)[0] + '_patches')
+		if os.path.exists(seg_patch_folder_path):
+			print("Skipping " + filename)
+			return
+		if not os.path.exists(os.path.join(FLAGS.seg_path,"seg_masks","seg_" + filename)):
+			print("Skipping %s " % filename)
+			return
+	else:
+		file_path = os.path.join(config.original_path, "original_images", filename)
 
-	mask_path = "mask_" + filename
-	mask_path = os.path.join(config.original_path,"masks", mask_path)
+		mask_path = "mask_" + filename
+		mask_path = os.path.join(config.original_path,"masks", mask_path)
 
-	sample_patches = tiff_patching.extract_patches(file_path, patch_size, overlap)
-	mask_patches = tiff_patching.extract_patches(mask_path, patch_size, overlap)
-	save_path = os.path.join(label, filename)
+		sample_patches = tiff_patching.extract_patches(file_path, patch_size, overlap)
+		mask_patches = tiff_patching.extract_patches(mask_path, patch_size, overlap)
+		save_path = os.path.join(label, filename)
 
-	num_patches = tiff_patching.save_patches(filename,
-		config.original_path,
-		label,
-		sample_patches,
-		mask_patches,
-		keep_percentage,
-		patch_size,
-		overlap,
-		sample_size)
+		num_patches = tiff_patching.save_patches(filename,
+			config.original_path,
+			label,
+			sample_patches,
+			mask_patches,
+			keep_percentage,
+			patch_size,
+			overlap,
+			sample_size)
+		print('Created ' + str(num_patches) + ' patches from ' + filename)
 
-	print('Created ' + str(num_patches) + ' patches from ' + filename)
+	# pdb.set_trace()
+	if os.path.exists(os.path.join(FLAGS.seg_path,"seg_masks","seg_" + filename)):
+		seg_path = os.path.join(FLAGS.seg_path, 'seg_masks', 'seg_' + filename)
+		image_list = os.listdir(patch_folder_path)
+		img_dict = {}
+		img_dict = get_patch_coords(img_dict, image_list)
+		os.makedirs(os.path.join(FLAGS.seg_path, label), exist_ok = True)
+		create_segmentation(seg_path, seg_patch_folder_path, img_dict, patch_folder_path, config)
+
 
 # Image bytes are appended to the binary file, so if a binary file exists at the start then it must be removed
 # After (potentially) deleting file, open a new appendable binary file with read/write capabilities
@@ -88,6 +124,18 @@ def remove_exisiting_binary_file_then_create_new(binary_file_path):
 def get_immediate_subdirectories(a_dir):
     return [name for name in os.listdir(a_dir)
             if os.path.isdir(os.path.join(a_dir, name))]
+
+def get_patch_coords(img_dict, image_list):
+	for image_name in image_list:
+			if image_name.endswith(".tif"):
+				image_name_noex = os.path.splitext(image_name)[0]
+				image_name_chop = image_name_noex.split("_")
+				x_coord = int(image_name_chop[len(image_name_chop)-2])
+				y_coord = int(image_name_chop[len(image_name_chop)-1])
+				img_dict[x_coord] = img_dict.get(x_coord, {})
+				img_dict[x_coord][y_coord] = image_name	
+	return img_dict
+
 
 def create_binary_file(label, mode, config):
 
@@ -130,24 +178,26 @@ def create_binary_file(label, mode, config):
 		subject_to_ID_dict[line[0]] = line[1]
 
 	for subject in subjects_list:
+		if subject == "":
+			break
 		dir_counter +=1
-		print("Writing " + subject + " -- %i/%i" % (dir_counter, len(subjects_list)))
+		
 		patch_folder_path = os.path.join(os.path.abspath(config.original_path), label, subject)
-		image_list = os.listdir(patch_folder_path)
+
+		if FLAGS.seg_path and os.path.exists(os.path.join(FLAGS.seg_path,label,subject)):
+			patch_folder_path = os.path.join(FLAGS.seg_path,label,subject)
+			print("Writing " + subject + " -- %i/%i -- FROM SEGMENTATION" % (dir_counter, len(subjects_list)))
+		else:
+			print("Writing " + subject + " -- %i/%i" % (dir_counter, len(subjects_list)))
+		
+		patch_image_list = os.listdir(patch_folder_path)
 
 		patient_ID_byte_string = str.encode(subject_to_ID_dict[subject])
 		padded_subject_file_name = "{:<100}".format(subject[:-8])
 		image_base_name = str.encode(padded_subject_file_name)
 				
-		img_dict = {}	
-		for image_name in image_list:
-			if image_name.endswith(".tif"):
-				image_name_noex = os.path.splitext(image_name)[0]
-				image_name_chop = image_name_noex.split("_")
-				x_coord = int(image_name_chop[len(image_name_chop)-2])
-				y_coord = int(image_name_chop[len(image_name_chop)-1])
-				img_dict[x_coord] = img_dict.get(x_coord, {})
-				img_dict[x_coord][y_coord] = image_name		
+		img_dict = {}
+		img_dict = get_patch_coords(img_dict, patch_image_list)	
 
 		for x_key in sorted(img_dict.keys()):
 			for y_key in sorted(img_dict[x_key].keys()):
@@ -224,8 +274,7 @@ if __name__ == '__main__':
 	r_list = r_file.read().splitlines()
 
 	nr_file = open(os.path.join(og_images_directory,"nonrecurrence_complete_image_list.txt"))
-	nr_list = nr_file.read().splitlines()
-	
+	nr_list = nr_file.read().splitlines()	
 
 	for file in sorted(os.listdir(og_images_directory)):
 		if file.endswith(".tif"):
