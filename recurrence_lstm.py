@@ -49,7 +49,6 @@ import util
 from scipy.misc import imsave
 import csv
 import pdb
-from IPython import embed
 
 from tensorflow.python.client import device_lib
 
@@ -473,7 +472,7 @@ class ColorConfig(object):
   max_max_epoch = 50 #100 #50
   keep_prob = 0.50 # 0.2-0.8 #parameter
   lr_decay = 1 #/ 1.15
-  batch_size = 2 #30 #10-100
+  batch_size = 30 #30 #10-100
   num_classes = 2
   rnn_mode = BLOCK
   image_size = 100

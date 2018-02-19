@@ -1,7 +1,6 @@
 import tensorflow as tf
 import sys
 import pdb
-from IPython import embed
 
 Py3 = sys.version_info[0] == 3
 
