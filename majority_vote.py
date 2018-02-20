@@ -11,13 +11,18 @@ import pdb
 import collections
 import numpy as np
 import matplotlib.pyplot as plt
+from skimage import io
+from PIL import Image
 from termcolor import cprint
 from tensorflow import flags
-from IPython import embed
 
 # Global variables
 flags.DEFINE_string("info","subject","Display per subject or per image info")
 flags.DEFINE_string("histogram_path", None, "Path for saving folder of histogram images")
+flags.DEFINE_string("og_image_path","/home/wanglab/Desktop/recurrence_seq_lstm/image_data/original_images/","Location of original images for generating heat map")
+flags.DEFINE_integer("patch_size", 500, "Dimensions of square patches taken from original image to generate the sequences given to the network")
+flags.DEFINE_float("patch_overlap", 0.3, "Overlap portion of patches taken from the original images")
+flags.DEFINE_string("map_path", None, "Path for saving heat maps")
 FLAGS = flags.FLAGS
 
 # Function declarations
@@ -75,7 +80,6 @@ def give_string_label(label):
     else:
         return "NONRECURRENT"
 
-
 def create_histogram_data_per_subject(subject_image_list, image_dict, truth_label):
     scaled_rec_hist_list = []
     unscaled_rec_hist_list = []
@@ -107,8 +111,50 @@ def create_histogram_data_per_subject(subject_image_list, image_dict, truth_labe
     plt.savefig(os.path.join(FLAGS.histogram_path, image_dict[image]["id"] + ".jpg"))
     plt.clf()
 
-def create_heat_map(image_name):
-    pass
+def generate_heat_map_single_image(image_info):
+    raw_patch_info = sum_neighboring_patches(image_info)
+    # raw_patch_info = image_info["coords"]
+    original_img_shape = io.imread(os.path.join(FLAGS.og_image_path,image_info["name"] + ".tif")).shape
+    x_length = original_img_shape[1]
+    y_length = original_img_shape[0]
+    label = int(image_info["labels"][0])
+    blank_image = np.zeros((y_length, x_length), dtype=np.uint8)
+    stride = 500
+    for patch in raw_patch_info:
+        rec_avg = average_value(raw_patch_info[patch], "rec")
+        nr_avg = average_value(raw_patch_info[patch], "nr")
+        soft_max = softmax([nr_avg, rec_avg])
+        x_patch_edge = patch[0] + stride
+        y_patch_edge = patch[1] + stride
+        blank_image[patch[1]:y_patch_edge, patch[0]:x_patch_edge] = soft_max[label]*200 + 55
+        # blank_image[patch[1]:y_patch_edge, patch[0]:x_patch_edge] = 255
+    # img = Image.fromarray(blank_image)
+    # img.save("heat_map_"+image_info["name"]+".jpg")
+    print("Heat mapping %s" % (image_info["name"]))
+    io.imsave(os.path.join(FLAGS.map_path,image_info["name"]+".tif"), blank_image)
+
+def include_neighbor_patches(coords, coords_dict, stride):
+    neighbors_added  = {}
+    neighbors_added["rec"] = coords_dict[coords]["rec"]
+    neighbors_added["nr"] = coords_dict[coords]["nr"]
+    x_list = [coords[0] - stride, coords[0], coords[0] + stride]
+    y_list = [coords[1] - stride, coords[1], coords[1] + stride]
+    for x in x_list:
+        for y in y_list:
+            if (x,y) in coords_dict:
+                neighbors_added["rec"] = neighbors_added["rec"] + coords_dict[(x,y)]["rec"]
+                neighbors_added["nr"] = neighbors_added["nr"] + coords_dict[(x,y)]["nr"]
+    return neighbors_added
+
+def sum_neighboring_patches(image_info):
+    patch_size = FLAGS.patch_size
+    patch_overlap = FLAGS.patch_overlap
+    stride = int(patch_size * (1 - patch_overlap))
+    neighbors = {}    
+    for coord in image_info["coords"]:
+        neighbors[coord] = include_neighbor_patches(coord, image_info["coords"], stride)
+    return neighbors
+
 def ops_within_patches(image):
     for coord in image:
         nr_sum = sum(image[coord]["nr"])
@@ -117,6 +163,7 @@ def ops_within_patches(image):
         rec_len = len(image[coord]["rec"])
         image[coord]["softmax"] = softmax([nr_sum, rec_sum])
         image[coord]["avg_softmax"] = softmax([nr_sum / nr_len, rec_sum / rec_len])
+
 def create_coord_list(row):
     raw = row.split()
     coord_array = []
@@ -200,7 +247,10 @@ def main():
     filename = os.path.join(base_path, "voting_file.csv")
     if not FLAGS.histogram_path:
         FLAGS.histogram_path = os.path.join(base_path, "histograms")
+    if not FLAGS.map_path:
+        FLAGS.map_path = os.path.join(base_path, "maps")
     os.makedirs(FLAGS.histogram_path, exist_ok=True)
+    os.makedirs(FLAGS.map_path, exist_ok=True)
 
     image_dict={}
     subject_dict={}
@@ -220,11 +270,11 @@ def main():
                 add_data_to_existing_subject(subject_dict[row[0]], row)
     for image_name in image_dict:
         image_patch_data = ops_within_patches(image_dict[image_name]["coords"])
-        create_heat_map(image_name)
+        generate_heat_map_single_image(image_dict[image_name])
     if FLAGS.info == "subject":
         print_info_per_subject(subject_dict, image_dict)
     elif FLAGS.info == "image":
-        print_info_per_image(image_dict)
+        print_info_per_image(image_dict)     
     else:
         print_info_per_subject(subject_dict, image_dict)
         print_info_per_image(image_dict)

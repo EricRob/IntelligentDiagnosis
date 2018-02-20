@@ -84,29 +84,13 @@ def save_patches (original_path, data_parent, label, sample_patches, mask_patche
 # Determine if patch should be saved depending on the amount of background space
 def patch_threshold(single_mask_patch, keep_percentage):
     arr = single_mask_patch[:,:,0]
-    counter = 0
-    for x in np.nditer(arr):
-        if x >= 217:
-            counter += 1
-
-    if (counter / arr.size) < ((100 - keep_percentage)/100):
+    total_pixels = arr.shape[0]*arr.shape[1]
+    patch_sum = np.sum(arr)
+    patch_threshold = total_pixels * (1-keep_percentage/100) * 255
+    if patch_sum <= patch_threshold:
         return True
-    
-    return False
-
-def seg_threshold_list(seg_patches, config):
-    meet_threshold_list = []
-    x_index = 0
-    y_index = 0
-    for i in range(seg_patches.shape[0]):
-        for j in range(seg_patches[1]):
-            if (seg_above_threshold(seg_patches[i,j,0,:,:,0], config.keep_percentage)):
-                meet_threshold_list = meet_threshold_list + [(x_index, y_index)]
-            x_index += floor(config.patch_size*(1-config.overlap*.01))
-        x_index = 0
-        y_index += floor(config.patch_size*(1-config.overlap*.01))
-
-    return meet_threshold_list
+    else:
+        return False
 
 def seg_above_threshold(single_seg_patch, keep_percentage):
     total_pixels = single_seg_patch.shape[0]*single_seg_patch.shape[1]
