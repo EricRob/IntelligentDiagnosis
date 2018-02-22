@@ -11,6 +11,7 @@ from tensorflow import flags
 from skimage import io
 from random import shuffle
 import pdb
+from termcolor import cprint
 import csv
 from shutil import copyfile
 
@@ -25,12 +26,14 @@ flags.DEFINE_bool("recurrence_only", False, "Generate only recurrence binary fil
 flags.DEFINE_bool("nonrecurrence_only", False, "Generate nonrecurrence binary file only")
 flags.DEFINE_string("seg_path", None, "Location of segmentations folder")
 flags.DEFINE_string("mode", None, "Create binary file for a specific mode between train, validation, or test")
-
+flags.DEFINE_bool("randomized_conditions", False, "Generate multiple binary files for randomized conditions with subject variability")
+flags.DEFINE_string("condition_path", None, "Path of condition folder with condition subject lists")
+flags.DEFINE_string("config", None, "Configuration for generating patches.")
 
 FLAGS = flags.FLAGS
 
-class PatchConfig(object):
-	original_path = "/home/wanglab/Desktop/recurrence_seq_lstm/image_data" # Location of image to be split into patches
+class OriginalPatchConfig(object):
+	image_data_folder_path = "/home/wanglab/Desktop/recurrence_seq_lstm/image_data" # Location of image to be split into patches
 	patch_size = 500 # Pixel length and width of each patch square
 	overlap = 30 # Amount of overlap between patches within a sample
 	sample_size = 100 # Final size of patch (usually 100)
@@ -61,7 +64,7 @@ def create_segmentation(seg_path, seg_folder_path, img_dict, patch_folder_path, 
 
 def create_patch_folder(filename, label, config):
 	
-	patch_folder_path = os.path.join(os.path.abspath(config.original_path), label, os.path.splitext(filename)[0] +'_patches')
+	patch_folder_path = os.path.join(os.path.abspath(config.image_data_folder_path), label, str(config.patch_size) + "_pixel_patches", os.path.splitext(filename)[0] +'_patches')
 	
 	patch_size = config.patch_size
 	overlap = config.overlap
@@ -80,17 +83,17 @@ def create_patch_folder(filename, label, config):
 			print("Skipping %s " % filename)
 			return
 	else:
-		file_path = os.path.join(config.original_path, "original_images", filename)
+		file_path = os.path.join(config.image_data_folder_path, "original_images", filename)
 
 		mask_path = "mask_" + filename
-		mask_path = os.path.join(config.original_path,"masks", mask_path)
+		mask_path = os.path.join(config.image_data_folder_path,"masks", mask_path)
 
 		sample_patches = tiff_patching.extract_patches(file_path, patch_size, overlap)
 		mask_patches = tiff_patching.extract_patches(mask_path, patch_size, overlap)
 		save_path = os.path.join(label, filename)
 
 		num_patches = tiff_patching.save_patches(filename,
-			config.original_path,
+			config.image_data_folder_path,
 			label,
 			sample_patches,
 			mask_patches,
@@ -100,7 +103,6 @@ def create_patch_folder(filename, label, config):
 			sample_size)
 		print('Created ' + str(num_patches) + ' patches from ' + filename)
 
-	# pdb.set_trace()
 	if os.path.exists(os.path.join(FLAGS.seg_path,"seg_masks","seg_" + filename)):
 		seg_path = os.path.join(FLAGS.seg_path, 'seg_masks', 'seg_' + filename)
 		image_list = os.listdir(patch_folder_path)
@@ -137,10 +139,13 @@ def get_patch_coords(img_dict, image_list):
 	return img_dict
 
 
-def create_binary_file(label, mode, config):
-
+def create_binary_file(label, mode, config, cond_path=None):
 	bin_name = label + "_" + mode + ".bin"
-	bin_path = os.path.join(os.path.abspath(config.original_path), label, bin_name)
+	
+	if FLAGS.randomized_conditions:
+		bin_path = os.path.join(FLAGS.condition_path, cond_path, label, bin_name)
+	else:
+		bin_path = os.path.join(os.path.abspath(config.image_data_folder_path), label, bin_name)
 
 	if label == "recurrence" :
 		sequence_overlap_percentage = FLAGS.r_overlap / 100
@@ -148,7 +153,7 @@ def create_binary_file(label, mode, config):
 		sequence_overlap_percentage = FLAGS.nr_overlap / 100
 
 	num_steps = config.num_steps
-	print("*********" + label + " " + mode + "*************")
+	cprint("*********" + label + " " + mode + "*************", 'magenta', 'on_white')
 	bin_file = remove_exisiting_binary_file_then_create_new(bin_path)
 	# bin_file = open(label + "_" + mode + ".bin", "ab+")
 
@@ -162,16 +167,17 @@ def create_binary_file(label, mode, config):
 	patch_coord_array = np.zeros([num_steps, 2], dtype=np.uint32)
 	write_stride = int(math.floor(num_steps * (1-sequence_overlap_percentage)))
 
-	total_files = sum([len(files) for r, d, files in os.walk(".")])
-	total_dirs = sum([len(d) for r, d, f in os.walk(".")])
 	counter = 0
 	dir_counter = 0
-	subjects_file = label + "_" + mode + "_subjects.txt"
+	subjects_filename = label + "_" + mode + "_subjects.txt"
 	
 	# walk over all files in starting directory and sub-directories
-	subjects_file = open(os.path.join(config.original_path, "per_mode_subjects", subjects_file), "r")
+	if FLAGS.randomized_conditions:
+		subjects_file = open(os.path.join(FLAGS.condition_path, cond_path, subjects_filename))
+	else:
+		subjects_file = open(os.path.join(config.image_data_folder_path, "per_mode_subjects", subjects_filename), "r")
 	subjects_list = subjects_file.read().splitlines()
-	subject_to_ID_csv_file = open(os.path.join(config.original_path,"filename_to_patient_ID.csv"),"r")
+	subject_to_ID_csv_file = open(os.path.join(config.image_data_folder_path,"filename_to_patient_ID.csv"),"r")
 	reader = csv.reader(subject_to_ID_csv_file, delimiter=",")
 	subject_to_ID_dict = {}
 	for line in reader:
@@ -182,10 +188,10 @@ def create_binary_file(label, mode, config):
 			break
 		dir_counter +=1
 		
-		patch_folder_path = os.path.join(os.path.abspath(config.original_path), label, subject)
+		patch_folder_path = os.path.join(os.path.abspath(config.image_data_folder_path), label, config.patch_size + "_pixel_patches", subject)
 
 		if FLAGS.seg_path and os.path.exists(os.path.join(FLAGS.seg_path,label,subject)):
-			patch_folder_path = os.path.join(FLAGS.seg_path,label,subject)
+			patch_folder_path = os.path.join(FLAGS.seg_path,label, config.patch_size + "_pixel_patches", subject)
 			print("Writing " + subject + " -- %i/%i -- FROM SEGMENTATION" % (dir_counter, len(subjects_list)))
 		else:
 			print("Writing " + subject + " -- %i/%i" % (dir_counter, len(subjects_list)))
@@ -231,13 +237,19 @@ def create_binary_file(label, mode, config):
 					bin_file.write(writing)
 	bin_file.close()
 
-def create_binary_mode_files(label, config):
-	if not FLAGS.mode:
-		create_binary_file(label, "train", config)
-		create_binary_file(label, "valid", config)
-		create_binary_file(label, "test", config)
+def create_binary_mode_files(label, config, cond_path=None):
+	if FLAGS.randomized_conditions:
+		os.makedirs(os.path.join(FLAGS.condition_path, cond_path, label), exist_ok=True)
+		create_binary_file(label, "train", config, cond_path=condition_folder)
+		create_binary_file(label, "valid", config, cond_path=condition_folder)
+		create_binary_file(label, "test", config, cond_path=condition_folder)
 	else:
-		create_binary_file(label, FLAGS.mode, config)
+		if not FLAGS.mode:
+			create_binary_file(label, "train", config)
+			create_binary_file(label, "valid", config)
+			create_binary_file(label, "test", config)
+		else:
+			create_binary_file(label, FLAGS.mode, config)
 
 def create_string_from_coord_array(coord_array, num_steps):
 	coord_string = ""
@@ -248,14 +260,10 @@ def create_string_from_coord_array(coord_array, num_steps):
 	return coord_string
 
 def get_config():
-  # """Get model config."""
-  # config = None
-  # if FLAGS.mode == "patch":
-  #   config = PatchConfig()
-  # else:
-  #   raise ValueError("Invalid mode: %s", FLAGS.model)
-
-  return PatchConfig()
+	if FLAGS.config == "300":
+		return SmallConfig()
+	else:
+		return OriginalPatchConfig()
 
 if __name__ == '__main__':
 
@@ -268,7 +276,7 @@ if __name__ == '__main__':
 	#directory = os.fsencode(FLAGS.data_dir)
 	# num_steps = FLAGS.num_steps
 	config = get_config()
-	og_images_directory = os.path.join(config.original_path, "original_images")
+	og_images_directory = os.path.join(config.image_data_folder_path, "original_images")
 
 	r_file = open(os.path.join(og_images_directory,"recurrence_complete_image_list.txt"))
 	r_list = r_file.read().splitlines()
@@ -283,10 +291,20 @@ if __name__ == '__main__':
 				create_patch_folder(filename, "recurrence", config)
 			elif filename in nr_list:
 				create_patch_folder(filename, "nonrecurrence", config)
-
-	if not FLAGS.nonrecurrence_only:
-		create_binary_mode_files("recurrence", config)
-	if not FLAGS.recurrence_only:
-		create_binary_mode_files("nonrecurrence", config)
+	if FLAGS.randomized_conditions:
+		if not FLAGS.condition_path:
+			raise ValueError("If creating binary files for with randomized subjects, must specify the condition's enclosing folder with --condition_path.")
+		for condition_folder in sorted(os.listdir(FLAGS.condition_path)):
+			if "condition" not in condition_folder:
+				break
+			else:
+				cprint("===============" + condition_folder + "===============", 'white', 'on_magenta')
+				create_binary_mode_files("recurrence", config, cond_path=condition_folder)
+				create_binary_mode_files("nonrecurrence", config, cond_path=condition_folder)
+	else:
+		if not FLAGS.nonrecurrence_only:
+			create_binary_mode_files("recurrence", config)
+		if not FLAGS.recurrence_only:
+			create_binary_mode_files("nonrecurrence", config)
 
 sys.exit(0)

@@ -54,7 +54,7 @@ def save_patches (original_path, data_parent, label, sample_patches, mask_patche
 
     # Create enclosing folder to hold patch dump
     # folder_path = os.path.abspath(os.path.join(original_path, os.pardir)) + '/' + label + '/' + os.path.splitext(original_path)[0] + '_patches'
-    folder_path = os.path.join(os.path.abspath(os.path.join(original_path, os.pardir)), data_parent, label, (os.path.splitext(original_path)[0] + '_patches'))
+    folder_path = os.path.join(os.path.abspath(os.path.join(original_path, os.pardir)), data_parent, label, str(patch_size) + "_pixel_patches", (os.path.splitext(original_path)[0] + '_patches'))
     os.makedirs(folder_path, exist_ok=True)
     x_index = 0
     y_index = 0
