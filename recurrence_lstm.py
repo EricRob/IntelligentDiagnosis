@@ -62,9 +62,9 @@ flags.DEFINE_string("recur_data_path", None,
                     "Where the recurrence binary file is stored.")
 flags.DEFINE_string("nonrecur_data_path", None,
                     "Where the nonrecurrence binary file is stored.")
-flags.DEFINE_float("learning_rate", None,
+flags.DEFINE_float("learning_rate", 0.005,
                     "hyperparameters of model's learning rate")
-flags.DEFINE_float("keep_prob", None,
+flags.DEFINE_float("keep_prob", 0.7,
                     "hyperparameter of model's dropout rate")
 flags.DEFINE_string("eval_dir", "/tmp/recurrence_lstm/", "Directory where to write event logs." )
 flags.DEFINE_string("results_prepend", None, "Identifier for saving results to prevent overwrite with similar tests" )
@@ -645,15 +645,16 @@ def run_epoch(session, model, results_file, epoch_count, csv_file=None, eval_op=
           else:
             result[3] += 1  # FP
          
-    if verbose and step % (model.input.epoch_size // 10) == 10 and model.mode == "train":
-      print("%.3f loss: %.3f" %
-            (step * 1.0 / model.input.epoch_size,
-               costs / (step + 1.0)
-              ))
-      # loss_file.write("%.3f, %.3f\n" %
-      #       (step * 1.0 / model.input.epoch_size,
-      #         np.exp(costs / iters)
-      #         ))
+    if model.mode == "train":
+      if verbose and step % (model.input.epoch_size // 10) == 10:
+        print("%.3f loss: %.3f" %
+              (step * 1.0 / model.input.epoch_size,
+                 costs / (step + 1.0)
+                ))
+        # loss_file.write("%.3f, %.3f\n" %
+        #       (step * 1.0 / model.input.epoch_size,
+        #         np.exp(costs / iters)
+        #         ))
     
     start_time = time.time()
   #print("Accuracy : %.3f  Epoch Size : %d " % (correct_num * 1.0 / model.input.epoch_size / model.input.batch_size, model.input.epoch_size)
