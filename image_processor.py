@@ -167,7 +167,6 @@ def create_binary_file(label, mode, config, cond_path=None):
 	patch_coord_array = np.zeros([num_steps, 2], dtype=np.uint32)
 	write_stride = int(math.floor(num_steps * (1-sequence_overlap_percentage)))
 
-	counter = 0
 	dir_counter = 0
 	subjects_filename = label + "_" + mode + "_subjects.txt"
 	
@@ -184,11 +183,12 @@ def create_binary_file(label, mode, config, cond_path=None):
 		subject_to_ID_dict[line[0]] = line[1]
 
 	for subject in subjects_list:
+		counter = 0
 		if subject == "":
 			break
 		dir_counter +=1
 		
-		patch_folder_path = os.path.join(os.path.abspath(config.image_data_folder_path), label, config.patch_size + "_pixel_patches", subject)
+		patch_folder_path = os.path.join(os.path.abspath(config.image_data_folder_path), label, str(config.patch_size) + "_pixel_patches", subject)
 
 		if FLAGS.seg_path and os.path.exists(os.path.join(FLAGS.seg_path,label,subject)):
 			patch_folder_path = os.path.join(FLAGS.seg_path,label, config.patch_size + "_pixel_patches", subject)
@@ -201,9 +201,8 @@ def create_binary_file(label, mode, config, cond_path=None):
 		patient_ID_byte_string = str.encode(subject_to_ID_dict[subject])
 		padded_subject_file_name = "{:<100}".format(subject[:-8])
 		image_base_name = str.encode(padded_subject_file_name)
-				
 		img_dict = {}
-		img_dict = get_patch_coords(img_dict, patch_image_list)	
+		img_dict = get_patch_coords(img_dict, patch_image_list)
 
 		for x_key in sorted(img_dict.keys()):
 			for y_key in sorted(img_dict[x_key].keys()):
