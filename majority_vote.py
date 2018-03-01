@@ -15,14 +15,19 @@ from skimage import io
 from PIL import Image
 from termcolor import cprint
 from tensorflow import flags
+from IPython import embed
+from sklearn.metrics import roc_curve, auc
 
 # Global variables
 flags.DEFINE_string("info","subject","Display per subject or per image info")
+flags.DEFINE_string("base_path", None, "Path of folder containing voting file")
 flags.DEFINE_string("histogram_path", None, "Path for saving folder of histogram images")
 flags.DEFINE_string("og_image_path","/home/wanglab/Desktop/recurrence_seq_lstm/image_data/original_images/","Location of original images for generating heat map")
 flags.DEFINE_integer("patch_size", 500, "Dimensions of square patches taken from original image to generate the sequences given to the network")
 flags.DEFINE_float("patch_overlap", 0.3, "Overlap portion of patches taken from the original images")
 flags.DEFINE_string("map_path", None, "Path for saving heat maps")
+flags.DEFINE_bool("create_maps", False, "Choose to create heat maps of images")
+flags.DEFINE_bool("from_outside", False, "Operating from another python script")
 FLAGS = flags.FLAGS
 
 # Function declarations
@@ -112,26 +117,32 @@ def create_histogram_data_per_subject(subject_image_list, image_dict, truth_labe
     plt.clf()
 
 def generate_heat_map_single_image(image_info):
-    raw_patch_info = sum_neighboring_patches(image_info)
-    # raw_patch_info = image_info["coords"]
+    # raw_patch_info = sum_neighboring_patches(image_info)
+    raw_patch_info = image_info["coords"]
     original_img_shape = io.imread(os.path.join(FLAGS.og_image_path,image_info["name"] + ".tif")).shape
     x_length = original_img_shape[1]
     y_length = original_img_shape[0]
     label = int(image_info["labels"][0])
-    blank_image = np.zeros((y_length, x_length), dtype=np.uint8)
+    tiff_arr = np.zeros((y_length, x_length), dtype=np.uint8)
+    #heat_arr = np.zeros((y_length, x_length), dtype=np.float32)
     stride = 500
     for patch in raw_patch_info:
         rec_avg = average_value(raw_patch_info[patch], "rec")
         nr_avg = average_value(raw_patch_info[patch], "nr")
         soft_max = softmax([nr_avg, rec_avg])
+        if patch[0] > 19700 and image_info["name"] == '08_04_D_3_1':
+            pdb.set_trace()
         x_patch_edge = patch[0] + stride
         y_patch_edge = patch[1] + stride
-        blank_image[patch[1]:y_patch_edge, patch[0]:x_patch_edge] = soft_max[label]*200 + 55
-        # blank_image[patch[1]:y_patch_edge, patch[0]:x_patch_edge] = 255
-    # img = Image.fromarray(blank_image)
-    # img.save("heat_map_"+image_info["name"]+".jpg")
+        tiff_arr[patch[1]:y_patch_edge, patch[0]:x_patch_edge] = soft_max[label]*200 + 55
+        #heat_arr[patch[1]:y_patch_edge, patch[0]:x_patch_edge] = soft_max[label] + 0.01
+
     print("Heat mapping %s" % (image_info["name"]))
-    io.imsave(os.path.join(FLAGS.map_path,image_info["name"]+".tif"), blank_image)
+    #plt.imshow(heat_arr, cmap='hot', interpolation='nearest')
+    #plt.savefig(os.path.join(FLAGS.map_path,"pretty_" + image_info["name"]+".jpg"))
+    io.imsave(os.path.join(FLAGS.map_path,image_info["name"]+".tif"), tiff_arr)
+
+    del tiff_arr
 
 def include_neighbor_patches(coords, coords_dict, stride):
     neighbors_added  = {}
@@ -175,7 +186,7 @@ def across_image_avg(sums, lens):
     return sums / lens
 
 def print_info_per_image(image_dict):
-    for image_name in image_dict:
+    for image_name in sorted(image_dict):
         c1 = collections.Counter(image_dict[image_name]["output"]).most_common(1)
         truth_label = give_string_label(image_dict[image_name]["labels"][0])
         network_label = give_string_label(c1[0][0])
@@ -183,7 +194,7 @@ def print_info_per_image(image_dict):
             color = 'on_green'
         else:
             color = 'on_red'
-        cprint("\n" + image_name, 'white', color, attrs=['bold'])
+        cprint("\n" + image_name + " -- " + image_dict[image_name]["id"], 'white', color, attrs=['bold'])
         print("Label: " + truth_label)
         print("Network majority vote: %s, %i%% (%i/%i) " % (network_label, int((c1[0][1])/len(image_dict[image_name]["output"])*100), int(c1[0][1]), len(image_dict[image_name]["output"])))
         unscaled_nr = average_value(image_dict[image_name], "unscaled_nr")
@@ -241,16 +252,125 @@ def print_info_per_subject(subject_dict, image_dict):
             print("Softmax of unscaled average: " + str(smax_subject))
             print("Scaled Average: %.3f, %.3f" % (avg_scaled_nr, avg_scaled_rec))
 
+def analysis_per_subject(subject_dict, image_dict):
+    subject_data = dict()
+    for subject in subject_dict:
+            unscaled_nr_sum = 0
+            unscaled_rec_sum = 0
+            scaled_nr_sum = 0
+            scaled_rec_sum = 0
+            unscaled_nr_len = 0
+            unscaled_rec_len = 0
+            scaled_nr_len = 0
+            scaled_rec_len = 0
+            network_outputs = []
+            subject_data[subject] = dict()
+
+            for image in subject_dict[subject]:
+                network_outputs = network_outputs + image_dict[image]["output"]
+                unscaled_nr_sum += sum(image_dict[image]["unscaled_nr"])
+                unscaled_nr_len += len(image_dict[image]["unscaled_nr"])
+                unscaled_rec_sum += sum(image_dict[image]["unscaled_rec"])
+                unscaled_rec_len += len(image_dict[image]["unscaled_rec"])
+                scaled_rec_sum += sum(image_dict[image]["scaled_rec"])
+                scaled_rec_len += len(image_dict[image]["scaled_rec"])
+                scaled_nr_sum += sum(image_dict[image]["scaled_nr"])
+                scaled_nr_len += len(image_dict[image]["scaled_nr"])
+            c2 = collections.Counter(network_outputs).most_common(1)
+            avg_unscaled_nr = across_image_avg(unscaled_nr_sum, unscaled_nr_len)
+            avg_unscaled_rec = across_image_avg(unscaled_rec_sum, unscaled_rec_len)
+            avg_scaled_nr = across_image_avg(scaled_nr_sum, scaled_nr_len)
+            avg_scaled_rec = across_image_avg(scaled_rec_sum, scaled_rec_len)
+            
+            subject_truth_label = give_string_label(image_dict[image]["labels"][0])
+            subject_network_label = give_string_label(c2[0][0])
+            smax_subject = softmax([avg_unscaled_nr, avg_unscaled_rec])
+            
+            subject_data[subject]["unr"] = avg_unscaled_nr
+            subject_data[subject]["urec"] = avg_unscaled_rec
+            subject_data[subject]["snr"] = avg_scaled_nr
+            subject_data[subject]["srec"] = avg_scaled_rec
+            subject_data[subject]["truth_label"] = subject_truth_label
+            subject_data[subject]["net_label"] = subject_network_label
+            subject_data[subject]["smax"] = smax_subject
+            subject_data[subject]["vote"] = c2[0][1]/len(network_outputs)
+
+    return subject_data
+
+def create_roc_curves(image_dict):
+    all_seq = dict()
+
+    all_seq["scaled_rec"] = []
+    all_seq["scaled_nr"] = []
+    all_seq["labels"] = []
+
+    for image in image_dict:
+        all_seq["scaled_rec"] = all_seq["scaled_rec"] + image_dict[image]["scaled_rec"]
+        all_seq["scaled_nr"] = all_seq["scaled_nr"] + image_dict[image]["scaled_nr"]
+        all_seq["labels"] = all_seq["labels"] + image_dict[image]["labels"]
+
+    lw = 2
+
+    labels = np.array(all_seq["labels"], dtype=np.uint8)
+    nr_scores = np.array(all_seq["scaled_nr"])
+    rec_scores = np.array(all_seq["scaled_rec"])
+
+    fpr, tpr, thresholds = roc_curve(labels, rec_scores, pos_label=1)
+    roc_auc = auc(fpr, tpr)
+
+    return fpr, tpr, thresholds, roc_auc
+
+    # plt.figure()
+    # plt.plot(1-fpr, tpr, color='darkorange',
+    #      lw=lw, label='ROC curve (area = %0.2f)' % roc_auc)
+    # plt.plot([0, 1], [1,0], color='black', lw=1, linestyle='--')
+    # plt.xlim([0.0, 1.0])
+    # plt.ylim([0.0, 1.05])
+    # plt.xlabel('Specificity')
+    # plt.ylabel('Sensitivity')
+    # plt.title('Receiver operating characteristic')
+    # plt.legend(loc="lower right")
+    # plt.savefig(os.path.join(FLAGS.base_path, "ROC.jpg"))
+    # plt.clf()
+
+def majority_vote(base_path, hist_path=None, map_path=None, create_maps=False, info=None, patch_size=None, patch_overlap=None, og_image_path=None):
+    if not hist_path:
+        hist_path = os.path.join(base_path, "histograms")
+    if not map_path:
+        map_path = os.path.join(base_path, "maps")
+    
+    FLAGS.base_path = base_path
+    FLAGS.hist_path = hist_path
+    FLAGS.map_path = map_path
+
+    if create_maps:
+        FLAGS.create_maps = create_maps
+    if info:
+        FLAGS.info = info
+    if patch_size:
+        FLAGS.patch_size = patch_size
+    if patch_overlap:
+        FLAGS.patch_overlap = patch_overlap
+    if og_image_path:
+        FLAGS.og_image_path = og_image_path
+
+    FLAGS.from_outside = True
+
+    image_dict, subject_dict = main()
+    return image_dict, subject_dict
+
 def main():
-    args = sys.argv[1:]
-    base_path = args[0]
+    if not FLAGS.base_path:
+        raise ValueError("Must set --base_path to the directory containing the voting_file.csv")
+    base_path = FLAGS.base_path
     filename = os.path.join(base_path, "voting_file.csv")
     if not FLAGS.histogram_path:
         FLAGS.histogram_path = os.path.join(base_path, "histograms")
     if not FLAGS.map_path:
         FLAGS.map_path = os.path.join(base_path, "maps")
-    os.makedirs(FLAGS.histogram_path, exist_ok=True)
-    os.makedirs(FLAGS.map_path, exist_ok=True)
+    if not FLAGS.from_outside:
+        os.makedirs(FLAGS.histogram_path, exist_ok=True)
+        os.makedirs(FLAGS.map_path, exist_ok=True)
 
     image_dict={}
     subject_dict={}
@@ -270,7 +390,13 @@ def main():
                 add_data_to_existing_subject(subject_dict[row[0]], row)
     for image_name in image_dict:
         image_patch_data = ops_within_patches(image_dict[image_name]["coords"])
-        generate_heat_map_single_image(image_dict[image_name])
+        if FLAGS.create_maps:
+            generate_heat_map_single_image(image_dict[image_name])
+    if FLAGS.from_outside:
+        return image_dict, subject_dict
+    
+    create_roc_curves(image_dict)
+    
     if FLAGS.info == "subject":
         print_info_per_subject(subject_dict, image_dict)
     elif FLAGS.info == "image":
@@ -278,9 +404,6 @@ def main():
     else:
         print_info_per_subject(subject_dict, image_dict)
         print_info_per_image(image_dict)
-    if not args:
-        print('usage: enter location of csv file as first parameter, enter --info="image" for only images, "subject" for only subjects, or any other value for all info')
-        sys.exit(1)
 
 
 # Main body
