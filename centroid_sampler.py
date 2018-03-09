@@ -11,7 +11,7 @@ import pdb
 import numpy as np
 from skimage import io
 from scipy.ndimage import measurements
-from skimage.transform import rescale
+from skimage import transform
 from math import floor
 from numpy.lib.stride_tricks import as_strided
 from termcolor import cprint
@@ -26,6 +26,7 @@ class OriginalPatchConfig(object):
 	tile_size = patch_size * 5
 	edge_overlap = 75 # Amount of overlap between patches within a sample
 	sample_size = 100 # Final size of patch (usually 100)
+	scaling_factor = patch_size // sample_size
 	patch_keep_percentage = 75 # Percentage of patch that must be data (i.e. non-background)
 	tile_keep_percentage = 35 # Percentage of tile that must contain cell data (i.e. non-background)
 	maximum_std_dev = 1.5 * patch_size # Std dev size for a tile with 100% density
@@ -188,18 +189,32 @@ def calculate_bottom_tile_masses(grid, keep_list):
 
 def sample_from_distribution(mask, tile_info, config):
 	keep_threshold = config.patch_size**2 * (1 - config.patch_keep_percentage/100)
+	remove_tiles = []
+	if not tile_info:
+		return
 	for tile in tile_info:
 		std_dev = config.maximum_std_dev * tile_info[tile]["density"]
 		
 		sequence_count = int(round(tile_info[tile]["density"] * config.maximum_seq_per_tile))
 		samples = sequence_count * config.num_steps
 		tile_info[tile]["coords"] = []
-		while len(tile_info[tile]["coords"]) < samples:
-			x = int(round(np.random.normal(tile_info[tile]["centroid"][1], std_dev) + tile[1] * config.tile_size))
-			y = int(round(np.random.normal(tile_info[tile]["centroid"][0], std_dev) + tile[0] * config.tile_size))
+		print(tile_info[tile]["centroid"])
+		counter = 0
+		while (len(tile_info[tile]["coords"]) < samples) and (counter < 10000):
+			counter += 1
+			x = int(round(np.random.normal(tile_info[tile]["centroid"][1], std_dev)))
+			x = x - config.patch_size // 2 # centroid should be in the center of the patch, x should be left edge. Shift over from center to left edge.
+			y = int(round(np.random.normal(tile_info[tile]["centroid"][0], std_dev)))
+			y = y - config.patch_size // 2 # centroid should be in center of the patch, y should be top edge. Shift up from center to top.
 			patch = mask[y:(y+config.patch_size), x:(x+config.patch_size)]
 			if np.sum(patch) <= keep_threshold:	
 				tile_info[tile]["coords"] = tile_info[tile]["coords"] + [(y,x)]
+		if counter >= 10000:
+			remove_tiles = remove_tiles + [tile]
+			cprint("Skipping " + str(tile), 'red')
+
+	for tile in remove_tiles:
+		del tile_info[tile]
 
 def split_and_combine_patch_lists(tile_dict, bottom_dict, right_dict, num_steps):
 	sequences = []
@@ -209,11 +224,20 @@ def split_and_combine_patch_lists(tile_dict, bottom_dict, right_dict, num_steps)
 	return sequences
 
 def append_patch_lists(patch_list, region_dict, num_steps):
+	if not region_dict:
+		return patch_list
+
 	for tile in region_dict:
 		coords_list = region_dict[tile]['coords']
 		for n in np.arange(len(coords_list) // num_steps):
 			patch_list = patch_list + [coords_list[(n*num_steps):((n+1)*num_steps)]]
 	return patch_list
+
+def adjust_centroids(centroids, tile_size):
+	if not centroids:
+		return
+	for center in centroids:
+		centroids[center]["centroid"] = (centroids[center]["centroid"][0] + center[0]*tile_size, centroids[center]["centroid"][1] + center[1]*tile_size)
 
 def generate_sequences(mask_filename, config):
 	tile_size = config.tile_size
@@ -243,6 +267,10 @@ def generate_sequences(mask_filename, config):
 	bottom_centroids = calculate_bottom_tile_masses(bottom_edge, keep_bottom_edge_list)
 	right_centroids = calculate_right_tile_masses(right_edge, keep_right_edge_list)
 
+	adjust_centroids(tile_centroids, tile_size)
+	adjust_centroids(bottom_centroids, tile_size)
+	adjust_centroids(right_centroids, tile_size)
+
 	cprint("Sampling around centroids...", 'green', 'on_white')
 	sample_from_distribution(mask, tile_centroids, config)
 	sample_from_distribution(mask, bottom_centroids, config)
@@ -267,10 +295,8 @@ def write_image_bin(image_bin, image_name, subject_ID, sequences, config):
 		for y,x in sequence:
 			patch = image[y:(y+config.patch_size),x:(x+config.patch_size),:]
 			# Need to verify this downscaling method
-			patch_downscaled = rescale(patch, (100,100))
-			print(patch_downscaled.shape)
-			image_bin.write(patch_downscaled)
-
+			patch_scaled = transform.downscale_local_mean(patch, (config.scaling_factor,config.scaling_factor,1)).astype('uint8')
+			image_bin.write(patch_scaled)
 
 def byte_string_from_coord_array(coord_array, num_steps):
 	coord_string = ""
@@ -303,7 +329,7 @@ def main():
 		cprint("Writing binary file...", 'green', 'on_white')
 		write_image_bin(image_bin, image_name, image_to_ID_dict[image_name], sequences, config)
 		image_bin.close()
-		pdb.set_trace()
+		print('\n')
 
 # Main body
 if __name__ == '__main__':
