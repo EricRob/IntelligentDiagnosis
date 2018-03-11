@@ -14,6 +14,7 @@ import pdb
 from termcolor import cprint
 import csv
 from shutil import copyfile
+from IPython import embed
 
 import tiff_patching
 
@@ -29,6 +30,8 @@ flags.DEFINE_string("mode", None, "Create binary file for a specific mode betwee
 flags.DEFINE_bool("randomized_conditions", False, "Generate multiple binary files for randomized conditions with subject variability")
 flags.DEFINE_string("condition_path", None, "Path of condition folder with condition subject lists")
 flags.DEFINE_string("config", None, "Configuration for generating patches.")
+flags.DEFINE_string("sampling_method", "column", "Sampling pattern for generating sequences")
+flags.DEFINE_string("patches_only",False,"Generate only patches for new images, and no binary files.")
 
 FLAGS = flags.FLAGS
 
@@ -103,14 +106,13 @@ def create_patch_folder(filename, label, config):
 			sample_size)
 		print('Created ' + str(num_patches) + ' patches from ' + filename)
 
-	if os.path.exists(os.path.join(FLAGS.seg_path,"seg_masks","seg_" + filename)):
+	if (FLAGS.seg_path) and (os.path.exists(os.path.join(FLAGS.seg_path,"seg_masks","seg_" + filename))):
 		seg_path = os.path.join(FLAGS.seg_path, 'seg_masks', 'seg_' + filename)
 		image_list = os.listdir(patch_folder_path)
 		img_dict = {}
 		img_dict = get_patch_coords(img_dict, image_list)
 		os.makedirs(os.path.join(FLAGS.seg_path, label), exist_ok = True)
 		create_segmentation(seg_path, seg_patch_folder_path, img_dict, patch_folder_path, config)
-
 
 # Image bytes are appended to the binary file, so if a binary file exists at the start then it must be removed
 # After (potentially) deleting file, open a new appendable binary file with read/write capabilities
@@ -137,7 +139,6 @@ def get_patch_coords(img_dict, image_list):
 				img_dict[x_coord] = img_dict.get(x_coord, {})
 				img_dict[x_coord][y_coord] = image_name	
 	return img_dict
-
 
 def create_binary_file(label, mode, config, cond_path=None):
 	bin_name = label + "_" + mode + ".bin"
@@ -168,72 +169,107 @@ def create_binary_file(label, mode, config, cond_path=None):
 	write_stride = int(math.floor(num_steps * (1-sequence_overlap_percentage)))
 
 	dir_counter = 0
-	subjects_filename = label + "_" + mode + "_subjects.txt"
+	images_filename = label + "_" + mode + "_subjects.txt"
 	
 	# walk over all files in starting directory and sub-directories
 	if FLAGS.randomized_conditions:
-		subjects_file = open(os.path.join(FLAGS.condition_path, cond_path, subjects_filename))
+		images_file = open(os.path.join(FLAGS.condition_path, cond_path, images_filename))
 	else:
-		subjects_file = open(os.path.join(config.image_data_folder_path, "per_mode_subjects", subjects_filename), "r")
-	subjects_list = subjects_file.read().splitlines()
-	subject_to_ID_csv_file = open(os.path.join(config.image_data_folder_path,"filename_to_patient_ID.csv"),"r")
-	reader = csv.reader(subject_to_ID_csv_file, delimiter=",")
-	subject_to_ID_dict = {}
+		images_file = open(os.path.join(config.image_data_folder_path, "per_mode_subjects", images_filename), "r")
+	images_list = images_file.read().splitlines()
+	image_to_ID_csv_file = open(os.path.join(config.image_data_folder_path,"image_to_subject_ID.csv"),"r")
+	reader = csv.reader(image_to_ID_csv_file, delimiter=",")
+	_ = next(reader) # discard header line
+	image_to_ID_dict = dict()
 	for line in reader:
-		subject_to_ID_dict[line[0]] = line[1]
-
-	for subject in subjects_list:
+		image_to_ID_dict[line[0].split(".")[0]+"_patches"] = line[1]
+	for image in images_list:
 		counter = 0
-		if subject == "":
+		if image == "":
 			break
 		dir_counter +=1
 		
-		patch_folder_path = os.path.join(os.path.abspath(config.image_data_folder_path), label, str(config.patch_size) + "_pixel_patches", subject)
+		patch_folder_path = os.path.join(os.path.abspath(config.image_data_folder_path), label, str(config.patch_size) + "_pixel_patches", image)
 
-		if FLAGS.seg_path and os.path.exists(os.path.join(FLAGS.seg_path,label,subject)):
-			patch_folder_path = os.path.join(FLAGS.seg_path,label, config.patch_size + "_pixel_patches", subject)
-			print("Writing " + subject + " -- %i/%i -- FROM SEGMENTATION" % (dir_counter, len(subjects_list)))
+		if FLAGS.seg_path and os.path.exists(os.path.join(FLAGS.seg_path,label,image)):
+			patch_folder_path = os.path.join(FLAGS.seg_path,label, config.patch_size + "_pixel_patches", image)
+			print("Writing " + image + " -- %i/%i -- FROM SEGMENTATION" % (dir_counter, len(images_list)))
 		else:
-			print("Writing " + subject + " -- %i/%i" % (dir_counter, len(subjects_list)))
+			print("Writing " + image + " -- %i/%i" % (dir_counter, len(images_list)))
 		
 		patch_image_list = os.listdir(patch_folder_path)
 
-		patient_ID_byte_string = str.encode(subject_to_ID_dict[subject])
-		padded_subject_file_name = "{:<100}".format(subject[:-8])
+		patient_ID_byte_string = str.encode(image_to_ID_dict[image])
+		padded_subject_file_name = "{:<100}".format(image[:-8])
 		image_base_name = str.encode(padded_subject_file_name)
 		img_dict = {}
 		img_dict = get_patch_coords(img_dict, patch_image_list)
 
-		for x_key in sorted(img_dict.keys()):
-			for y_key in sorted(img_dict[x_key].keys()):
-				filename = img_dict[x_key][y_key]
-				counter +=1
-				img = io.imread(os.path.join(patch_folder_path,filename))
-				arr = img.flatten()
+		if FLAGS.sampling_method == 'square':
+			square_sampling(img_dict, patch_image_list, label, config)
+		elif FLAGS.sampling_method == 'row':
+			img_dict = swap_x_and_y_coords(img_dict)
 
-				if(counter <= num_steps):
-					write_array[counter-1,:] = arr
-					patch_coord_array[counter-1, 0] = x_key
-					patch_coord_array[counter-1, 1] = y_key
-				else: # Shift all images in the write_array to the left one step, then replace the last value with the new image data
-					write_array = np.roll(write_array, -1, axis=0)
-					patch_coord_array = np.roll(patch_coord_array, -1, axis=0)
+			for y_key in sorted(img_dict.keys()):
+				for x_key in sorted(img_dict[y_key].keys()):
+					filename = img_dict[y_key][x_key]
+					counter +=1
+					img = io.imread(os.path.join(patch_folder_path,filename))
+					arr = img.flatten()
 
-					write_array[num_steps - 1,:] = arr
-					patch_coord_array[num_steps-1, 0] = x_key
-					patch_coord_array[num_steps-1, 1] = y_key
+					if(counter <= num_steps):
+						write_array[counter-1,:] = arr
+						patch_coord_array[counter-1, 0] = x_key
+						patch_coord_array[counter-1, 1] = y_key
+					else: # Shift all images in the write_array to the left one step, then replace the last value with the new image data
+						write_array = np.roll(write_array, -1, axis=0)
+						patch_coord_array = np.roll(patch_coord_array, -1, axis=0)
+
+						write_array[num_steps - 1,:] = arr
+						patch_coord_array[num_steps-1, 0] = x_key
+						patch_coord_array[num_steps-1, 1] = y_key
+
+					write_count = counter - num_steps
+
+					# After the a new portion of the sequence has been added, add the write_array to the binary file
+					if(write_count >= 0) & (write_count % write_stride == 0):
+						writing = np.reshape(write_array, (num_steps, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_DEPTH))
+						coord_str = create_string_from_coord_array(patch_coord_array, config.num_steps)
+						bin_file.write(patient_ID_byte_string)
+						bin_file.write(image_base_name)
+						bin_file.write(str.encode(coord_str))
+						bin_file.write(writing)	
+		elif FLAGS.sampling_method == 'column':
+			for x_key in sorted(img_dict.keys()):
+				for y_key in sorted(img_dict[x_key].keys()):
+					filename = img_dict[x_key][y_key]
+					counter +=1
+					img = io.imread(os.path.join(patch_folder_path,filename))
+					arr = img.flatten()
+
+					if(counter <= num_steps):
+						write_array[counter-1,:] = arr
+						patch_coord_array[counter-1, 0] = x_key
+						patch_coord_array[counter-1, 1] = y_key
+					else: # Shift all images in the write_array to the left one step, then replace the last value with the new image data
+						write_array = np.roll(write_array, -1, axis=0)
+						patch_coord_array = np.roll(patch_coord_array, -1, axis=0)
+
+						write_array[num_steps - 1,:] = arr
+						patch_coord_array[num_steps-1, 0] = x_key
+						patch_coord_array[num_steps-1, 1] = y_key
 
 
-				write_count = counter - num_steps
+					write_count = counter - num_steps
 
-				# After the a new portion of the sequence has been added, add the write_array to the binary file
-				if(write_count >= 0) & (write_count % write_stride == 0):
-					writing = np.reshape(write_array, (num_steps, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_DEPTH))
-					coord_str = create_string_from_coord_array(patch_coord_array, config.num_steps)
-					bin_file.write(patient_ID_byte_string)
-					bin_file.write(image_base_name)
-					bin_file.write(str.encode(coord_str))
-					bin_file.write(writing)
+					# After the a new portion of the sequence has been added, add the write_array to the binary file
+					if(write_count >= 0) & (write_count % write_stride == 0):
+						writing = np.reshape(write_array, (num_steps, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_DEPTH))
+						coord_str = create_string_from_coord_array(patch_coord_array, config.num_steps)
+						bin_file.write(patient_ID_byte_string)
+						bin_file.write(image_base_name)
+						bin_file.write(str.encode(coord_str))
+						bin_file.write(writing)
 	bin_file.close()
 
 def create_binary_mode_files(label, config, cond_path=None):
@@ -249,6 +285,16 @@ def create_binary_mode_files(label, config, cond_path=None):
 			create_binary_file(label, "test", config)
 		else:
 			create_binary_file(label, FLAGS.mode, config)
+
+def swap_x_and_y_coords(img_dict):
+	swapped_coords = dict()
+	for x_key in sorted(img_dict.keys()):
+		for y_key in sorted(img_dict[x_key].keys()):
+			if y_key not in swapped_coords:
+				swapped_coords[y_key] = dict()
+			swapped_coords[y_key][x_key] = img_dict[x_key][y_key]
+	return swapped_coords
+
 
 def create_string_from_coord_array(coord_array, num_steps):
 	coord_string = ""
@@ -274,36 +320,36 @@ if __name__ == '__main__':
 
 	#directory = os.fsencode(FLAGS.data_dir)
 	# num_steps = FLAGS.num_steps
+
+	if FLAGS.condition_path:
+		FLAGS.randomized_conditions = True
+
 	config = get_config()
 	og_images_directory = os.path.join(config.image_data_folder_path, "original_images")
 
-	r_file = open(os.path.join(og_images_directory,"recurrence_complete_image_list.txt"))
-	r_list = r_file.read().splitlines()
+	image_to_ID_csv_file = open(os.path.join(config.image_data_folder_path,"image_to_subject_ID.csv"),"r")
+	reader = csv.DictReader(image_to_ID_csv_file, delimiter=",")
+	for row in reader:
+		if row["label"] == 1:
+			create_patch_folder(row["image_name"], "recurrence", config)
+		elif row["label"] == 0:
+			create_patch_folder(row["image_name"], "nonrecurrence", config)
 
-	nr_file = open(os.path.join(og_images_directory,"nonrecurrence_complete_image_list.txt"))
-	nr_list = nr_file.read().splitlines()	
-
-	for file in sorted(os.listdir(og_images_directory)):
-		if file.endswith(".tif"):
-			filename = os.fsdecode(file)
-			if filename in r_list:
-				create_patch_folder(filename, "recurrence", config)
-			elif filename in nr_list:
-				create_patch_folder(filename, "nonrecurrence", config)
-	if FLAGS.randomized_conditions:
-		if not FLAGS.condition_path:
-			raise ValueError("If creating binary files for with randomized subjects, must specify the condition's enclosing folder with --condition_path.")
-		for condition_folder in sorted(os.listdir(FLAGS.condition_path)):
-			if "condition" not in condition_folder:
-				break
-			else:
-				cprint("===============" + condition_folder + "===============", 'white', 'on_magenta')
-				create_binary_mode_files("recurrence", config, cond_path=condition_folder)
-				create_binary_mode_files("nonrecurrence", config, cond_path=condition_folder)
-	else:
-		if not FLAGS.nonrecurrence_only:
-			create_binary_mode_files("recurrence", config)
-		if not FLAGS.recurrence_only:
-			create_binary_mode_files("nonrecurrence", config)
+	if not FLAGS.patches_only:
+		if FLAGS.randomized_conditions:
+			if not FLAGS.condition_path:
+				raise ValueError("If creating binary files for with randomized subjects, must specify the condition's enclosing folder with --condition_path.")
+			for condition_folder in sorted(os.listdir(FLAGS.condition_path)):
+				if "condition" not in condition_folder:
+					break
+				else:
+					cprint("===============" + condition_folder + "===============", 'white', 'on_magenta')
+					create_binary_mode_files("recurrence", config, cond_path=condition_folder)
+					create_binary_mode_files("nonrecurrence", config, cond_path=condition_folder)
+		else:
+			if not FLAGS.nonrecurrence_only:
+				create_binary_mode_files("recurrence", config)
+			if not FLAGS.recurrence_only:
+				create_binary_mode_files("nonrecurrence", config)
 
 sys.exit(0)
