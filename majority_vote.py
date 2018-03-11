@@ -11,6 +11,7 @@ import pdb
 import collections
 import numpy as np
 import matplotlib.pyplot as plt
+from pylab import subplot, plot, subplots_adjust
 from skimage import io
 from PIL import Image
 from termcolor import cprint
@@ -28,6 +29,7 @@ flags.DEFINE_float("patch_overlap", 0.3, "Overlap portion of patches taken from 
 flags.DEFINE_string("map_path", None, "Path for saving heat maps")
 flags.DEFINE_bool("create_maps", False, "Choose to create heat maps of images")
 flags.DEFINE_bool("from_outside", False, "Operating from another python script")
+flags.DEFINE_bool('per_subject', False, 'Provide ROC and majority votes per subject')
 FLAGS = flags.FLAGS
 
 # Function declarations
@@ -130,8 +132,6 @@ def generate_heat_map_single_image(image_info):
         rec_avg = average_value(raw_patch_info[patch], "rec")
         nr_avg = average_value(raw_patch_info[patch], "nr")
         soft_max = softmax([nr_avg, rec_avg])
-        if patch[0] > 19700 and image_info["name"] == '08_04_D_3_1':
-            pdb.set_trace()
         x_patch_edge = patch[0] + stride
         y_patch_edge = patch[1] + stride
         tiff_arr[patch[1]:y_patch_edge, patch[0]:x_patch_edge] = soft_max[label]*200 + 55
@@ -297,7 +297,7 @@ def analysis_per_subject(subject_dict, image_dict):
 
     return subject_data
 
-def create_roc_curves(image_dict):
+def create_overall_roc_curve(image_dict):
     all_seq = dict()
 
     all_seq["scaled_rec"] = []
@@ -332,6 +332,100 @@ def create_roc_curves(image_dict):
     # plt.legend(loc="lower right")
     # plt.savefig(os.path.join(FLAGS.base_path, "ROC.jpg"))
     # plt.clf()
+
+def per_subject_roc_curves(subject_dict, image_dict):
+    roc_dict = dict()
+    for subject in subject_dict:
+        roc_dict[subject] = dict()
+        roc_dict[subject]["scaled_rec"] = []
+        roc_dict[subject]["labels"] = []
+        for image in subject_dict[subject]:
+            roc_dict[subject]["scaled_rec"] = roc_dict[subject]["scaled_rec"] + image_dict[image]["scaled_rec"]
+            roc_dict[subject]["labels"] = roc_dict[subject]["labels"] + image_dict[image]["labels"]
+        labels = np.array(roc_dict[subject]["labels"], dtype=np.uint8)
+        rec_scores = np.array(roc_dict[subject]["scaled_rec"])
+        fpr, tpr, thresholds = roc_curve(labels, rec_scores, pos_label=1)
+        # tpr[np.isnan(tpr)] = 0
+        # fpr[np.isnan(fpr)] = 0
+        roc_auc = auc(fpr, tpr)
+        roc_dict[subject]['fpr'] = fpr
+        roc_dict[subject]['tpr'] = tpr
+        roc_dict[subject]['thresholds'] = thresholds
+        roc_dict[subject]['auc'] = roc_auc
+    return roc_dict
+
+def plot_roc_curves_and_votes(roc_dict, subject_dict, image_dict):
+    subject_data = analysis_per_subject(subject_dict, image_dict)
+    number_of_subplot_rows = len(roc_dict)
+    figure = plt.figure()
+    counter = 1
+    for subject in roc_dict:
+        roc_loc = str(number_of_subplot_rows) + '2' + str(counter)
+        counter += 1
+        bar_loc = str(number_of_subplot_rows) + '2' + str(counter)
+        counter += 1
+
+        fpr = roc_dict[subject]['fpr']
+        tpr = roc_dict[subject]['tpr']
+
+        roc = figure.add_subplot(roc_loc)
+        roc.plot(1-fpr, tpr, color='darkorange', lw=2)
+        roc.plot([0, 1], [1,0], color='black', lw=1, linestyle='--')
+        roc.set_title('ROC')
+        legend = 'ROC curve (area = %0.2f)' % roc_dict[subject]['auc']
+        roc.legend([legend])
+
+        bar_graph = figure.add_subplot(bar_loc)
+
+        if not subject_data[subject]["truth_label"] == subject_data[subject]["net_label"]:
+            subject_data[subject]["vote"] = 1 - subject_data[subject]["vote"]
+        if subject_data[subject]["truth_label"] == 'RECURRENT':
+            bar_graph.bar(1, subject_data[subject]["vote"], color='orange')
+        elif subject_data[subject]["truth_label"] == 'NONRECURRENT':
+            bar_graph.bar(1, subject_data[subject]["vote"], color='blue')
+        
+        bar_graph.set_xticks([subject])
+        # bar_graph.set_xticklabels([subject])
+        bar_graph.set_ylim([0, 1])
+        bar_graph.legend([subject_data[subject]["truth_label"]])
+
+        pdb.set_trace()
+
+def save_roc_curve(fpr, tpr, thresholds, roc_auc):
+    plt.plot(1-fpr, tpr, color='darkorange', lw=2)
+    plt.plot([0, 1], [1,0], color='black', lw=1, linestyle='--')
+    path_list = FLAGS.base_path.split("/")
+    plt.title(path_list[len(path_list)-2])
+    legend = 'ROC curve (area = %0.2f)' % roc_auc
+    plt.legend([legend])
+    plt.savefig(os.path.join(FLAGS.base_path,"ROC.jpg"))
+    plt.clf()
+
+def save_subjects_vote_bar_graph(image_dict, subject_dict):
+    subject_data = analysis_per_subject(subject_dict, image_dict)
+    index = 0
+    half_index = len(subject_data.keys()) // 2    
+    recur_names =[]
+    nonrecur_names = []
+    
+    for subject in sorted(subject_data):
+        if not subject_data[subject]["truth_label"] == subject_data[subject]["net_label"]:
+            subject_data[subject]["vote"] = 1 - subject_data[subject]["vote"]
+        
+        if subject_data[subject]["truth_label"] == 'RECURRENT':
+            plt.bar(index, subject_data[subject]["vote"], color='orange', tick_label=subject)
+            index += 1
+            recur_names.append(subject)
+
+        elif subject_data[subject]["truth_label"] == 'NONRECURRENT':
+            plt.bar(half_index, subject_data[subject]["vote"], color='blue', tick_label=subject)
+            nonrecur_names.append(subject)
+            half_index += 1
+    plt.ylim([0,1])
+    path_list = FLAGS.base_path.split("/")
+    plt.title(path_list[len(path_list)-2])
+    plt.legend(["Recurrent","Nonrecurrent"])
+    plt.savefig(os.path.join(FLAGS.base_path,"majority_voting.jpg"))
 
 def majority_vote(base_path, hist_path=None, map_path=None, create_maps=False, info=None, patch_size=None, patch_overlap=None, og_image_path=None):
     if not hist_path:
@@ -395,10 +489,16 @@ def main():
     if FLAGS.from_outside:
         return image_dict, subject_dict
     
-    create_roc_curves(image_dict)
+    if FLAGS.per_subject:
+        roc_dict = per_subject_roc_curves(subject_dict, image_dict)
+        plot_roc_curves_and_votes(roc_dict, subject_dict, image_dict)
+    else:
+        fpr, tpr, thresholds, roc_auc = create_overall_roc_curve(image_dict)
+        save_roc_curve(fpr, tpr, thresholds, roc_auc)
     
     if FLAGS.info == "subject":
         print_info_per_subject(subject_dict, image_dict)
+        save_subjects_vote_bar_graph(image_dict, subject_dict)
     elif FLAGS.info == "image":
         print_info_per_image(image_dict)     
     else:

@@ -48,6 +48,7 @@ import reader
 import util
 from scipy.misc import imsave
 import csv
+from termcolor import cprint
 import pdb
 
 from tensorflow.python.client import device_lib
@@ -56,7 +57,7 @@ flags = tf.flags
 logging = tf.logging
 
 flags.DEFINE_string(
-    "model", "color",
+    "config", "color",
     "Configuration for the current run. Can be small, medium, large, test, or (default) color.")
 flags.DEFINE_string("recur_data_path", None,
                     "Where the recurrence binary file is stored.")
@@ -469,7 +470,7 @@ class ColorConfig(object):
   num_steps = 20 #50-500
   hidden_size = 500 #100
   max_epoch = 5 
-  max_max_epoch = 50 #100 #50
+  max_max_epoch = 100 #100 #50
   keep_prob = 0.50 # 0.2-0.8 #parameter
   lr_decay = 1 #/ 1.15
   batch_size = 30 #30 #10-100
@@ -615,9 +616,10 @@ def run_epoch(session, model, results_file, epoch_count, csv_file=None, eval_op=
     subject_ids = vals["subject_ids"]
     names = vals["names"]
     coords = vals["coords"]
+    
     if test_mode:
       create_voting_file(subject_ids, names, labels, unscaled_logits, scaled_logits, output, coords, csv_file)
-      save_sample_image(input_data, labels, model, step, epoch_count)
+      # save_sample_image(input_data, labels, model, step, epoch_count)
     
     costs += cost
     iters += model.input.num_steps
@@ -646,7 +648,7 @@ def run_epoch(session, model, results_file, epoch_count, csv_file=None, eval_op=
             result[3] += 1  # FP
          
     if model.mode == "train":
-      if verbose and step % (model.input.epoch_size // 10) == 10:
+      if verbose and step % (model.input.epoch_size // 10) == 5:
         print("%.3f loss: %.3f" %
               (step * 1.0 / model.input.epoch_size,
                  costs / (step + 1.0)
@@ -676,8 +678,8 @@ def run_epoch(session, model, results_file, epoch_count, csv_file=None, eval_op=
       result[1] * 1.0 / (result[1] + result[2]), # False Omission
       (result[0] + result[2]) * 1.0 / np.sum(result), #Accurary
       result[0] + result[1], #Pos cases
-      result[2] + result[3],
-      cost)) #Neg cases
+      result[2] + result[3], #Neg cases
+      costs)) 
 
   return costs / model.input.epoch_size
 
@@ -685,18 +687,18 @@ def run_epoch(session, model, results_file, epoch_count, csv_file=None, eval_op=
 def get_config():
   """Get model config."""
   config = None
-  if FLAGS.model == "small":
+  if FLAGS.config == "small":
     config = SmallConfig()
-  elif FLAGS.model == "medium":
+  elif FLAGS.config == "medium":
     config = MediumConfig()
-  elif FLAGS.model == "large":
+  elif FLAGS.config == "large":
     config = LargeConfig()
-  elif FLAGS.model == "test":
+  elif FLAGS.config == "test":
     config = TestConfig()
-  elif FLAGS.model == "color":
+  elif FLAGS.config == "color":
     config = ColorConfig()
   else:
-    raise ValueError("Invalid model: %s", FLAGS.model)
+    raise ValueError("Invalid config: %s", FLAGS.config)
   if FLAGS.rnn_mode:
     config.rnn_mode = FLAGS.rnn_mode
   if FLAGS.num_gpus != 1 or tf.__version__ < "1.3.0" :
@@ -745,6 +747,12 @@ def main(_):
   base_directory = "/home/wanglab/Desktop/recurrence_seq_lstm"
   results_directory = "results/" + results_prepend + "_lr" + str(config.learning_rate) + "_kp" + str(int(config.keep_prob*100))
   results_path = os.path.join(base_directory, results_directory)
+  
+  cprint("Data Sources:", 'white', 'on_magenta')
+  cprint(FLAGS.recur_data_path, 'magenta', 'on_white')
+  cprint(FLAGS.nonrecur_data_path, 'magenta', 'on_white')
+  cprint("Results saved to %s" % (results_path), 'white', 'on_magenta')
+  
   os.makedirs(os.path.join(base_directory, results_directory), exist_ok=True)
   if config.test_mode == 0:  
     # os.makedirs(os.path.join(base_directory,"samples"), exist_ok=True)
@@ -753,7 +761,7 @@ def main(_):
     test_file = open(os.path.join(results_path,"test_results.txt"), 'at+')
   else:
     test_file = open(os.path.join(results_path,"secondary_test_results.txt"), 'at+')
-    csv_file = open(os.path.join(results_path,"voting_file.csv"), 'at+')
+    csv_file = open(os.path.join(results_path,"voting_file.csv"), 'wt+')
     csv_file.write("ID,names,output,label,unscaled_nr,unscaled_rec,scaled_nr,scaled_rec,coords\n")
 
   eval_config = get_config()
@@ -835,10 +843,11 @@ def main(_):
             variable_parameters *= dim.value
         #print(variable_parameters)
         total_parameters += variable_parameters
-    print(total_parameters)  
+    cprint(total_parameters, 'green')  
 
 
     with sv.managed_session(config=config_proto) as session:
+      #pdb.set_trace()
       if config.test_mode == 0:
         training_loss=[]
         for i in range(config.max_max_epoch):
@@ -854,7 +863,13 @@ def main(_):
 
           training_loss.append(avg_train_cost)
 
-          avg_test_cost = run_epoch(session, mtest, test_file, i + 1, verbose=True)
+          if config.max_max_epoch == (i+1):
+            csv_file = open(os.path.join(results_path,"voting_file.csv"), 'wt+')
+            csv_file.write("ID,name,output,label,unscaled_nr,unscaled_rec,scaled_nr,scaled_rec,coords\n")
+            avg_test_cost = run_epoch(session, mtest, test_file, i + 1, csv_file=csv_file, verbose=True, test_mode=True)
+            csv_file.close()
+          else:
+            avg_test_cost = run_epoch(session, mtest, test_file, i + 1, verbose=True)
           print("Avg Test Cost: %.3f" % avg_test_cost)
      
         train_file.close()

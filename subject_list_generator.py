@@ -15,8 +15,9 @@ from tensorflow import flags
 
 # Global variables
 flags.DEFINE_string("subject_list", "verified_images.csv", "Master list of subjects from which to create per-mode subject lists")
-flags.DEFINE_string("base_path", None, "Location of current testing condition files")
+flags.DEFINE_string("base_path", None, "Location of subject list and where the current testing condition files will be created")
 flags.DEFINE_integer("conditions", 20, "Number of patient sets to create")
+flags.DEFINE_string("condition_name", "leave_one_out_conditions", "Name of current testing condition")
 FLAGS = flags.FLAGS
 # Class declarations
 
@@ -64,11 +65,11 @@ def generate_subject_lists(subject_dict):
 	# else:
 	# 	large_label_list = nonrecur_subject_list
 	# 	small_label_list = recur_subject_list
-	conditions_folder_path = os.path.join(FLAGS.base_path, "conditions")
+	conditions_folder_path = os.path.join(FLAGS.base_path, FLAGS.condition_name)
 	os.makedirs(conditions_folder_path, exist_ok=True)
 
 	for i in range(FLAGS.conditions):
-		folder_path = os.path.join(conditions_folder_path, str(i+1) + "_condition")
+		folder_path = os.path.join(conditions_folder_path, '{0:03d}'.format(i+1) + "_condition")
 		os.makedirs(folder_path, exist_ok=True)
 		recur_test_subject = random.choice(recur_subject_list)
 		nonrecur_test_subject = random.choice(nonrecur_subject_list)
@@ -96,6 +97,7 @@ def write_test_file(subject_dict, test_subject, test_file):
 def write_train_and_valid_files(subject_dict, subject_list, valid_file, train_file):
 	for subject in subject_list:
 		image_list = list(subject_dict[subject]["images"])
+		random.shuffle(image_list)
 		if len(image_list) == 1:
 			train_file.write(image_list[0] + '\n')
 		elif len(image_list) == 2:
@@ -103,7 +105,6 @@ def write_train_and_valid_files(subject_dict, subject_list, valid_file, train_fi
 			valid_file.write(image_list[1] + '\n')
 		else:
 			num_valid_subjects = len(image_list) // 3
-			random.shuffle(image_list)
 			for x in range(num_valid_subjects):
 				valid_file.write(image_list.pop(0) + '\n')
 			for image in image_list:
@@ -114,7 +115,6 @@ def write_train_and_valid_files(subject_dict, subject_list, valid_file, train_fi
 def main():
     base_path = FLAGS.base_path
     filename = FLAGS.subject_list
-    os.makedirs(os.path.join(base_path, "per_mode_subjects"), exist_ok=True)
     csv_file = os.path.join(base_path, filename)
 
     subject_dict = {}
@@ -127,13 +127,13 @@ def main():
     			initialize_subject(subject_dict[row[0]], row)
     		else:
     			add_to_existing_subject(subject_dict[row[0]], row)
-    recurrent_count = 0
-    nonrecurrent_count = 0
-    for key in subject_dict.keys():
-    	if subject_dict[key]["label"] == 'RECURRENT':
-    		recurrent_count +=1
-    	elif subject_dict[key]["label"] == 'NONRECURRENT':
-    		nonrecurrent_count +=1
+    # recurrent_count = 0
+    # nonrecurrent_count = 0
+    # for key in subject_dict.keys():
+    # 	if subject_dict[key]["label"] == 'RECURRENT':
+    # 		recurrent_count +=1
+    # 	elif subject_dict[key]["label"] == 'NONRECURRENT':
+    # 		nonrecurrent_count +=1
     generate_subject_lists(subject_dict)
 
 # Main body

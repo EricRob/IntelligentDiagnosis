@@ -8,6 +8,7 @@ import sys
 import os
 import csv
 import matplotlib.pyplot as plt
+from pylab import subplot, plot, subplots_adjust
 import numpy as np
 import pdb
 from termcolor import cprint
@@ -133,6 +134,7 @@ def create_majority_votes(parent, figure):
 	bar_graph.set_xticklabels(names)
 	bar_graph.set_ylim([0, 1])
 	bar_graph.set_title("Majority Vote")
+	bar_graph.legend(["Recurrent","Nonrecurrent"])
 	return
 
 def main():
