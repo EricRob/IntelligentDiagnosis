@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3 python3
 
 import numpy as np
 import warnings
@@ -323,16 +323,15 @@ if __name__ == '__main__':
 
 	if FLAGS.condition_path:
 		FLAGS.randomized_conditions = True
-
 	config = get_config()
 	og_images_directory = os.path.join(config.image_data_folder_path, "original_images")
 
 	image_to_ID_csv_file = open(os.path.join(config.image_data_folder_path,"image_to_subject_ID.csv"),"r")
 	reader = csv.DictReader(image_to_ID_csv_file, delimiter=",")
 	for row in reader:
-		if row["label"] == 1:
+		if int(row["label"]) == 1:
 			create_patch_folder(row["image_name"], "recurrence", config)
-		elif row["label"] == 0:
+		elif int(row["label"]) == 0:
 			create_patch_folder(row["image_name"], "nonrecurrence", config)
 
 	if not FLAGS.patches_only:
