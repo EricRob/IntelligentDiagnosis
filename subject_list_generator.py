@@ -18,6 +18,7 @@ flags.DEFINE_string("subject_list", "verified_images.csv", "Master list of subje
 flags.DEFINE_string("base_path", None, "Location of subject list and where the current testing condition files will be created")
 flags.DEFINE_integer("conditions", 20, "Number of patient sets to create")
 flags.DEFINE_string("condition_name", "leave_one_out_conditions", "Name of current testing condition")
+flags.DEFINE_integer("test_subjects", 1, "Number of subjects to include in test conditions")
 FLAGS = flags.FLAGS
 # Class declarations
 
@@ -71,27 +72,41 @@ def generate_subject_lists(subject_dict):
 	for i in range(FLAGS.conditions):
 		folder_path = os.path.join(conditions_folder_path, '{0:03d}'.format(i+1) + "_condition")
 		os.makedirs(folder_path, exist_ok=True)
-		recur_test_subject = random.choice(recur_subject_list)
-		nonrecur_test_subject = random.choice(nonrecur_subject_list)
+		recur_test_subjects = []
+		nonrecur_test_subjects = []
+
+		while(len(recur_test_subjects) < (FLAGS.test_subjects / 2)):
+			rand_recur_subject = random.choice(recur_subject_list)
+			if rand_recur_subject not in recur_test_subjects:
+				recur_test_subjects.append(rand_recur_subject)
+
+		while(len(nonrecur_test_subjects) < (FLAGS.test_subjects / 2)):
+			rand_nonrecur_subject = random.choice(nonrecur_subject_list)
+			if rand_nonrecur_subject not in nonrecur_test_subjects:
+				nonrecur_test_subjects.append(rand_nonrecur_subject)
 		
 		recur_test_removed = list(recur_subject_list)
-		recur_test_removed.remove(recur_test_subject)
+		for test_subject in recur_test_subjects:
+			recur_test_removed.remove(test_subject)
+
 		nonrecur_test_removed = list(nonrecur_subject_list)
-		nonrecur_test_removed.remove(nonrecur_test_subject)
+		for test_subject in nonrecur_test_subjects:
+			nonrecur_test_removed.remove(test_subject)
 
-		create_mode_lists_per_label(subject_dict, recur_test_subject, recur_test_removed, folder_path, 'recurrence')
-		create_mode_lists_per_label(subject_dict, nonrecur_test_subject, nonrecur_test_removed, folder_path,'nonrecurrence')
+		create_mode_lists_per_label(subject_dict, recur_test_subjects, recur_test_removed, folder_path, 'recurrence')
+		create_mode_lists_per_label(subject_dict, nonrecur_test_subjects, nonrecur_test_removed, folder_path,'nonrecurrence')
 
-def create_mode_lists_per_label(subject_dict, test_subject, subject_list, folder_path, label):
+def create_mode_lists_per_label(subject_dict, test_subjects, subject_list, folder_path, label):
 	test_file = open(os.path.join(folder_path, label + "_test_subjects.txt"), "wt")
 	valid_file = open(os.path.join(folder_path, label + "_valid_subjects.txt"), "wt")
 	train_file = open(os.path.join(folder_path, label + "_train_subjects.txt"), "wt")
-	write_test_file(subject_dict, test_subject, test_file)
+	write_test_file(subject_dict, test_subjects, test_file)
 	write_train_and_valid_files(subject_dict, subject_list, valid_file, train_file)
 
-def write_test_file(subject_dict, test_subject, test_file):
-	for image in subject_dict[test_subject]["images"]:
-		test_file.write(image + '\n')
+def write_test_file(subject_dict, test_subjects, test_file):
+	for subject in test_subjects:
+		for image in subject_dict[subject]["images"]:
+			test_file.write(image + '\n')
 	test_file.close()
 
 def write_train_and_valid_files(subject_dict, subject_list, valid_file, train_file):
