@@ -9,6 +9,7 @@ import csv
 import os
 import pdb
 import random
+import numpy as np
 from termcolor import cprint
 from tensorflow import flags
 
@@ -54,47 +55,105 @@ def generate_label_dicts(subject_dict):
 			nonrecurrence_dict[subject] = subject_dict[subject]["images"]
 	return recurrence_dict, nonrecurrence_dict
 
+def sort_recurrence_from_nonrecurrence(train_list, test_list, subject_dict):
+	recur_train = []
+	nonrecur_train = []
+	recur_test = []
+	nonrecur_test = []
+
+	for subj in train_list:
+		if subject_dict[subj]['label'] == 'NONRECURRENT':
+			nonrecur_train.append(subj)
+		else:
+			recur_train.append(subj)
+
+	for subj in test_list:
+		if subject_dict[subj]['label'] == 'NONRECURRENT':
+			nonrecur_test.append(subj)
+		else:
+			recur_test.append(subj)
+	return recur_train, recur_test, nonrecur_train, nonrecur_test
+
+def one_third_subject_lists(folder_path, train_list, test_list, subject_dict):
+	os.makedirs(folder_path, exist_ok=True)
+	recur_train, recur_test, nonrecur_train, nonrecur_test = sort_recurrence_from_nonrecurrence(train_list, test_list, subject_dict)
+	create_mode_lists_per_label(subject_dict, recur_test, recur_train, folder_path, 'recurrence')
+	create_mode_lists_per_label(subject_dict, nonrecur_test, nonrecur_train, folder_path, 'nonrecurrence')
+
 def generate_subject_lists(subject_dict):
 	recurrence_dict, nonrecurrence_dict = generate_label_dicts(subject_dict)
 	
-	recur_subject_list = list(recurrence_dict.keys())
-	nonrecur_subject_list = list(nonrecurrence_dict.keys())
+	# subject_list = random.shuffle(list(subject_dict))
+	
+	subject_list = list(subject_dict)
+	random.shuffle(subject_list)
 
-	# if len(recur_subject_list) > nonrecur_subject_list:
-	# 	large_label_list = recur_subject_list
-	# 	small_label_list = nonrecur_subject_list
-	# else:
-	# 	large_label_list = nonrecur_subject_list
-	# 	small_label_list = recur_subject_list
 	conditions_folder_path = os.path.join(FLAGS.base_path, FLAGS.condition_name)
 	os.makedirs(conditions_folder_path, exist_ok=True)
 
-	for i in range(FLAGS.conditions):
-		folder_path = os.path.join(conditions_folder_path, '{0:03d}'.format(i+1) + "_condition")
-		os.makedirs(folder_path, exist_ok=True)
-		recur_test_subjects = []
-		nonrecur_test_subjects = []
+	test_subject_count = len(subject_list) // 3
+	test_subjects = list(subject_list)
 
-		while(len(recur_test_subjects) < (FLAGS.test_subjects / 2)):
-			rand_recur_subject = random.choice(recur_subject_list)
-			if rand_recur_subject not in recur_test_subjects:
-				recur_test_subjects.append(rand_recur_subject)
+	condition_one_train = list(subject_list)
+	condition_two_train = list(subject_list)
+	condition_three_train = list(subject_list)
 
-		while(len(nonrecur_test_subjects) < (FLAGS.test_subjects / 2)):
-			rand_nonrecur_subject = random.choice(nonrecur_subject_list)
-			if rand_nonrecur_subject not in nonrecur_test_subjects:
-				nonrecur_test_subjects.append(rand_nonrecur_subject)
+	condition_one_test = []
+	condition_two_test = []
+	condition_three_test = []
+
+
+	for _ in np.arange(test_subject_count):
+		subject_one = test_subjects.pop()
+		condition_one_test.append(subject_one)
+		condition_one_train.remove(subject_one)
+
+		subject_two = test_subjects.pop()
+		condition_two_test.append(subject_two)
+		condition_two_train.remove(subject_two)
+
+	for subject_three in test_subjects:
+		condition_three_train.remove(subject_three)
+
+
+	folder_path_one = os.path.join(conditions_folder_path, "001_condition")
+	one_third_subject_lists(folder_path_one, condition_one_train, condition_one_test, subject_dict)
+	
+	folder_path_two = os.path.join(conditions_folder_path, "002_condition")
+	one_third_subject_lists(folder_path_two, condition_two_train, condition_two_test, subject_dict)
+
+	folder_path_three = os.path.join(conditions_folder_path, "003_condition")
+	one_third_subject_lists(folder_path_three, condition_three_train, test_subjects, subject_dict)
+
+
+	# recur_subject_list = list(recurrence_dict.keys())
+	# nonrecur_subject_list = list(nonrecurrence_dict.keys())
+	# for i in range(FLAGS.conditions):
+	# 	folder_path = os.path.join(conditions_folder_path, '{0:03d}'.format(i+1) + "_condition")
+	# 	os.makedirs(folder_path, exist_ok=True)
+	# 	recur_test_subjects = []
+	# 	nonrecur_test_subjects = []
+
+	# 	while(len(recur_test_subjects) < (FLAGS.test_subjects / 2)):
+	# 		rand_recur_subject = random.choice(recur_subject_list)
+	# 		if rand_recur_subject not in recur_test_subjects:
+	# 			recur_test_subjects.append(rand_recur_subject)
+
+	# 	while(len(nonrecur_test_subjects) < (FLAGS.test_subjects / 2)):
+	# 		rand_nonrecur_subject = random.choice(nonrecur_subject_list)
+	# 		if rand_nonrecur_subject not in nonrecur_test_subjects:
+	# 			nonrecur_test_subjects.append(rand_nonrecur_subject)
 		
-		recur_test_removed = list(recur_subject_list)
-		for test_subject in recur_test_subjects:
-			recur_test_removed.remove(test_subject)
+	# 	recur_test_removed = list(recur_subject_list)
+	# 	for test_subject in recur_test_subjects:
+	# 		recur_test_removed.remove(test_subject)
 
-		nonrecur_test_removed = list(nonrecur_subject_list)
-		for test_subject in nonrecur_test_subjects:
-			nonrecur_test_removed.remove(test_subject)
+	# 	nonrecur_test_removed = list(nonrecur_subject_list)
+	# 	for test_subject in nonrecur_test_subjects:
+	# 		nonrecur_test_removed.remove(test_subject)
 
-		create_mode_lists_per_label(subject_dict, recur_test_subjects, recur_test_removed, folder_path, 'recurrence')
-		create_mode_lists_per_label(subject_dict, nonrecur_test_subjects, nonrecur_test_removed, folder_path,'nonrecurrence')
+	# 	create_mode_lists_per_label(subject_dict, recur_test_subjects, recur_test_removed, folder_path, 'recurrence')
+	# 	create_mode_lists_per_label(subject_dict, nonrecur_test_subjects, nonrecur_test_removed, folder_path,'nonrecurrence')
 
 def create_mode_lists_per_label(subject_dict, test_subjects, subject_list, folder_path, label):
 	test_file = open(os.path.join(folder_path, label + "_test_subjects.txt"), "wt")

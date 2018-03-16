@@ -94,7 +94,7 @@ def create_subplot(figure, train_dict, valid_dict, test_dict, epochs, value, plo
 
 def create_majority_votes(parent, figure):
 	image_dict, subject_dict = voter.majority_vote(parent)
-	fpr, tpr, thresholds, roc_auc = voter.create_roc_curves(image_dict)
+	fpr, tpr, thresholds, roc_auc = voter.create_overall_roc_curve(image_dict)
 	roc = figure.add_subplot(235)
 	roc.plot(1-fpr, tpr, color='darkorange', lw=2)
 	roc.plot([0, 1], [1,0], color='black', lw=1, linestyle='--')
@@ -107,34 +107,64 @@ def create_majority_votes(parent, figure):
 	bar_graph = figure.add_subplot(236)
 	index = 0
 	half_index = len(subject_data.keys()) // 2
-	if len(subject_data.keys()) % 2 == 1:
-		half_index += 1
+	# if len(subject_data.keys()) % 2 == 1:
+	# 	half_index += 1
 
-	recur_names =[]
+	names =[]
+	votes = []
+	recur_votes = []
 	nonrecur_names = []
+	nonrecur_votes = []
 
-	for subject in sorted(subject_data):
-		if not subject_data[subject]["truth_label"] == subject_data[subject]["net_label"]:
-			subject_data[subject]["vote"] = 1 - subject_data[subject]["vote"]
-		
+	recur_dict = dict()
+	nonrecur_dict = dict()
+
+	for subject in subject_data:
 		if subject_data[subject]["truth_label"] == 'RECURRENT':
-			bar_graph.bar(index, subject_data[subject]["vote"], color='orange')
-			index += 1
-			recur_names.append(subject)
+			recur_dict[subject] = subject_data[subject]
+		else:
+			nonrecur_dict[subject] = subject_data[subject]
+	for subject in sorted(recur_dict):
+		if not recur_dict[subject]["truth_label"] == recur_dict[subject]["net_label"]:
+			recur_dict[subject]["vote"] = 1 - recur_dict[subject]["vote"]
+		rec_legend = bar_graph.bar(index, recur_dict[subject]["vote"], color='orange', label="Recurrent")
+		index += 1
+		names.append(subject)
+		votes.append(recur_dict[subject]["vote"])
 
-		elif subject_data[subject]["truth_label"] == 'NONRECURRENT':
-			bar_graph.bar(half_index, subject_data[subject]["vote"], color='blue')
-			nonrecur_names.append(subject)
-			half_index += 1
-	if len(subject_data.keys()) % 2 == 1:
-		recur_names.append(" ")
+	for subject in sorted(nonrecur_dict):
+		if not nonrecur_dict[subject]["truth_label"] == nonrecur_dict[subject]["net_label"]:
+			nonrecur_dict[subject]["vote"] = 1 - nonrecur_dict[subject]["vote"]
+		nonrec_legend = bar_graph.bar(index, nonrecur_dict[subject]["vote"], color='blue', label="Nonrecurrent")
+		index += 1
+		names.append(subject)
+		votes.append(nonrecur_dict[subject]["vote"])
 
-	names = recur_names + nonrecur_names
+
+	# for subject in sorted(subject_data):
+	# 	if not subject_data[subject]["truth_label"] == subject_data[subject]["net_label"]:
+	# 		subject_data[subject]["vote"] = 1 - subject_data[subject]["vote"]
+		
+	# 	if subject_data[subject]["truth_label"] == 'RECURRENT':
+	# 		bar_graph.bar(index, subject_data[subject]["vote"], color='orange')
+	# 		index += 1
+	# 		recur_names.append(subject)
+	# 		recur_votes.append(subject_data[subject]["vote"])
+
+	# 	elif subject_data[subject]["truth_label"] == 'NONRECURRENT':
+	# 		bar_graph.bar(half_index, subject_data[subject]["vote"], color='blue')
+	# 		nonrecur_names.append(subject)
+	# 		nonrecur_votes.append(subject_data[subject]["vote"])
+	# 		half_index += 1
+	# names = recur_names + nonrecur_names
+	# votes = recur_votes + nonrecur_votes
 	bar_graph.set_xticks(np.arange(len(subject_data.keys())))
-	bar_graph.set_xticklabels(names)
+	bar_graph.set_xticklabels(names, rotation=90)
 	bar_graph.set_ylim([0, 1])
+	bar_graph.axhline(0.5, color='gray')
 	bar_graph.set_title("Majority Vote")
-	bar_graph.legend(["Recurrent","Nonrecurrent"])
+	percent_vote = ["{:.4f}".format(vote) for vote in votes]
+	bar_graph.legend([rec_legend, nonrec_legend], ["Recurrent", "Nonrecurrent"])
 	return
 
 def main():
