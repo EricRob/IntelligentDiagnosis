@@ -24,6 +24,9 @@ FLAGS = flags.FLAGS
 
 # Function declarations
 def split_image_in_half(img, large_image_name):
+	if os.path.exists(new_filename + "_B1.tif"):
+		cprint("Region 1 already exists, skipping " + large_image_name)
+		return
 	y_center = img.shape[0] // 2
 
 	top = img[0:y_center,:,:]
@@ -38,30 +41,37 @@ def split_image_in_half(img, large_image_name):
 	del bottom
 
 def split_image_into_fourths(img, large_image_name):
+	if os.path.exists(new_filename + "_Q1.tif"):
+		cprint("Region 1 already exists, skipping " + large_image_name)
+		return
 	x_shape = img.shape[1]
 	y_shape = img.shape[0]
 	x_center = x_shape // 2
 	y_center = y_shape // 2
-	nw = img[0:y_center, 0:x_center, :]
-	sw = img[y_center:, 0:x_center, :]
-	ne = img[0:y_center, x_center:, :]
-	se = img[y_center:, x_center:, :]
-	del img
+
 	new_filename = os.path.join(FLAGS.base_path, FLAGS.original_images_folder,large_image_name.split('.')[0])
+
+	nw = img[0:y_center, 0:x_center, :]
 	cprint("Saving NW...", 'green')
 	io.imsave(new_filename + "_Q1.tif", nw )
 	del nw
+	sw = img[y_center:, 0:x_center, :]
 	cprint("Saving SW...", 'green')
 	io.imsave(new_filename + "_Q3.tif", sw )
 	del sw
+	ne = img[0:y_center, x_center:, :]
 	cprint("Saving NE...", 'green')
 	io.imsave(new_filename + "_Q3.tif", ne )
 	del ne
+	se = img[y_center:, x_center:, :]
 	cprint("Saving SE...", 'green')
 	io.imsave(new_filename + "_Q4.tif", se )
 
 def split_image_into_ninths(img, large_image_name):
 	new_filename = os.path.join(FLAGS.base_path, FLAGS.original_images_folder,large_image_name.split('.')[0])
+	if os.path.exists(new_filename + "_N1.tif"):
+		cprint("Region 1 already exists, skipping " + large_image_name)
+		return
 	x_shape = img.shape[1]
 	y_shape = img.shape[0]
 	x_left = x_shape // 3
@@ -118,7 +128,7 @@ def main():
 	with open(os.path.join(FLAGS.base_path, FLAGS.image_list), newline="") as csvfile:
 		reader = csv.reader(csvfile)
 		for line in reader:
-			large_image_name = line[0]
+			large_image_name = line[1]
 			img_path = os.path.join(FLAGS.base_path, FLAGS.original_images_folder,large_image_name)
 			if not os.path.exists(img_path):
 				continue
