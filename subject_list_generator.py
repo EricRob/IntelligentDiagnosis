@@ -17,9 +17,9 @@ from tensorflow import flags
 # Global variables
 flags.DEFINE_string("subject_list", "verified_images.csv", "Master list of subjects from which to create per-mode subject lists")
 flags.DEFINE_string("base_path", None, "Location of subject list and where the current testing condition files will be created")
-flags.DEFINE_integer("conditions", 20, "Number of patient sets to create")
+flags.DEFINE_integer("conditions", 6, "Number of patient sets to create")
 flags.DEFINE_string("condition_name", "leave_one_out_conditions", "Name of current testing condition")
-flags.DEFINE_integer("test_subjects", 1, "Number of subjects to include in test conditions")
+
 FLAGS = flags.FLAGS
 # Class declarations
 
@@ -74,56 +74,93 @@ def sort_recurrence_from_nonrecurrence(train_list, test_list, subject_dict):
 			recur_test.append(subj)
 	return recur_train, recur_test, nonrecur_train, nonrecur_test
 
-def one_third_subject_lists(folder_path, train_list, test_list, subject_dict):
+def write_subject_lists(folder_path, train_list, test_list, subject_dict, condition_dict, i):
 	os.makedirs(folder_path, exist_ok=True)
 	recur_train, recur_test, nonrecur_train, nonrecur_test = sort_recurrence_from_nonrecurrence(train_list, test_list, subject_dict)
+	condition_dict[i+1]["recur_test"] = recur_test
+	condition_dict[i+1]["nonrecur_test"] = nonrecur_test
 	create_mode_lists_per_label(subject_dict, recur_test, recur_train, folder_path, 'recurrence')
 	create_mode_lists_per_label(subject_dict, nonrecur_test, nonrecur_train, folder_path, 'nonrecurrence')
 
+def make_single_condition_list(subject_list, all_test_subjects, test_count, i, cond_path, subject_dict, condition_dict):
+	train_list = list(subject_list)
+	test_list = []
+
+	for _ in np.arange(test_count):
+		subject = all_test_subjects.pop()
+		test_list.append(subject)
+		train_list.remove(subject)
+	folder_path = os.path.join(cond_path, '{0:03d}'.format(i+1) + "_condition")
+	write_subject_lists(folder_path, train_list, test_list, subject_dict, condition_dict, i)
+	return all_test_subjects
+
+def write_conditions_csv(condition_dict, conditions_folder_path):
+	with open(os.path.join(conditions_folder_path,FLAGS.condition_name + '_tests.csv'), 'w', newline='') as csvfile:
+		csvwriter = csv.writer(csvfile)
+		csvwriter.writerow(['subject', 'label', 'condition'])
+		for test_cond in condition_dict:
+			for recur in condition_dict[test_cond]["recur_test"]:
+				csvwriter.writerow([recur, '1', str(test_cond)])
+			for nonrecur in condition_dict[test_cond]["nonrecur_test"]:
+				csvwriter.writerow([nonrecur, '0', str(test_cond)])
+
+
+
 def generate_subject_lists(subject_dict):
-	recurrence_dict, nonrecurrence_dict = generate_label_dicts(subject_dict)
+	# recurrence_dict, nonrecurrence_dict = generate_label_dicts(subject_dict)
 	
 	# subject_list = random.shuffle(list(subject_dict))
 	
 	subject_list = list(subject_dict)
-	random.shuffle(subject_list)
-
 	conditions_folder_path = os.path.join(FLAGS.base_path, FLAGS.condition_name)
 	os.makedirs(conditions_folder_path, exist_ok=True)
+	test_subject_count = len(subject_list) // FLAGS.conditions
+	condition_dict = dict()
+	for i in np.arange(FLAGS.conditions):
+		condition_dict[i+1] = dict()
+	all_non_empty = False
 
-	test_subject_count = len(subject_list) // 3
-	test_subjects = list(subject_list)
+	while(not all_non_empty):
+		all_non_empty = True
+		random.shuffle(subject_list)
+		test_subjects = list(subject_list)
 
-	condition_one_train = list(subject_list)
-	condition_two_train = list(subject_list)
-	condition_three_train = list(subject_list)
+		# condition_one_train = list(subject_list)
+		# condition_two_train = list(subject_list)
+		# condition_three_train = list(subject_list)
 
-	condition_one_test = []
-	condition_two_test = []
-	condition_three_test = []
+		# condition_one_test = []
+		# condition_two_test = []
+		# condition_three_test = []
+
+		for i in np.arange(FLAGS.conditions-1):
+			test_subjects = make_single_condition_list(subject_list, test_subjects, test_subject_count, i, conditions_folder_path, subject_dict, condition_dict)
+		final_condition_train = list(subject_list)
+
+		for subject in test_subjects:
+			final_condition_train.remove(subject)
+		final_folder_path = os.path.join(conditions_folder_path, '{0:03d}'.format(FLAGS.conditions) + "_condition")
+		write_subject_lists(final_folder_path, final_condition_train, test_subjects, subject_dict, condition_dict, FLAGS.conditions-1)
+
+		# Make sure all tests contain at least one subject. If not, reshuffle subject list and start over.
+		for condition in condition_dict:
+			if not condition_dict[condition]["recur_test"]:
+				all_non_empty = False
+				break
+			if not condition_dict[condition]["nonrecur_test"]:
+				all_non_empty = False
+				break
+		write_conditions_csv(condition_dict, conditions_folder_path)
 
 
-	for _ in np.arange(test_subject_count):
-		subject_one = test_subjects.pop()
-		condition_one_test.append(subject_one)
-		condition_one_train.remove(subject_one)
-
-		subject_two = test_subjects.pop()
-		condition_two_test.append(subject_two)
-		condition_two_train.remove(subject_two)
-
-	for subject_three in test_subjects:
-		condition_three_train.remove(subject_three)
 
 
-	folder_path_one = os.path.join(conditions_folder_path, "001_condition")
-	one_third_subject_lists(folder_path_one, condition_one_train, condition_one_test, subject_dict)
-	
-	folder_path_two = os.path.join(conditions_folder_path, "002_condition")
-	one_third_subject_lists(folder_path_two, condition_two_train, condition_two_test, subject_dict)
-
-	folder_path_three = os.path.join(conditions_folder_path, "003_condition")
-	one_third_subject_lists(folder_path_three, condition_three_train, test_subjects, subject_dict)
+	# folder_path_one = os.path.join(conditions_folder_path, "001_condition")
+	# write_subject_lists(folder_path_one, condition_one_train, condition_one_test, subject_dict)
+	# folder_path_two = os.path.join(conditions_folder_path, "002_condition")
+	# write_subject_lists(folder_path_two, condition_two_train, condition_two_test, subject_dict)
+	# folder_path_three = os.path.join(conditions_folder_path, "003_condition")
+	# write_subject_lists(folder_path_three, condition_three_train, test_subjects, subject_dict)
 
 
 	# recur_subject_list = list(recurrence_dict.keys())

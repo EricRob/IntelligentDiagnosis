@@ -14,7 +14,7 @@ import pdb
 from termcolor import cprint
 import csv
 from shutil import copyfile
-import centroid_sampler
+import centroid_sampler as gauss
 
 import tiff_patching
 
@@ -30,9 +30,9 @@ flags.DEFINE_string("mode", None, "Create binary file for a specific mode betwee
 flags.DEFINE_bool("randomized_conditions", False, "Generate multiple binary files for randomized conditions with subject variability")
 flags.DEFINE_string("condition_path", None, "Path of condition folder with condition subject lists")
 flags.DEFINE_string("config", None, "Configuration for generating patches.")
-flags.DEFINE_string("sampling_method", "column", "Sampling pattern for generating sequences")
+flags.DEFINE_string("sampling_method", "gauss", "Sampling pattern for generating sequences")
 flags.DEFINE_string("patches_only",False,"Generate only patches for new images, and no binary files.")
-flags.DEFINE_integer("gauss_seq", 3, "Number of sequences to generate per tile with gaussian sampling")
+flags.DEFINE_integer("gauss_seq", 6, "Number of sequences to generate per tile with gaussian sampling")
 
 FLAGS = flags.FLAGS
 
@@ -77,7 +77,6 @@ def create_patch_folder(filename, label, config):
 
 	if os.path.exists(patch_folder_path):
 		if not FLAGS.seg_path:
-			print("Skipping " + filename)
 			return
 		seg_patch_folder_path = os.path.join(FLAGS.seg_path, label, os.path.splitext(filename)[0] + '_patches')
 		if os.path.exists(seg_patch_folder_path):
@@ -115,6 +114,79 @@ def create_patch_folder(filename, label, config):
 		os.makedirs(os.path.join(FLAGS.seg_path, label), exist_ok = True)
 		create_segmentation(seg_path, seg_patch_folder_path, img_dict, patch_folder_path, config)
 
+def write_patch_binary_file(filename, label, config):
+	patch_folder_path = os.path.join(os.path.abspath(config.image_data_folder_path), label, str(config.patch_size) + "_pixel_patches", os.path.splitext(filename)[0] +'_patches')
+
+	bin_name = os.path.splitext(filename)[0] + ".bin"
+	bin_path = os.path.join(patch_folder_path, bin_name)
+	
+	if os.path.exists(bin_path):
+		return
+	cprint()
+	
+	if label == "recurrence" :
+		sequence_overlap_percentage = FLAGS.r_overlap / 100
+	else:
+		sequence_overlap_percentage = FLAGS.nr_overlap / 100
+
+	num_steps = config.num_steps
+	bin_file = open(bin_path, "ab+")
+
+	IMAGE_HEIGHT = config.image_height
+	IMAGE_WIDTH = config.image_width
+	IMAGE_DEPTH = config.image_depth
+	
+	image_bytes = IMAGE_HEIGHT * IMAGE_WIDTH * IMAGE_DEPTH
+
+	write_array = np.zeros([num_steps, image_bytes], dtype=np.uint8)
+	patch_coord_array = np.zeros([num_steps, 2], dtype=np.uint32)
+	write_stride = int(math.floor(num_steps * (1-sequence_overlap_percentage)))
+	
+	image_to_ID_csv_file = open(os.path.join(config.image_data_folder_path,"image_to_subject_ID.csv"),"r")
+	reader = csv.reader(image_to_ID_csv_file, delimiter=",")
+	_ = next(reader) # discard header line
+	image_to_ID_dict = dict()
+	for line in reader:
+		image_to_ID_dict[line[0].split(".")[0]+"_patches"] = line[1]
+
+	patient_ID_byte_string = str.encode(image_to_ID_dict[filename])
+	padded_subject_file_name = "{:<100}".format(image[:-8])
+	image_base_name = str.encode(padded_subject_file_name)
+	img_dict = {}
+	img_dict = get_patch_coords(img_dict, patch_image_list)
+
+	for x_key in sorted(img_dict.keys()):
+		for y_key in sorted(img_dict[x_key].keys()):
+			filename = img_dict[x_key][y_key]
+			counter +=1
+			img = io.imread(os.path.join(patch_folder_path,filename))
+			arr = img.flatten()
+
+			if(counter <= num_steps):
+				write_array[counter-1,:] = arr
+				patch_coord_array[counter-1, 0] = x_key
+				patch_coord_array[counter-1, 1] = y_key
+			else: # Shift all images in the write_array to the left one step, then replace the last value with the new image data
+				write_array = np.roll(write_array, -1, axis=0)
+				patch_coord_array = np.roll(patch_coord_array, -1, axis=0)
+
+				write_array[num_steps - 1,:] = arr
+				patch_coord_array[num_steps-1, 0] = x_key
+				patch_coord_array[num_steps-1, 1] = y_key
+
+
+			write_count = counter - num_steps
+
+			# After the a new portion of the sequence has been added, add the write_array to the binary file
+			if(write_count >= 0) & (write_count % write_stride == 0):
+				writing = np.reshape(write_array, (num_steps, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_DEPTH))
+				coord_str = create_string_from_coord_array(patch_coord_array, config.num_steps)
+				bin_file.write(patient_ID_byte_string)
+				bin_file.write(image_base_name)
+				bin_file.write(str.encode(coord_str))
+				bin_file.write(writing)
+	bin_file.close()
+
 # Image bytes are appended to the binary file, so if a binary file exists at the start then it must be removed
 # After (potentially) deleting file, open a new appendable binary file with read/write capabilities
 def remove_exisiting_binary_file_then_create_new(binary_file_path):
@@ -142,11 +214,12 @@ def get_patch_coords(img_dict, image_list):
 	return img_dict
 
 def gauss_sampling(image_to_ID_dict, images_list, bin_file, config):
-	gauss_config = centroid_sampler.OriginalPatchConfig()
+	gauss_config = gauss.OriginalPatchConfig()
 	gauss_config.maximum_seq_per_tile = FLAGS.gauss_seq
 	gauss_category_folder = "std_dev" + str(gauss_config.maximum_std_dev) + "_seq" + str(gauss_config.maximum_seq_per_tile)
 	gauss_folder = os.path.join(config.image_data_folder_path,'gaussian_patches', gauss_category_folder)
 	os.makedirs(gauss_folder, exist_ok=True)
+	# remove_characters = -8
 	for image in images_list:
 		if not image:
 			continue
@@ -156,12 +229,12 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, config):
 			cprint('Creating image binary file for ' + image[:-8], 'white', 'on_green')
 			mask_name = 'mask_' + image[:-8] + '.tif'
 			mask_path = os.path.join(config.image_data_folder_path,'masks', mask_name)
-			sequences, _ = centroid_sampler.generate_sequences(mask_path, gauss_config)
+			sequences, _ = gauss.generate_sequences(mask_path, gauss_config)
 			image_bin = open(image_bin_path, 'wb+')
 			image_tiff_name = image[:-8] + '.tif'
 			image_patch_name = image[:-8] + '_patches'
 			cprint("Writing binary file...", 'green', 'on_white')
-			centroid_sampler.write_image_bin(image_bin, image_tiff_name, image_to_ID_dict[image_patch_name], sequences, gauss_config)
+			gauss.write_image_bin(image_bin, image_tiff_name, image_to_ID_dict[image_patch_name], sequences, gauss_config)
 			image_bin.close()
 
 		cprint("Appending " + image[:-8], 'green')
@@ -366,8 +439,10 @@ if __name__ == '__main__':
 		for row in reader:
 			if int(row["label"]) == 1:
 				create_patch_folder(row["image_name"], "recurrence", config)
+				# write_patch_binary_file(row["image_name"], "recurrence", config)
 			elif int(row["label"]) == 0:
 				create_patch_folder(row["image_name"], "nonrecurrence", config)
+				# write_patch_binary_file(row["image_name"], "nonrecurrence", config)
 
 	if not FLAGS.patches_only:
 		if FLAGS.randomized_conditions:

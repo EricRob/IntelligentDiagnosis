@@ -30,6 +30,9 @@ flags.DEFINE_string("map_path", None, "Path for saving heat maps")
 flags.DEFINE_bool("create_maps", False, "Choose to create heat maps of images")
 flags.DEFINE_bool("from_outside", False, "Operating from another python script")
 flags.DEFINE_bool('per_subject', False, 'Provide ROC and majority votes per subject')
+flags.DEFINE_string('voting_file', 'voting_file.csv', 'Name of voting file for gathering data')
+flags.DEFINE_bool('print', False, 'Print subject or image majority voting results to command line terminal')
+flags.DEFINE_string('condition_name', 'test_conditions.csv', 'name of csv file with cross validation conditions')
 FLAGS = flags.FLAGS
 
 # Function declarations
@@ -312,6 +315,7 @@ def create_overall_roc_curve(image_dict):
     lw = 2
 
     labels = np.array(all_seq["labels"], dtype=np.uint8)
+
     nr_scores = np.array(all_seq["scaled_nr"])
     rec_scores = np.array(all_seq["scaled_rec"])
 
@@ -389,8 +393,6 @@ def plot_roc_curves_and_votes(roc_dict, subject_dict, image_dict):
         bar_graph.set_ylim([0, 1])
         bar_graph.legend([subject_data[subject]["truth_label"]])
 
-        pdb.set_trace()
-
 def save_roc_curve(fpr, tpr, thresholds, roc_auc):
     plt.plot(1-fpr, tpr, color='darkorange', lw=2)
     plt.plot([0, 1], [1,0], color='black', lw=1, linestyle='--')
@@ -401,33 +403,153 @@ def save_roc_curve(fpr, tpr, thresholds, roc_auc):
     plt.savefig(os.path.join(FLAGS.base_path,"ROC.jpg"))
     plt.clf()
 
+def add_test_condition(subject_data):
+    with open(os.path.join(FLAGS.base_path,FLAGS.condition_name), 'r') as csvfile:
+        reader = csv.reader(csvfile)
+        _ = next(reader) # discard header
+        for line in reader:
+            if line[0] in subject_data:
+                subject_data[line[0]]["condition"] = line[2]
+
 def save_subjects_vote_bar_graph(image_dict, subject_dict):
     subject_data = analysis_per_subject(subject_dict, image_dict)
+    add_test_condition(subject_data)
     index = 0
-    half_index = len(subject_data.keys()) // 2    
-    recur_names =[]
-    nonrecur_names = []
-    
-    for subject in sorted(subject_data):
-        if not subject_data[subject]["truth_label"] == subject_data[subject]["net_label"]:
-            subject_data[subject]["vote"] = 1 - subject_data[subject]["vote"]
-        
+    names =[]
+    votes = []
+    recur_dict = dict()
+    nonrecur_dict = dict()
+    for subject in subject_data:
         if subject_data[subject]["truth_label"] == 'RECURRENT':
-            plt.bar(index, subject_data[subject]["vote"], color='orange', tick_label=subject)
-            index += 1
-            recur_names.append(subject)
+            recur_dict[subject] = subject_data[subject]
+        else:
+            nonrecur_dict[subject] = subject_data[subject]
+    
+    total_conditions = 1
+    for subject in subject_data:
+        if int(subject_data[subject]["condition"]) > total_conditions:
+            total_conditions = int(subject_data[subject]["condition"])
 
-        elif subject_data[subject]["truth_label"] == 'NONRECURRENT':
-            plt.bar(half_index, subject_data[subject]["vote"], color='blue', tick_label=subject)
-            nonrecur_names.append(subject)
-            half_index += 1
+    for cond in np.arange(total_conditions):
+        cond +=1        
+        for subject in sorted(recur_dict):
+            if int(recur_dict[subject]['condition']) == cond:
+                if not recur_dict[subject]["truth_label"] == recur_dict[subject]["net_label"]:
+                    recur_dict[subject]["vote"] = 1 - recur_dict[subject]["vote"]
+                rec_legend = plt.bar(index, recur_dict[subject]["vote"], color='orange', label="Recurrent")
+                index += 1
+                names.append(subject)
+                votes.append(recur_dict[subject]["vote"])
+                subject_data[subject]["vote"] = recur_dict[subject]["vote"]
+        
+        for subject in sorted(nonrecur_dict):
+            if int(nonrecur_dict[subject]['condition']) == cond:
+                if not nonrecur_dict[subject]["truth_label"] == nonrecur_dict[subject]["net_label"]:
+                    nonrecur_dict[subject]["vote"] = 1 - nonrecur_dict[subject]["vote"]
+                nonrec_legend = plt.bar(index, nonrecur_dict[subject]["vote"], color='blue', label="Nonrecurrent")
+                index += 1
+                names.append(subject)
+                votes.append(nonrecur_dict[subject]["vote"])
+                subject_data[subject]["vote"] = nonrecur_dict[subject]["vote"]
+        plt.bar(index, 0)
+        index += 1
+        names.append('^^ %i ^^' % (cond))
+
+    plt.xticks(np.arange(len(subject_data.keys()) + total_conditions), names, rotation=90)
+    plt.axhline(0.5, color='gray')
+    vote_sum = 0
+    for subject in subject_data:
+        vote_sum += subject_data[subject]["vote"]
+    vote_avg = vote_sum / len(subject_data)
+
     plt.ylim([0,1])
-    path_list = FLAGS.base_path.split("/")
-    plt.title(path_list[len(path_list)-2])
-    plt.legend(["Recurrent","Nonrecurrent"])
+    plt.title("Majority votes (avg vote = %.4f)" % (vote_avg))
+    plt.legend([rec_legend, nonrec_legend], ["Recurrent", "Nonrecurrent"])
     plt.savefig(os.path.join(FLAGS.base_path,"majority_voting.jpg"))
+    plt.clf()
+    auc_dict = per_condition_roc(subject_data, total_conditions)
+    write_results_csv(subject_data, recur_dict, nonrecur_dict, auc_dict, total_conditions)
 
-def majority_vote(base_path, hist_path=None, map_path=None, create_maps=False, info=None, patch_size=None, patch_overlap=None, og_image_path=None):
+def per_condition_roc(subject_data, total_conditions):
+    auc_dict = dict()
+    for cond in np.arange(total_conditions):
+        cond += 1
+        cond_labels = []
+        cond_votes = []
+        for subject in subject_data:
+            if int(subject_data[subject]["condition"]) == cond:
+                if subject_data[subject]['truth_label'] == 'RECURRENT':
+                    cond_labels = cond_labels + [1]
+                    cond_votes = cond_votes + [subject_data[subject]['vote']]
+                else:
+                    cond_labels = cond_labels + [0]
+                    cond_votes = cond_votes + [1 - subject_data[subject]['vote']]
+        label_arr = np.array(cond_labels)
+        votes_arr = np.array(cond_votes)
+        fpr, tpr, thresholds = roc_curve(label_arr, votes_arr, pos_label=1)
+        roc_auc = auc(fpr, tpr)
+        auc_dict[cond] = roc_auc
+        plt.plot(1-fpr, tpr, color='darkorange', lw=2)
+        plt.plot([0, 1], [1,0], color='black', lw=1, linestyle='--')
+        path_list = FLAGS.base_path.split("/")
+        plt.title(path_list[len(path_list)-2] + " -- Condition " + str(cond))
+        legend = 'ROC curve (area = %0.2f)' % roc_auc
+        plt.legend([legend])
+        plt.savefig(os.path.join(FLAGS.base_path,str(cond) + "_ROC.jpg"))
+        plt.clf()
+    return auc_dict
+
+def write_results_csv(subject_data, recur_dict, nonrecur_dict, auc_dict, total_conditions):
+    auc_arr = np.zeros(len(auc_dict))
+    for cond in auc_dict:
+        auc_arr[cond-1] = auc_dict[cond]
+
+    total_votes = np.zeros(len(subject_data))
+    recur_votes = np.zeros(len(recur_dict))
+    nonrecur_votes = np.zeros(len(nonrecur_dict))
+    count = 0
+    for subject in subject_data:
+        total_votes[count] = subject_data[subject]["vote"]
+        count += 1
+    
+    recur_pass = 0
+    recur_count = 0
+    for subject in recur_dict:
+        recur_votes[recur_count] = subject_data[subject]["vote"]
+        recur_count += 1
+        if recur_dict[subject]['vote'] > 0.5:
+            recur_pass += 1
+
+    nonrecur_pass = 0
+    nonrecur_count = 0
+    for subject in nonrecur_dict:
+        nonrecur_votes[nonrecur_count] = subject_data[subject]["vote"]
+        nonrecur_count += 1
+        if nonrecur_dict[subject]['vote'] > 0.5:
+            nonrecur_pass += 1
+    # pdb.set_trace()
+    with open(os.path.join(FLAGS.base_path, 'test_summary.csv'), 'w', newline='') as csvfile:
+        csvwriter = csv.writer(csvfile)
+        csvwriter.writerow(['Recurrent subjects passed:', recur_pass,'','Nonrecurrence subjects passed:', nonrecur_pass])
+        csvwriter.writerow(['Recurrence subjects:', len(recur_dict),'','Nonrecurrence subjects:', len(nonrecur_dict)])
+        csvwriter.writerow(['Recurrence accuracy:', '{0:.4f}'.format(recur_pass / len(recur_dict)),'','Nonrecurrence accuracy:', '{0:.4f}'.format(nonrecur_pass / len(nonrecur_dict))])
+        csvwriter.writerow(['Recurrence average vote:', '{0:.4f}'.format(np.mean(recur_votes)),'','Nonrecurrence average vote:', '{0:.4f}'.format(np.mean(nonrecur_votes))])
+        csvwriter.writerow(['Recurrence vote std-dev:', '{0:.4f}'.format(np.std(recur_votes)),'','Nonrecurrence vote std-dev:', '{0:.4f}'.format(np.std(nonrecur_votes))])
+        csvwriter.writerow([''])
+        csvwriter.writerow(['Average vote:', '{0:.4f}'.format(np.mean(total_votes)),'','Average AUC:', '{0:.4f}'.format(np.mean(auc_arr))])
+        csvwriter.writerow(['Vote std-dev:', '{0:.4f}'.format(np.std(total_votes)),'','AUC std-dev:', '{0:.4f}'.format(np.std(auc_arr))])
+        csvwriter.writerow([''])
+        csvwriter.writerow(['subject', 'label', 'vote', 'condition'])
+        for cond in np.arange(total_conditions):
+            cond += 1
+            for subject in sorted(subject_data):
+                if int(subject_data[subject]['condition']) == cond:
+                    if subject_data[subject]['truth_label'] == 'RECURRENT':
+                        csvwriter.writerow([subject, '1', '{0:.4f}'.format(subject_data[subject]['vote']), subject_data[subject]["condition"]])
+                    else:
+                        csvwriter.writerow([subject, '0', '{0:.4f}'.format(subject_data[subject]['vote']), subject_data[subject]["condition"]])
+
+def majority_vote(base_path, voting_filename=None, hist_path=None, map_path=None, create_maps=False, info=None, patch_size=None, patch_overlap=None, og_image_path=None):
     if not hist_path:
         hist_path = os.path.join(base_path, "histograms")
     if not map_path:
@@ -437,6 +559,8 @@ def majority_vote(base_path, hist_path=None, map_path=None, create_maps=False, i
     FLAGS.hist_path = hist_path
     FLAGS.map_path = map_path
 
+    if voting_filename:
+        FLAGS.voting_file=voting_filename
     if create_maps:
         FLAGS.create_maps = create_maps
     if info:
@@ -457,7 +581,7 @@ def main():
     if not FLAGS.base_path:
         raise ValueError("Must set --base_path to the directory containing the voting_file.csv")
     base_path = FLAGS.base_path
-    filename = os.path.join(base_path, "voting_file.csv")
+    filename = os.path.join(base_path, FLAGS.voting_file)
     if not FLAGS.histogram_path:
         FLAGS.histogram_path = os.path.join(base_path, "histograms")
     if not FLAGS.map_path:
@@ -497,11 +621,12 @@ def main():
         save_roc_curve(fpr, tpr, thresholds, roc_auc)
     
     if FLAGS.info == "subject":
-        print_info_per_subject(subject_dict, image_dict)
+        if FLAGS.print == True:
+            print_info_per_subject(subject_dict, image_dict)
         save_subjects_vote_bar_graph(image_dict, subject_dict)
-    elif FLAGS.info == "image":
+    elif FLAGS.info == "image" and FLAGS.print == True:
         print_info_per_image(image_dict)     
-    else:
+    elif FLAGS.print == True:
         print_info_per_subject(subject_dict, image_dict)
         print_info_per_image(image_dict)
 

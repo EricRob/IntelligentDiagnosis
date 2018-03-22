@@ -470,7 +470,7 @@ class ColorConfig(object):
   num_steps = 20 #50-500
   hidden_size = 500 #100
   max_epoch = 5 
-  max_max_epoch = 100 #100 #50
+  max_max_epoch = 50 #100 #50
   keep_prob = 0.50 # 0.2-0.8 #parameter
   lr_decay = 1 #/ 1.15
   batch_size = 30 #30 #10-100
@@ -522,14 +522,14 @@ class LargeConfig(object):
 class TestConfig(object):
   """Color config."""
   init_scale = 0.1
-  learning_rate = 0.001 # 10e-5 to 5e-3 #parameter
+  learning_rate = 0.005 # 10e-5 to 5e-3 #parameter
   max_grad_norm = 5
   num_layers = 2
   num_steps = 20 #50-500
   hidden_size = 500 #100
   max_epoch = 5 
   max_max_epoch = 50 #100 #50
-  keep_prob = 0.50 # 0.2-0.8 #parameter
+  keep_prob = 0.70 # 0.2-0.8 #parameter
   lr_decay = 1 #/ 1.15
   batch_size = 30 #30 #10-100
   num_classes = 2
@@ -761,7 +761,7 @@ def main(_):
     test_file = open(os.path.join(results_path,"test_results.txt"), 'at+')
   else:
     test_file = open(os.path.join(results_path,"secondary_test_results.txt"), 'at+')
-    csv_file = open(os.path.join(results_path,"voting_file.csv"), 'wt+')
+    csv_file = open(os.path.join(results_path,"secondary_voting_file.csv"), 'wt+')
     csv_file.write("ID,names,output,label,unscaled_nr,unscaled_rec,scaled_nr,scaled_rec,coords\n")
 
   eval_config = get_config()
@@ -825,7 +825,7 @@ def main(_):
     if FLAGS.save_model:
       FLAGS.save_path = os.path.join(results_path,"model")
     
-    sv = tf.train.Supervisor(logdir=FLAGS.save_path)
+    sv = tf.train.Supervisor(logdir=FLAGS.save_path, save_model_secs=1500)
     
     gpu_options = tf.GPUOptions(allow_growth=True) #per_process_gpu_memory_fraction=1.0)
     config_proto = tf.ConfigProto(allow_soft_placement=soft_placement, gpu_options=gpu_options)

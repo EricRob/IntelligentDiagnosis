@@ -19,6 +19,7 @@ import majority_vote as voter
 
 # Global variables
 flags.DEFINE_string("results_folder", "../results/","Results folder containing all results and voting files")
+flags.DEFINE_string('vote_file', 'voting_file.csv', "voting file name")
 flags.DEFINE_bool("overwrite",False,"Overwrite existing summary plots")
 FLAGS = flags.FLAGS
 
@@ -93,7 +94,7 @@ def create_subplot(figure, train_dict, valid_dict, test_dict, epochs, value, plo
 	subplot.set_title(value.title())
 
 def create_majority_votes(parent, figure):
-	image_dict, subject_dict = voter.majority_vote(parent)
+	image_dict, subject_dict = voter.majority_vote(parent, voting_filename=FLAGS.vote_file)
 	fpr, tpr, thresholds, roc_auc = voter.create_overall_roc_curve(image_dict)
 	roc = figure.add_subplot(235)
 	roc.plot(1-fpr, tpr, color='darkorange', lw=2)
@@ -168,37 +169,39 @@ def create_majority_votes(parent, figure):
 	return
 
 def main():
+	count = 0
+	for root, dirs, _ in os.walk(FLAGS.results_folder):
+		for folder in dirs:
+			files = os.listdir(os.path.join(root,folder))
+			if not (has_results_files(files) and (FLAGS.vote_file in files)):
+				pass
+			else:
+				results_name = os.path.join(root, folder, os.path.splitext(FLAGS.vote_file)[0] + "_results_summary.jpg")
+				if os.path.exists(results_name) and not FLAGS.overwrite:
+					# print("skipping " + folder)
+					pass
+				else:
+					if has_results_files(files):
+						figure = create_results_graphs(os.path.join(root, folder))
 
-    for root, dirs, _ in os.walk(FLAGS.results_folder):
-    	for folder in dirs:
-    		files = os.listdir(os.path.join(root,folder))
-    		if not (has_results_files(files) and ('voting_file.csv' in files)):
-    			pass
-    		else:
-	    		results_name = os.path.join(root, folder, "results_summary.jpg")
-	    		if os.path.exists(results_name) and not FLAGS.overwrite:
-	    			print("skipping " + folder)
-	    			pass
-	    		else:
-		    		if has_results_files(files):
-		    			figure = create_results_graphs(os.path.join(root, folder))
-
-		    		if ('voting_file.csv' in files) and (os.stat(os.path.join(root,folder,'voting_file.csv')).st_size > 0):
-		    			create_majority_votes(os.path.join(root, folder), figure)
-		    		
-		    		figure.suptitle(folder, fontsize=32)
-		    		figure.tight_layout(rect=[0, 0.03, 1, 0.95])
-		    		figure.set_size_inches(15, 12)
-		    		cprint("Summarizing and saving " + folder, 'magenta', 'on_white')
-		    		figure.savefig(results_name)
-		    		plt.close()
+					if (FLAGS.vote_file in files) and (os.stat(os.path.join(root,folder,FLAGS.vote_file)).st_size > 0):
+						create_majority_votes(os.path.join(root, folder), figure)
+					
+					figure.suptitle(folder, fontsize=32)
+					figure.tight_layout(rect=[0, 0.03, 1, 0.95])
+					figure.set_size_inches(15, 12)
+					cprint("Summarizing and saving " + folder, 'magenta', 'on_white')
+					figure.savefig(results_name)
+					plt.close()
+					count +=1
 	    		# results_files = ['train_results.txt', 'valid_results.txt', 'test_results.txt', 'voting_file.csv']
 	    		# move_path = os.path.join(root, folder,"raw_data")
 	    		# os.makedirs(move_path, exist_ok=True)
 	    		# for f in results_files:
 	    		# 	if os.path.exists(os.path.join(root, folder,f)):
 	    		# 		move(os.path.join(root, folder,f), os.path.join(move_path,f))
-
+	if count == 0:
+		cprint("¸¸♬·¯·♩¸¸♪·¯·♫¸¸No new results to summarize¸¸♬·¯·♩¸¸♪·¯·♫¸¸", 'yellow', attrs=['bold'])
 
 # Main body
 if __name__ == '__main__':
