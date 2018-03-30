@@ -249,9 +249,14 @@ def corner_sample_from_distribution(mask, corner, config, keep_corner):
 		y = int(round(np.random.normal(corner["centroid"][0], std_dev)))
 		y = y - config.patch_size // 2 # centroid should be in center of the patch, y should be top edge. Shift up from center to top.
 		patch = mask[y:(y+config.patch_size), x:(x+config.patch_size)]
+		if np.sum(patch) <= keep_threshold:
+			corner['coords'] = corner['coords'] + [(y,x)]
 	if counter >= 10000:
-			cprint("Skipping corner", 'red')
-			corner['centroid'] = []
+		cprint("Skipping corner", 'red')
+		corner['centroid'] = []
+	else:
+		cprint("Keep corner!", 'green', 'on_white')
+
 
 def split_and_combine_patch_lists(tile_dict, bottom_dict, right_dict, corner_dict, keep_corner, num_steps):
 	sequences = []
@@ -259,8 +264,13 @@ def split_and_combine_patch_lists(tile_dict, bottom_dict, right_dict, corner_dic
 	sequences = append_patch_lists(sequences, bottom_dict, num_steps)
 	sequences = append_patch_lists(sequences, right_dict, num_steps)
 	if keep_corner and corner_dict['coords']:
-		sequences.append(corner_dict['coords'])
+		sequences = append_corner_patch_lists(sequences, corner_dict['coords'], num_steps)
 	return sequences
+
+def append_corner_patch_lists(patch_list, coords_list, num_steps):
+	for n in np.arange(len(coords_list) // num_steps):
+		patch_list = patch_list + [coords_list[(n*num_steps):((n+1)*num_steps)]]
+	return patch_list
 
 def append_patch_lists(patch_list, region_dict, num_steps):
 	if not region_dict:
@@ -438,7 +448,6 @@ def main():
 		sequences, all_centroids = generate_sequences(mask, config)
 		image_bin = open(gauss_bin_path, 'wb+')
 		# verify_images(all_centroids, image_name, image_to_ID_dict[image_name], config)
-		# pdb.set_trace()
 		cprint("Writing binary file...", 'green', 'on_white')
 		write_image_bin(image_bin, image_name, image_to_ID_dict[image_name], sequences, config)
 		image_bin.close()

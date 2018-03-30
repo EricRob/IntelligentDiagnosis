@@ -50,6 +50,7 @@ from scipy.misc import imsave
 import csv
 from termcolor import cprint
 import pdb
+from math import sqrt
 
 from tensorflow.python.client import device_lib
 
@@ -90,6 +91,47 @@ BASIC = "basic"
 CUDNN = "cudnn"
 BLOCK = "block"
 
+def arrange_kernels_on_grid(kernel, layer, config, pad = 0):
+ #kernel: 3,3,32,32
+  def factorization(n):
+    for i in range(int(sqrt(float(n))), 0, -1):
+      if n % i == 0:
+        return (i, int(n / i))
+  (grid_Y, grid_X) = factorization (kernel.get_shape()[3].value)
+  # print ('grid: %d = (%d, %d)' % (kernel.get_shape()[3].value, grid_Y, grid_X))
+
+  x_min = tf.reduce_min(kernel)
+  x_max = tf.reduce_max(kernel)
+  kernel = (kernel - x_min) / (x_max - x_min)
+
+  # pad x_dim and y_dim
+  x_pad = tf.pad(kernel, tf.constant( [[pad,pad],[pad,pad],[0,0],[0,0]] ), mode = 'CONSTANT')
+  
+  # x_dim and y_dim dimensions, w.r.t. padding
+  y_dim = kernel.get_shape()[0] + 2 * pad
+  x_dim = kernel.get_shape()[1]+ 2* pad
+  channels = kernel.get_shape()[2]
+
+  # put NumKernels to the 1st dimension
+  x_pad = tf.transpose(x_pad, (3, 0, 1, 2)) #8, 12, 3, 3
+  # organize grid on y_dim axis
+  x_pad = tf.reshape(x_pad, tf.stack([grid_X, y_dim * grid_Y, x_dim, channels])) #8, 12, 3, 3
+
+  # switch x_dim and y_dim axes
+  x_pad = tf.transpose(x_pad, (0, 2, 1, 3)) #8, 3, 12, 3
+  # organize grid on x_dim axis
+  x_pad = tf.reshape(x_pad, tf.stack([1, x_dim * grid_X, y_dim * grid_Y, channels])) #1, 24, 12, 3
+
+  # back to normal order (not combining with the next step for clarity)
+  x_pad = tf.transpose(x_pad, (2, 1, 3, 0)) # 12, 24, 3, 1
+  pdb.set_trace()
+
+  # to tf.image_summary order [batch_size, height, width, channels],
+  #   where in this case batch_size == 1
+  x_pad = tf.transpose(x_pad, (3, 0, 1, 2))
+
+  # scaling to [0, 255] is not necessary for tensorboard
+  return x_pad
 
 def data_type():
   return tf.float16 if FLAGS.use_fp16 else tf.float32
@@ -276,26 +318,42 @@ class SeqModel(object):
     return output, state
 
   def _add_conv_layers(self, inputs, config, is_training):
+    filters = []
+    for _ in np.arange(config.num_cnn_layers):
+      filters = filters + [32]
 
-    filters = [32, 32, 32, 32, 32, 32] #, 512, 512, 512, 512] #[64, 128, 256, 256, 512, 512, 512, 512]
+    # filters = [32, 32, 32, 32, 32, 32] #, 512, 512, 512, 512] #[64, 128, 256, 256, 512, 512, 512, 512]
     pools = [1, 2, 6, 8]
     
     cnn_batch_size = config.num_steps * config.batch_size
     conv_in = tf.reshape(inputs, [cnn_batch_size, config.image_size, config.image_size, config.image_depth])
 
     convolved = conv_in
-    for i in range(len(filters)): #(config.num_cnn_layers):
+    # all_layers = tf.Variable()
+    for i in range(config.num_cnn_layers):
       
       with tf.variable_scope("conv%s" % str(i+1)):
         convolved_input = convolved
         # Add dropout layer if enabled and not first convolution layer.
         if i > 0 and config.keep_prob < 1:
-          convolved_input= tf.layers.dropout(convolved_input, rate=1-config.keep_prob, training=is_training)
+          convolved_input= tf.layers.dropout(convolved_input,
+            rate=1-config.keep_prob,
+            training=is_training)
 
         norm = tf.layers.batch_normalization(convolved_input, axis=-1, momentum=0.1, training=True, epsilon=1e-5, name="norm%s" % str(i+1))
 
-        conv = tf.layers.conv2d(norm, filters=filters[i], kernel_size=3, activation=tf.nn.relu, strides=1, padding="same", name = "conv%s" % str(i+1))
+        conv = tf.layers.conv2d(norm,
+                filters=filters[i],
+                kernel_size=3,
+                activation=tf.nn.relu,
+                strides=1,
+                padding="same",
+                name = "conv%s" % str(i+1))
 
+        # if i == 0 and is_training:
+        #   kernel = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, 'Model/conv1/conv1/kernel')[0]
+        #   grid = arrange_kernels_on_grid(kernel, i, config)
+        #   tf.summary.image('Model/conv1/conv1/kernel', grid, max_outputs=1)
         if i+1 in pools:
           pool = tf.layers.max_pooling2d(conv, pool_size=2, strides=2, padding="same", name="pool1")
         else:
@@ -306,6 +364,7 @@ class SeqModel(object):
 
 
   def _activation_summary(x):
+
     """Helper to create summaries for activations.
 
     Creates a summary that provides a histogram of activations.
@@ -478,7 +537,7 @@ class ColorConfig(object):
   rnn_mode = BLOCK
   image_size = 100
   image_depth = 3
-  num_cnn_layers = 8
+  num_cnn_layers = 6
   cnn_filters = 20 # not used
   test_mode = 0
 
@@ -518,7 +577,6 @@ class LargeConfig(object):
   image_size = 100
   image_depth = 1
 
-
 class TestConfig(object):
   """Color config."""
   init_scale = 0.1
@@ -536,7 +594,7 @@ class TestConfig(object):
   rnn_mode = BLOCK
   image_size = 100
   image_depth = 3
-  num_cnn_layers = 8
+  num_cnn_layers = 6
   cnn_filters = 20 # not used
   test_mode = 1
 
@@ -616,7 +674,6 @@ def run_epoch(session, model, results_file, epoch_count, csv_file=None, eval_op=
     subject_ids = vals["subject_ids"]
     names = vals["names"]
     coords = vals["coords"]
-    
     if test_mode:
       create_voting_file(subject_ids, names, labels, unscaled_logits, scaled_logits, output, coords, csv_file)
       # save_sample_image(input_data, labels, model, step, epoch_count)
@@ -745,7 +802,7 @@ def main(_):
     config.max_max_epoch = FLAGS.epochs
 
   base_directory = "/home/wanglab/Desktop/recurrence_seq_lstm"
-  results_directory = "results/" + results_prepend + "_lr" + str(config.learning_rate) + "_kp" + str(int(config.keep_prob*100))
+  results_directory = "results/" + results_prepend #+ "_lr" + str(config.learning_rate) + "_kp" + str(int(config.keep_prob*100))
   results_path = os.path.join(base_directory, results_directory)
   
   cprint("Data Sources:", 'white', 'on_magenta')
@@ -774,7 +831,7 @@ def main(_):
     initializer = tf.random_uniform_initializer(-config.init_scale,
                                                 config.init_scale)
     # summary_op = tf.summary.merge_all()
-    # summary_writer = tf.summary.FileWriter(FLAGS.eval_dir, GRAPH)
+    # summary_writer = tf.summary.FileWriter(FLAGS.eval_dir, g)
     #init_op = tf.global_variables_initializer()
     with tf.name_scope("Train"):
       train_input = SeqInput(config=config, mode="train", name="TrainInput")
@@ -847,7 +904,6 @@ def main(_):
 
 
     with sv.managed_session(config=config_proto) as session:
-      #pdb.set_trace()
       if config.test_mode == 0:
         training_loss=[]
         for i in range(config.max_max_epoch):

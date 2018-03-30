@@ -24,6 +24,8 @@ FLAGS = flags.FLAGS
 
 # Function declarations
 def split_image_in_half(img, large_image_name):
+	new_filename = os.path.join(FLAGS.base_path, FLAGS.original_images_folder,large_image_name.split('.')[0])
+
 	if os.path.exists(new_filename + "_B1.tif"):
 		cprint("Region 1 already exists, skipping " + large_image_name)
 		return
@@ -32,7 +34,6 @@ def split_image_in_half(img, large_image_name):
 	top = img[0:y_center,:,:]
 	bottom = img[y_center:,:,:]
 
-	new_filename = os.path.join(FLAGS.base_path, FLAGS.original_images_folder,large_image_name.split('.')[0])
 	cprint("Saving top...", 'green')
 	io.imsave(new_filename + "_B1.tif", top)
 	del top
@@ -41,31 +42,45 @@ def split_image_in_half(img, large_image_name):
 	del bottom
 
 def split_image_into_fourths(img, large_image_name):
-	if os.path.exists(new_filename + "_Q1.tif"):
-		cprint("Region 1 already exists, skipping " + large_image_name)
-		return
+	new_filename = os.path.join(FLAGS.base_path, FLAGS.original_images_folder,large_image_name.split('.')[0])
+
+	
 	x_shape = img.shape[1]
 	y_shape = img.shape[0]
 	x_center = x_shape // 2
 	y_center = y_shape // 2
-
-	new_filename = os.path.join(FLAGS.base_path, FLAGS.original_images_folder,large_image_name.split('.')[0])
-
-	nw = img[0:y_center, 0:x_center, :]
-	cprint("Saving NW...", 'green')
-	io.imsave(new_filename + "_Q1.tif", nw )
-	del nw
-	sw = img[y_center:, 0:x_center, :]
-	cprint("Saving SW...", 'green')
-	io.imsave(new_filename + "_Q3.tif", sw )
-	del sw
-	ne = img[0:y_center, x_center:, :]
-	cprint("Saving NE...", 'green')
-	io.imsave(new_filename + "_Q3.tif", ne )
-	del ne
-	se = img[y_center:, x_center:, :]
-	cprint("Saving SE...", 'green')
-	io.imsave(new_filename + "_Q4.tif", se )
+	
+	if os.path.exists(new_filename + "_Q1.tif"):
+		cprint("Region 1 already exists, skipping Q1")
+	else:
+		nw = img[0:y_center, 0:x_center, :]
+		cprint("Saving NW...", 'green')
+		io.imsave(new_filename + "_Q1.tif", nw )
+		del nw
+	
+	if os.path.exists(new_filename + "_Q2.tif"):
+		cprint("Region 2 already exists, skipping Q2")
+	else:	
+		sw = img[y_center:, 0:x_center, :]
+		cprint("Saving SW...", 'green')
+		io.imsave(new_filename + "_Q2.tif", sw )
+		del sw
+	
+	if os.path.exists(new_filename + "_Q3.tif"):
+		cprint("Region 3 already exists, skipping Q3")
+	else:
+		ne = img[0:y_center, x_center:, :]
+		cprint("Saving NE...", 'green')
+		io.imsave(new_filename + "_Q3.tif", ne )
+		del ne
+	
+	if os.path.exists(new_filename + "_Q4.tif"):
+		cprint("Region 3 already exists, skipping Q4")
+	else:
+		se = img[y_center:, x_center:, :]
+		cprint("Saving SE...", 'green')
+		io.imsave(new_filename + "_Q4.tif", se )
+		del se
 
 def split_image_into_ninths(img, large_image_name):
 	new_filename = os.path.join(FLAGS.base_path, FLAGS.original_images_folder,large_image_name.split('.')[0])
@@ -127,6 +142,7 @@ def split_image_into_ninths(img, large_image_name):
 def main():
 	with open(os.path.join(FLAGS.base_path, FLAGS.image_list), newline="") as csvfile:
 		reader = csv.reader(csvfile)
+		_ = next(reader) # Discard header line
 		for line in reader:
 			large_image_name = line[1]
 			img_path = os.path.join(FLAGS.base_path, FLAGS.original_images_folder,large_image_name)
@@ -135,11 +151,13 @@ def main():
 			cprint("Loading " + large_image_name + " into memory", 'yellow')
 			img = io.imread(img_path)
 			size = os.path.getsize(img_path)
-			if size < 8000000000:
-				cprint("Splitting " + large_image_name + 'into half', 'yellow')
+			if size < 4000000000:
+				cprint(large_image_name + 'is under 4GB, will not split', 'yellow')
+			elif size < 8000000000:
+				cprint("Splitting " + large_image_name + ' into half', 'yellow')
 				split_image_in_half(img, large_image_name)
 			elif size < 16000000000:
-				cprint("Splitting " + large_image_name + 'into fourths', 'yellow')
+				cprint("Splitting " + large_image_name + ' into fourths', 'yellow')
 				split_image_into_fourths(img, large_image_name)
 			elif size < 36000000000:
 				cprint("Splitting " + large_image_name + ' into ninths', 'yellow')

@@ -32,7 +32,7 @@ flags.DEFINE_bool("from_outside", False, "Operating from another python script")
 flags.DEFINE_bool('per_subject', False, 'Provide ROC and majority votes per subject')
 flags.DEFINE_string('voting_file', 'voting_file.csv', 'Name of voting file for gathering data')
 flags.DEFINE_bool('print', False, 'Print subject or image majority voting results to command line terminal')
-flags.DEFINE_string('condition_name', 'test_conditions.csv', 'name of csv file with cross validation conditions')
+flags.DEFINE_string('subject_conditions', None, 'name of csv file with cross validation conditions')
 FLAGS = flags.FLAGS
 
 # Function declarations
@@ -404,12 +404,16 @@ def save_roc_curve(fpr, tpr, thresholds, roc_auc):
     plt.clf()
 
 def add_test_condition(subject_data):
-    with open(os.path.join(FLAGS.base_path,FLAGS.condition_name), 'r') as csvfile:
-        reader = csv.reader(csvfile)
-        _ = next(reader) # discard header
-        for line in reader:
-            if line[0] in subject_data:
-                subject_data[line[0]]["condition"] = line[2]
+    if not FLAGS.subject_conditions:
+        for subject in subject_data:
+            subject_data[subject]['condition'] = 1
+    else:
+        with open(os.path.join(FLAGS.base_path,FLAGS.subject_conditions), 'r') as csvfile:
+            reader = csv.reader(csvfile)
+            _ = next(reader) # discard header
+            for line in reader:
+                if line[0] in subject_data:
+                    subject_data[line[0]]["condition"] = line[2]
 
 def save_subjects_vote_bar_graph(image_dict, subject_dict):
     subject_data = analysis_per_subject(subject_dict, image_dict)
@@ -426,9 +430,10 @@ def save_subjects_vote_bar_graph(image_dict, subject_dict):
             nonrecur_dict[subject] = subject_data[subject]
     
     total_conditions = 1
-    for subject in subject_data:
-        if int(subject_data[subject]["condition"]) > total_conditions:
-            total_conditions = int(subject_data[subject]["condition"])
+    if FLAGS.subject_conditions:
+        for subject in subject_data:
+            if int(subject_data[subject]["condition"]) > total_conditions:
+                total_conditions = int(subject_data[subject]["condition"])
 
     for cond in np.arange(total_conditions):
         cond +=1        
@@ -463,7 +468,9 @@ def save_subjects_vote_bar_graph(image_dict, subject_dict):
     vote_avg = vote_sum / len(subject_data)
 
     plt.ylim([0,1])
-    plt.title("Majority votes (avg vote = %.4f)" % (vote_avg))
+    results_path = FLAGS.base_path.split("/")
+    x = len(results_path)
+    plt.title(results_path[x-1] + " (avg vote = %.4f)" % (vote_avg))
     plt.legend([rec_legend, nonrec_legend], ["Recurrent", "Nonrecurrent"])
     plt.savefig(os.path.join(FLAGS.base_path,"majority_voting.jpg"))
     plt.clf()
@@ -597,6 +604,8 @@ def main():
         csvreader = csv.reader(csvfile, delimiter=",")
         header = next(csvreader) # Discard header line
         for row in csvreader:
+            if not row:
+                continue
             if row[1] not in image_dict:
                 image_dict[row[1]]={}
                 initialize_image(image_dict[row[1]], row)

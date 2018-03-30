@@ -94,6 +94,7 @@ def create_subplot(figure, train_dict, valid_dict, test_dict, epochs, value, plo
 	subplot.set_title(value.title())
 
 def create_majority_votes(parent, figure):
+
 	image_dict, subject_dict = voter.majority_vote(parent, voting_filename=FLAGS.vote_file)
 	fpr, tpr, thresholds, roc_auc = voter.create_overall_roc_curve(image_dict)
 	roc = figure.add_subplot(235)
@@ -173,6 +174,7 @@ def main():
 	for root, dirs, _ in os.walk(FLAGS.results_folder):
 		for folder in dirs:
 			files = os.listdir(os.path.join(root,folder))
+			
 			if not (has_results_files(files) and (FLAGS.vote_file in files)):
 				pass
 			else:

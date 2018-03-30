@@ -65,7 +65,6 @@ def create_segmentation(seg_path, seg_folder_path, img_dict, patch_folder_path, 
 				else:
 					print("%s not in segmentation" % (single_patch_path))
 	
-
 def create_patch_folder(filename, label, config):
 	
 	patch_folder_path = os.path.join(os.path.abspath(config.image_data_folder_path), label, str(config.patch_size) + "_pixel_patches", os.path.splitext(filename)[0] +'_patches')
@@ -187,9 +186,9 @@ def write_patch_binary_file(filename, label, config):
 				bin_file.write(writing)
 	bin_file.close()
 
-# Image bytes are appended to the binary file, so if a binary file exists at the start then it must be removed
-# After (potentially) deleting file, open a new appendable binary file with read/write capabilities
 def remove_exisiting_binary_file_then_create_new(binary_file_path):
+	# Image bytes are appended to the binary file, so if a binary file exists at the start then it must be removed
+	# After (potentially) deleting file, open a new appendable binary file with read/write capabilities
 	try:
 		os.remove(binary_file_path)
 		print("--> existing binary file removed <--")
@@ -401,7 +400,6 @@ def swap_x_and_y_coords(img_dict):
 				swapped_coords[y_key] = dict()
 			swapped_coords[y_key][x_key] = img_dict[x_key][y_key]
 	return swapped_coords
-
 
 def create_string_from_coord_array(coord_array, num_steps):
 	coord_string = ""
