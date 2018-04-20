@@ -249,6 +249,8 @@ def corner_sample_from_distribution(mask, corner, config, keep_corner):
 		y = int(round(np.random.normal(corner["centroid"][0], std_dev)))
 		y = y - config.patch_size // 2 # centroid should be in center of the patch, y should be top edge. Shift up from center to top.
 		patch = mask[y:(y+config.patch_size), x:(x+config.patch_size)]
+		if x < 0 or y < 0 or x+config.patch_size > mask.shape[1] or y+config.patch_size > mask.shape[0]:
+			continue
 		if np.sum(patch) <= keep_threshold:
 			corner['coords'] = corner['coords'] + [(y,x)]
 	if counter >= 10000:

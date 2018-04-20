@@ -33,6 +33,7 @@ flags.DEFINE_string("config", None, "Configuration for generating patches.")
 flags.DEFINE_string("sampling_method", "gauss", "Sampling pattern for generating sequences")
 flags.DEFINE_string("patches_only",False,"Generate only patches for new images, and no binary files.")
 flags.DEFINE_integer("gauss_seq", 6, "Number of sequences to generate per tile with gaussian sampling")
+flags.DEFINE_integer("gauss_stdev", 1500, "Standard deviation of pixel distance from center for gaussian sampling")
 
 FLAGS = flags.FLAGS
 
@@ -215,6 +216,7 @@ def get_patch_coords(img_dict, image_list):
 def gauss_sampling(image_to_ID_dict, images_list, bin_file, config):
 	gauss_config = gauss.OriginalPatchConfig()
 	gauss_config.maximum_seq_per_tile = FLAGS.gauss_seq
+	gauss_config.maximum_std_dev = FLAGS.gauss_stdev
 	gauss_category_folder = "std_dev" + str(gauss_config.maximum_std_dev) + "_seq" + str(gauss_config.maximum_seq_per_tile)
 	gauss_folder = os.path.join(config.image_data_folder_path,'gaussian_patches', gauss_category_folder)
 	os.makedirs(gauss_folder, exist_ok=True)

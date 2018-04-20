@@ -124,7 +124,6 @@ def arrange_kernels_on_grid(kernel, layer, config, pad = 0):
 
   # back to normal order (not combining with the next step for clarity)
   x_pad = tf.transpose(x_pad, (2, 1, 3, 0)) # 12, 24, 3, 1
-  pdb.set_trace()
 
   # to tf.image_summary order [batch_size, height, width, channels],
   #   where in this case batch_size == 1
@@ -350,10 +349,10 @@ class SeqModel(object):
                 padding="same",
                 name = "conv%s" % str(i+1))
 
-        # if i == 0 and is_training:
-        #   kernel = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, 'Model/conv1/conv1/kernel')[0]
-        #   grid = arrange_kernels_on_grid(kernel, i, config)
-        #   tf.summary.image('Model/conv1/conv1/kernel', grid, max_outputs=1)
+        if i == 0 and is_training:
+          kernel = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, 'Model/conv1/conv1/kernel')[0]
+          grid = arrange_kernels_on_grid(kernel, i, config)
+          tf.summary.image('Model/conv1/conv1/kernel', grid, max_outputs=1)
         if i+1 in pools:
           pool = tf.layers.max_pooling2d(conv, pool_size=2, strides=2, padding="same", name="pool1")
         else:
