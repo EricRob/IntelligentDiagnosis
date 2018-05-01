@@ -829,8 +829,6 @@ def main(_):
   with tf.Graph().as_default() as g:
     initializer = tf.random_uniform_initializer(-config.init_scale,
                                                 config.init_scale)
-    # summary_op = tf.summary.merge_all()
-    # summary_writer = tf.summary.FileWriter(FLAGS.eval_dir, g)
     #init_op = tf.global_variables_initializer()
     with tf.name_scope("Train"):
       train_input = SeqInput(config=config, mode="train", name="TrainInput")
@@ -882,6 +880,8 @@ def main(_):
       FLAGS.save_path = os.path.join(results_path,"model")
     
     sv = tf.train.Supervisor(logdir=FLAGS.save_path, save_model_secs=1500)
+    # summary_op = tf.summary.merge_all()
+    summary_writer = tf.summary.FileWriter(FLAGS.save_path)
     
     gpu_options = tf.GPUOptions(allow_growth=True) #per_process_gpu_memory_fraction=1.0)
     config_proto = tf.ConfigProto(allow_soft_placement=soft_placement, gpu_options=gpu_options)
