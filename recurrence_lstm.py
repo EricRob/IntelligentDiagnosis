@@ -85,6 +85,7 @@ flags.DEFINE_string("rnn_mode", None,
 flags.DEFINE_integer("epochs", None, "Number of epochs to run")
 flags.DEFINE_string("model_path", None, "Location of model to load from last checkpoint")
 flags.DEFINE_bool("save_model", False, "Save model and checkpoints for future testing")
+flags.DEFINE_integer("num_steps", 20, "Steps in LSTM sequence")
 
 FLAGS = flags.FLAGS
 BASIC = "basic"
@@ -531,7 +532,7 @@ class ColorConfig(object):
   max_max_epoch = 50 #100 #50
   keep_prob = 0.50 # 0.2-0.8 #parameter
   lr_decay = 1 #/ 1.15
-  batch_size = 30 #30 #10-100
+  batch_size = 50 #30 #10-100
   num_classes = 2
   rnn_mode = BLOCK
   image_size = 100
@@ -800,7 +801,7 @@ def main(_):
   if FLAGS.epochs:
     config.max_max_epoch = FLAGS.epochs
 
-  base_directory = "/home/wanglab/Desktop/recurrence_seq_lstm"
+  base_directory = ".."
   results_directory = "results/" + results_prepend #+ "_lr" + str(config.learning_rate) + "_kp" + str(int(config.keep_prob*100))
   results_path = os.path.join(base_directory, results_directory)
   
