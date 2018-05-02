@@ -34,11 +34,12 @@ flags.DEFINE_string("sampling_method", "gauss", "Sampling pattern for generating
 flags.DEFINE_string("patches_only",False,"Generate only patches for new images, and no binary files.")
 flags.DEFINE_integer("gauss_seq", 6, "Number of sequences to generate per tile with gaussian sampling")
 flags.DEFINE_integer("gauss_stdev", 1500, "Standard deviation of pixel distance from center for gaussian sampling")
+flags.DEFINE_integer("gauss_tile_size", 2500, "Tile dimensions for splitting sample image for gauss distribution")
 
 FLAGS = flags.FLAGS
 
 class OriginalPatchConfig(object):
-	image_data_folder_path = "/home/wanglab/Desktop/recurrence_seq_lstm/image_data" # Location of image to be split into patches
+	image_data_folder_path = "../image_data" # Location of images folder
 	patch_size = 500 # Pixel length and width of each patch square
 	overlap = 30 # Amount of overlap between patches within a sample
 	sample_size = 100 # Final size of patch (usually 100)
@@ -215,9 +216,10 @@ def get_patch_coords(img_dict, image_list):
 
 def gauss_sampling(image_to_ID_dict, images_list, bin_file, config):
 	gauss_config = gauss.OriginalPatchConfig()
+	gauss_config.tile_size = FLAGS.gauss_tile_size
 	gauss_config.maximum_seq_per_tile = FLAGS.gauss_seq
 	gauss_config.maximum_std_dev = FLAGS.gauss_stdev
-	gauss_category_folder = "std_dev" + str(gauss_config.maximum_std_dev) + "_seq" + str(gauss_config.maximum_seq_per_tile)
+	gauss_category_folder = "tile" + str(gauss_config.tile_size) + "_std_dev" + str(gauss_config.maximum_std_dev) + "_seq" + str(gauss_config.maximum_seq_per_tile)
 	gauss_folder = os.path.join(config.image_data_folder_path,'gaussian_patches', gauss_category_folder)
 	os.makedirs(gauss_folder, exist_ok=True)
 	# remove_characters = -8
@@ -450,7 +452,7 @@ if __name__ == '__main__':
 				raise ValueError("If creating binary files for with randomized subjects, must specify the condition's enclosing folder with --condition_path.")
 			for condition_folder in sorted(os.listdir(FLAGS.condition_path)):
 				if "condition" not in condition_folder:
-					break
+					continue
 				else:
 					cprint("===============" + condition_folder + "===============", 'white', 'on_magenta')
 					create_binary_mode_files("recurrence", config, cond_path=condition_folder)
