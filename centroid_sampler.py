@@ -80,9 +80,9 @@ def extract_tiles(arr, tile_size, edge_overlap):
 
 def adjust_tile_grid_edges(tiles, shape, tile_size, edge_overlap):
 	if shape[0] / tile_size % 1 < (edge_overlap / 100):
-		tiles = tiles[:(tiles.shape[0]-1), :, :, :]
+		tiles = tiles[:(max(tiles.shape[0]-1, 0)), :, :, :]
 	if shape[1] / tile_size % 1 < (edge_overlap / 100):
-		tiles = tiles[:,:(tiles.shape[1]-1), :, :]
+		tiles = tiles[:,:(max(tiles.shape[1]-1, 0)), :, :]
 	return tiles
 
 def bottom_edge_tiles(image, tile_size, edge_overlap):
@@ -92,7 +92,7 @@ def bottom_edge_tiles(image, tile_size, edge_overlap):
 		bottom_edge_y_value = (image.shape[0] // tile_size - 1) * tile_size
 
 		bottom_mask_edge = image[bottom_edge_y_value:,:]
-		bottom_edge_columns = bottom_mask_edge.shape[1] // tile_size - 1
+		bottom_edge_columns = max(bottom_mask_edge.shape[1] // tile_size - 1, 0)
 		bottom_edge = np.zeros((1, bottom_edge_columns, bottom_mask_edge.shape[0], tile_size))
 		
 		for column in np.arange(bottom_edge.shape[1]):
@@ -115,7 +115,7 @@ def right_edge_tiles(image, tile_size, edge_overlap):
 	if right_overlap:
 		right_edge_x_value = (image.shape[1] // tile_size - 1) * tile_size
 		right_mask_edge = image[:,right_edge_x_value:]
-		right_edge_rows = right_mask_edge.shape[0] // tile_size - 1
+		right_edge_rows = max(right_mask_edge.shape[0] // tile_size - 1, 0)
 		right_edge = np.zeros((right_edge_rows, 1, tile_size, right_mask_edge.shape[1]))
 		
 		for row in np.arange(right_edge.shape[0]):
@@ -206,8 +206,9 @@ def calculate_bottom_tile_masses(grid, keep_list, config):
 def sample_from_distribution(mask, tile_info, config):
 	keep_threshold = config.patch_size**2 * (1 - config.patch_keep_percentage/100)
 	remove_tiles = []
+	skip_count = 0
 	if not tile_info:
-		return
+		return 0
 	for tile in tile_info:
 		std_dev = config.maximum_std_dev
 		
@@ -229,19 +230,22 @@ def sample_from_distribution(mask, tile_info, config):
 		if counter >= config.maximum_sample_count:
 			remove_tiles = remove_tiles + [tile]
 			cprint("Skipping " + str(tile), 'red')
+			skip_count += 1
 
 	for tile in remove_tiles:
 		del tile_info[tile]
+	return skip_count
 
 def corner_sample_from_distribution(mask, corner, config, keep_corner):
 	if not keep_corner:
-		return
+		return 1
 	keep_threshold = config.patch_size**2 * (1 - config.patch_keep_percentage/100)
 	std_dev = config.maximum_std_dev
 	sequence_count = int(round(corner["density"] * config.maximum_seq_per_tile))
 	samples = sequence_count * config.num_steps
 	corner['coords'] = []
 	counter = 0
+	skip_count = 0
 	while(len(corner['coords']) < samples) and (counter < 10000):
 		counter += 1
 		x = int(round(np.random.normal(corner["centroid"][1], std_dev)))
@@ -256,8 +260,11 @@ def corner_sample_from_distribution(mask, corner, config, keep_corner):
 	if counter >= 10000:
 		cprint("Skipping corner", 'red')
 		corner['centroid'] = []
+		skip_count = 1
 	else:
 		cprint("Keep corner!", 'green', 'on_white')
+
+	return skip_count
 
 
 def split_and_combine_patch_lists(tile_dict, bottom_dict, right_dict, corner_dict, keep_corner, num_steps):
@@ -351,11 +358,16 @@ def generate_sequences(mask_filename, config):
 	adjust_centroids(right_centroids, tile_size)
 
 	cprint("Sampling around centroids...", 'green', 'on_white')
-	sample_from_distribution(mask, tile_centroids, config)
-	sample_from_distribution(mask, bottom_centroids, config)
-	sample_from_distribution(mask, right_centroids, config)
-	corner_sample_from_distribution(mask, corner_centroid, config, keep_corner)
+	tile_count = get_tile_count(tile_centroids, bottom_centroids, right_centroids)
+	cprint("Tile count: " + str(tile_count))
+	skip_count = 0
 
+	skip_count += sample_from_distribution(mask, tile_centroids, config)
+	skip_count += sample_from_distribution(mask, bottom_centroids, config)
+	skip_count += sample_from_distribution(mask, right_centroids, config)
+	skip_count += corner_sample_from_distribution(mask, corner_centroid, config, keep_corner)
+
+	cprint("Keeping " + str(tile_count - skip_count) + "/" + str(tile_count) + " tiles")
 
 	cprint("Listing sequences...", 'green', 'on_white')
 	sequences = split_and_combine_patch_lists(tile_centroids, bottom_centroids, right_centroids, corner_centroid, keep_corner, config.num_steps)
@@ -412,7 +424,15 @@ def verify_images(all_centroids, image_name, subject_ID, config):
 			cprint(str((y,x)),'cyan')
 			io.imsave(patch_name, patch_scaled)
 
-
+def get_tile_count(main, bottom, right):
+	tile_count = 1 # Always include corner
+	if main:
+		tile_count += len(main)
+	if bottom:
+		tile_count += len(bottom)
+	if right:
+		tile_count += len(right)
+	return tile_count
 def byte_string_from_coord_array(coord_array, num_steps):
 	coord_string = ""
 	for y in np.arange(num_steps):
