@@ -26,7 +26,7 @@ FLAGS = flags.FLAGS
 
 # Class declarations
 class OriginalPatchConfig(object):
-	image_data_folder_path = "/home/wanglab/Desktop/recurrence_seq_lstm/image_data" # Location of image to be split into patches
+	image_data_folder_path = "../image_data" # Location of image to be split into patches
 	patch_size = 500 # Pixel length and width of each patch square
 	tile_size = patch_size * 5
 	edge_overlap = 75 # Amount of overlap between patches within a sample
