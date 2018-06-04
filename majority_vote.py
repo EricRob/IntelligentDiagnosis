@@ -297,6 +297,9 @@ def analysis_per_subject(subject_dict, image_dict):
             subject_data[subject]["net_label"] = subject_network_label
             subject_data[subject]["smax"] = smax_subject
             subject_data[subject]["vote"] = c2[0][1]/len(network_outputs)
+            subject_data[subject]['accurate_votes'] = c2[0][1]
+            subject_data[subject]['total_votes'] = len(network_outputs)
+            subject_data[subject]['image_count'] = len(subject_dict[subject])
 
     return subject_data
 
@@ -441,21 +444,26 @@ def save_subjects_vote_bar_graph(image_dict, subject_dict):
             if int(recur_dict[subject]['condition']) == cond:
                 if not recur_dict[subject]["truth_label"] == recur_dict[subject]["net_label"]:
                     recur_dict[subject]["vote"] = 1 - recur_dict[subject]["vote"]
+                    recur_dict[subject]['accurate_votes'] = recur_dict[subject]['total_votes'] - recur_dict[subject]['accurate_votes']
+                    # recur_dict[subject][]
                 rec_legend = plt.bar(index, recur_dict[subject]["vote"], color='orange', label="Recurrent")
                 index += 1
                 names.append(subject)
                 votes.append(recur_dict[subject]["vote"])
                 subject_data[subject]["vote"] = recur_dict[subject]["vote"]
+                subject_data[subject]['accurate_votes'] = recur_dict[subject]['accurate_votes']
         
         for subject in sorted(nonrecur_dict):
             if int(nonrecur_dict[subject]['condition']) == cond:
                 if not nonrecur_dict[subject]["truth_label"] == nonrecur_dict[subject]["net_label"]:
                     nonrecur_dict[subject]["vote"] = 1 - nonrecur_dict[subject]["vote"]
+                    nonrecur_dict[subject]['accurate_votes'] = nonrecur_dict[subject]['total_votes'] - nonrecur_dict[subject]['accurate_votes']
                 nonrec_legend = plt.bar(index, nonrecur_dict[subject]["vote"], color='blue', label="Nonrecurrent")
                 index += 1
                 names.append(subject)
                 votes.append(nonrecur_dict[subject]["vote"])
                 subject_data[subject]["vote"] = nonrecur_dict[subject]["vote"]
+                subject_data[subject]['accurate_votes'] = nonrecur_dict[subject]['accurate_votes']
         plt.bar(index, 0)
         index += 1
         names.append('^^ %i ^^' % (cond))
@@ -546,15 +554,33 @@ def write_results_csv(subject_data, recur_dict, nonrecur_dict, auc_dict, total_c
         csvwriter.writerow(['Average vote:', '{0:.4f}'.format(np.mean(total_votes)),'','Average AUC:', '{0:.4f}'.format(np.mean(auc_arr))])
         csvwriter.writerow(['Vote std-dev:', '{0:.4f}'.format(np.std(total_votes)),'','AUC std-dev:', '{0:.4f}'.format(np.std(auc_arr))])
         csvwriter.writerow([''])
-        csvwriter.writerow(['subject', 'label', 'vote', 'condition'])
+        csvwriter.writerow(['condition', 'subject', 'success','label', 'avg_vote', 'accurate_votes', 'total_votes', 'image_count'])
         for cond in np.arange(total_conditions):
             cond += 1
             for subject in sorted(subject_data):
+                if round(subject_data[subject]['vote']):
+                    success = 'PASS'
+                else:
+                    success = 'FAIL'
                 if int(subject_data[subject]['condition']) == cond:
                     if subject_data[subject]['truth_label'] == 'RECURRENT':
-                        csvwriter.writerow([subject, '1', '{0:.4f}'.format(subject_data[subject]['vote']), subject_data[subject]["condition"]])
+                        csvwriter.writerow([subject_data[subject]["condition"],
+                            subject,
+                            success,
+                            '1',
+                            '{0:.4f}'.format(subject_data[subject]['vote']),
+                            subject_data[subject]['accurate_votes'],
+                            subject_data[subject]['total_votes'],
+                            subject_data[subject]['image_count']])
                     else:
-                        csvwriter.writerow([subject, '0', '{0:.4f}'.format(subject_data[subject]['vote']), subject_data[subject]["condition"]])
+                        csvwriter.writerow([subject_data[subject]["condition"],
+                            subject,
+                            success,
+                            '0',
+                            '{0:.4f}'.format(subject_data[subject]['vote']),
+                            subject_data[subject]['accurate_votes'],
+                            subject_data[subject]['total_votes'],
+                            subject_data[subject]['image_count']])
 
 def majority_vote(base_path, voting_filename=None, hist_path=None, map_path=None, create_maps=False, info=None, patch_size=None, patch_overlap=None, og_image_path=None):
     if not hist_path:
