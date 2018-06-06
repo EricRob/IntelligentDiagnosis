@@ -53,6 +53,7 @@ def initialize_image(data, row):
     data["unscaled_rec"]=[float(row[5])]
     data["scaled_nr"]=[float(row[6])]
     data["scaled_rec"]=[float(row[7])]
+    data["coord_array"] = [row[8]]
     data["coords"] = {}
     coord_array = create_coord_list(row[8])
     for coord in coord_array:
@@ -64,6 +65,9 @@ def initialize_subject(subj_dict, row):
     subj_dict[row[0]]=[row[1]]
 
 def add_data_to_existing_image(data, row):
+    if row[8] in data["coord_array"]:
+        return
+    data["coord_array"].append(row[8])
     data["output"].append(row[2])
     data["labels"].append(row[3])
     data["unscaled_nr"].append(float(row[4]))
@@ -625,10 +629,12 @@ def main():
 
     image_dict={}
     subject_dict={}
+    cprint(filename, 'grey', 'on_white')
 
     with open(filename, newline="") as csvfile:
         csvreader = csv.reader(csvfile, delimiter=",")
         header = next(csvreader) # Discard header line
+        print("Reading csv...")
         for row in csvreader:
             if not row:
                 continue
@@ -641,7 +647,8 @@ def main():
                 initialize_subject(subject_dict, row)
             else:
                 add_data_to_existing_subject(subject_dict[row[0]], row)
-    for image_name in image_dict:
+    print("Creating image dictionary...")
+    for image_name in image_dict:    
         image_patch_data = ops_within_patches(image_dict[image_name]["coords"])
         if FLAGS.create_maps:
             generate_heat_map_single_image(image_dict[image_name])
@@ -652,18 +659,21 @@ def main():
         roc_dict = per_subject_roc_curves(subject_dict, image_dict)
         plot_roc_curves_and_votes(roc_dict, subject_dict, image_dict)
     else:
+        print("Creating ROC...")
         fpr, tpr, thresholds, roc_auc = create_overall_roc_curve(image_dict)
         save_roc_curve(fpr, tpr, thresholds, roc_auc)
     
     if FLAGS.info == "subject":
         if FLAGS.print == True:
             print_info_per_subject(subject_dict, image_dict)
+        print("Saving bar graph...")
         save_subjects_vote_bar_graph(image_dict, subject_dict)
     elif FLAGS.info == "image" and FLAGS.print == True:
         print_info_per_image(image_dict)     
     elif FLAGS.print == True:
         print_info_per_subject(subject_dict, image_dict)
         print_info_per_image(image_dict)
+    cprint("Done.\n", 'green')
 
 
 # Main body
