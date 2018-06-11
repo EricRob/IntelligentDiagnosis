@@ -16,9 +16,10 @@ from tensorflow import flags
 
 # Global variables
 flags.DEFINE_string("subject_list", "verified_images.csv", "Master list of subjects from which to create per-mode subject lists")
-flags.DEFINE_string("base_path", None, "Location of subject list and where the current testing condition files will be created")
+flags.DEFINE_string("base_path", "../data_conditions/", "Location of subject list and where the current testing condition files will be created")
 flags.DEFINE_integer("conditions", 6, "Number of patient sets to create")
-flags.DEFINE_string("condition_name", "leave_one_out_conditions", "Name of current testing condition")
+flags.DEFINE_string("condition_name", None, "Name of current testing condition")
+flags.DEFINE_bool("image_processor", False, "List generator is being called rom image_processor.py")
 
 FLAGS = flags.FLAGS
 # Class declarations
@@ -78,7 +79,10 @@ def write_subject_lists(folder_path, train_list, test_list, subject_dict, condit
 	os.makedirs(folder_path, exist_ok=True)
 	recur_train, recur_test, nonrecur_train, nonrecur_test = sort_recurrence_from_nonrecurrence(train_list, test_list, subject_dict)
 	condition_dict[i+1]["recur_test"] = recur_test
+	condition_dict[i+1]["recur_test_count"] = len(recur_test)
 	condition_dict[i+1]["nonrecur_test"] = nonrecur_test
+	condition_dict[i+1]['nonrecur_test_count'] = len(nonrecur_test)
+
 	create_mode_lists_per_label(subject_dict, recur_test, recur_train, folder_path, 'recurrence')
 	create_mode_lists_per_label(subject_dict, nonrecur_test, nonrecur_train, folder_path, 'nonrecurrence')
 
@@ -104,34 +108,27 @@ def write_conditions_csv(condition_dict, conditions_folder_path):
 			for nonrecur in condition_dict[test_cond]["nonrecur_test"]:
 				csvwriter.writerow([nonrecur, '0', str(test_cond)])
 
-
-
 def generate_subject_lists(subject_dict):
 	# recurrence_dict, nonrecurrence_dict = generate_label_dicts(subject_dict)
 	
 	# subject_list = random.shuffle(list(subject_dict))
 	
 	subject_list = list(subject_dict)
+	if not FLAGS.condition_name:
+		FLAGS.condition_name = os.path.splitext(FLAGS.subject_list)[0]
 	conditions_folder_path = os.path.join(FLAGS.base_path, FLAGS.condition_name)
 	os.makedirs(conditions_folder_path, exist_ok=True)
 	test_subject_count = len(subject_list) // FLAGS.conditions
 	condition_dict = dict()
 	for i in np.arange(FLAGS.conditions):
 		condition_dict[i+1] = dict()
-	all_non_empty = False
-
-	while(not all_non_empty):
-		all_non_empty = True
+	adequate_distribution = False
+	count = 0
+	while(not adequate_distribution):
+		count += 1
+		adequate_distribution = True
 		random.shuffle(subject_list)
 		test_subjects = list(subject_list)
-
-		# condition_one_train = list(subject_list)
-		# condition_two_train = list(subject_list)
-		# condition_three_train = list(subject_list)
-
-		# condition_one_test = []
-		# condition_two_test = []
-		# condition_three_test = []
 
 		for i in np.arange(FLAGS.conditions-1):
 			test_subjects = make_single_condition_list(subject_list, test_subjects, test_subject_count, i, conditions_folder_path, subject_dict, condition_dict)
@@ -141,56 +138,24 @@ def generate_subject_lists(subject_dict):
 			final_condition_train.remove(subject)
 		final_folder_path = os.path.join(conditions_folder_path, '{0:03d}'.format(FLAGS.conditions) + "_condition")
 		write_subject_lists(final_folder_path, final_condition_train, test_subjects, subject_dict, condition_dict, FLAGS.conditions-1)
+		
 
 		# Make sure all tests contain at least one subject. If not, reshuffle subject list and start over.
 		for condition in condition_dict:
 			if not condition_dict[condition]["recur_test"]:
-				all_non_empty = False
+				adequate_distribution = False
 				break
 			if not condition_dict[condition]["nonrecur_test"]:
-				all_non_empty = False
+				adequate_distribution = False
 				break
-		write_conditions_csv(condition_dict, conditions_folder_path)
-
-
-
-
-	# folder_path_one = os.path.join(conditions_folder_path, "001_condition")
-	# write_subject_lists(folder_path_one, condition_one_train, condition_one_test, subject_dict)
-	# folder_path_two = os.path.join(conditions_folder_path, "002_condition")
-	# write_subject_lists(folder_path_two, condition_two_train, condition_two_test, subject_dict)
-	# folder_path_three = os.path.join(conditions_folder_path, "003_condition")
-	# write_subject_lists(folder_path_three, condition_three_train, test_subjects, subject_dict)
-
-
-	# recur_subject_list = list(recurrence_dict.keys())
-	# nonrecur_subject_list = list(nonrecurrence_dict.keys())
-	# for i in range(FLAGS.conditions):
-	# 	folder_path = os.path.join(conditions_folder_path, '{0:03d}'.format(i+1) + "_condition")
-	# 	os.makedirs(folder_path, exist_ok=True)
-	# 	recur_test_subjects = []
-	# 	nonrecur_test_subjects = []
-
-	# 	while(len(recur_test_subjects) < (FLAGS.test_subjects / 2)):
-	# 		rand_recur_subject = random.choice(recur_subject_list)
-	# 		if rand_recur_subject not in recur_test_subjects:
-	# 			recur_test_subjects.append(rand_recur_subject)
-
-	# 	while(len(nonrecur_test_subjects) < (FLAGS.test_subjects / 2)):
-	# 		rand_nonrecur_subject = random.choice(nonrecur_subject_list)
-	# 		if rand_nonrecur_subject not in nonrecur_test_subjects:
-	# 			nonrecur_test_subjects.append(rand_nonrecur_subject)
 		
-	# 	recur_test_removed = list(recur_subject_list)
-	# 	for test_subject in recur_test_subjects:
-	# 		recur_test_removed.remove(test_subject)
+		adequate_distribution = subject_condition_distributions(condition_dict)
+		if adequate_distribution:
+			cprint("Attempt " + str(count) + " -- Success", 'white', 'on_green')
+		else:
+			cprint("Attempt " + str(count) + " -- Unbalanced", 'white', 'on_red')
 
-	# 	nonrecur_test_removed = list(nonrecur_subject_list)
-	# 	for test_subject in nonrecur_test_subjects:
-	# 		nonrecur_test_removed.remove(test_subject)
-
-	# 	create_mode_lists_per_label(subject_dict, recur_test_subjects, recur_test_removed, folder_path, 'recurrence')
-	# 	create_mode_lists_per_label(subject_dict, nonrecur_test_subjects, nonrecur_test_removed, folder_path,'nonrecurrence')
+		write_conditions_csv(condition_dict, conditions_folder_path)
 
 def create_mode_lists_per_label(subject_dict, test_subjects, subject_list, folder_path, label):
 	test_file = open(os.path.join(folder_path, label + "_test_subjects.txt"), "wt")
@@ -198,6 +163,24 @@ def create_mode_lists_per_label(subject_dict, test_subjects, subject_list, folde
 	train_file = open(os.path.join(folder_path, label + "_train_subjects.txt"), "wt")
 	write_test_file(subject_dict, test_subjects, test_file)
 	write_train_and_valid_files(subject_dict, subject_list, valid_file, train_file)
+
+def subject_condition_distributions(condition_dict):
+	recur_count = 0
+	nonrecur_count = 0
+	one_off = False
+
+	for cond in condition_dict:
+		recur_count += len(condition_dict[cond]['recur_test'])
+		nonrecur_count += len(condition_dict[cond]['nonrecur_test'])
+	recur_portion = round(recur_count / (recur_count + nonrecur_count), 1)
+	for cond in condition_dict:
+		cond_portion = round(condition_dict[cond]['recur_test_count'] / (condition_dict[cond]['nonrecur_test_count'] + condition_dict[cond]['recur_test_count']), 1)
+		if (abs(round(cond_portion - recur_portion, 1)) > 0.1):
+			if one_off:
+				return False
+			else:
+				one_off = True
+	return True
 
 def write_test_file(subject_dict, test_subjects, test_file):
 	for subject in test_subjects:
@@ -222,6 +205,15 @@ def write_train_and_valid_files(subject_dict, subject_list, valid_file, train_fi
 				train_file.write(image + '\n')
 	train_file.close()
 	valid_file.close()
+
+def write_lists(new_condition_name, verified_csv, c_val_folds, base_path):
+	FLAGS.image_processor = True
+	FLAGS.condition_name = new_condition_name
+	FLAGS.subject_list = verified_csv
+	FLAGS.conditions = c_val_folds
+	FLAGS.base_path = base_path
+	main()
+	return True
 
 def main():
     base_path = FLAGS.base_path

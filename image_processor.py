@@ -13,8 +13,10 @@ from random import shuffle
 import pdb
 from termcolor import cprint
 import csv
+import subprocess
 from shutil import copyfile
 import centroid_sampler as gauss
+import subject_list_generator
 
 import tiff_patching
 
@@ -23,18 +25,37 @@ warnings.simplefilter('ignore', Image.DecompressionBombWarning)
 flags.DEFINE_integer("r_overlap", 75, "Percentage of overlap of recurrence samples")
 flags.DEFINE_integer("nr_overlap", 50, "Percentage of overlap of nonrecurrence samples")
 flags.DEFINE_integer("num_steps", 20, "Number of steps in RNN sequence")
+
 flags.DEFINE_bool("recurrence_only", False, "Generate only recurrence binary file")
 flags.DEFINE_bool("nonrecurrence_only", False, "Generate nonrecurrence binary file only")
+
 flags.DEFINE_string("seg_path", None, "Location of segmentations folder")
+
 flags.DEFINE_string("mode", None, "Create binary file for a specific mode between train, validation, or test")
+
 flags.DEFINE_bool("randomized_conditions", False, "Generate multiple binary files for randomized conditions with subject variability")
 flags.DEFINE_string("condition_path", None, "Path of condition folder with condition subject lists")
+
+flags.DEFINE_bool("generate_conditions", False, "Generate randomized lists of subjects for cross-validation testing")
+flags.DEFINE_string("verified_list",  "verified_images.csv", "Master list of subjects from which to create per-mode subject lists")
+flags.DEFINE_string("new_condition", None, "Name of testing condition to create")
+flags.DEFINE_integer("cross_val_folds", 6, "Number of folds for cross-validation when creating new subject lists")
+flags.DEFINE_string("data_conditions","/home/wanglab/Desktop/recurrence_seq_lstm/data_conditions", "Location of data_conditions directory" )
+
 flags.DEFINE_string("config", None, "Configuration for generating patches.")
 flags.DEFINE_string("sampling_method", "gauss", "Sampling pattern for generating sequences")
 flags.DEFINE_string("patches_only",False,"Generate only patches for new images, and no binary files.")
+
 flags.DEFINE_integer("gauss_seq", 6, "Number of sequences to generate per tile with gaussian sampling")
 flags.DEFINE_integer("gauss_stdev", 1500, "Standard deviation of pixel distance from center for gaussian sampling")
 flags.DEFINE_integer("gauss_tile_size", 2500, "Tile dimensions for splitting sample image for gauss distribution")
+
+flags.DEFINE_bool("check_new_masks", False, "Check for new masks to create")
+flags.DEFINE_string("new_image_dir", '/home/wanglab/Desktop/new_masks/', "location of new images to be masked and moved to image_data")
+flags.DEFINE_string("original_images_dir", '/home/wanglab/Desktop/recurrence_seq_lstm/image_data/original_images', 'location of original_images directory within image_data')
+flags.DEFINE_string("masks_dir", '/home/wanglab/Desktop/recurrence_seq_lstm/image_data/masks', 'location of masks directory within image_data' )
+
+flags.DEFINE_bool("skip_preverification", False, "Skip checking image folders for verified_list images and masks")
 
 FLAGS = flags.FLAGS
 
@@ -385,9 +406,9 @@ def create_binary_file(label, mode, config, cond_path=None):
 def create_binary_mode_files(label, config, cond_path=None):
 	if FLAGS.randomized_conditions:
 		os.makedirs(os.path.join(FLAGS.condition_path, cond_path, label), exist_ok=True)
-		create_binary_file(label, "train", config, cond_path=condition_folder)
-		create_binary_file(label, "valid", config, cond_path=condition_folder)
-		create_binary_file(label, "test", config, cond_path=condition_folder)
+		create_binary_file(label, "train", config, cond_path=cond_path)
+		create_binary_file(label, "valid", config, cond_path=cond_path)
+		create_binary_file(label, "test", config, cond_path=cond_path)
 	else:
 		if not FLAGS.mode:
 			create_binary_file(label, "train", config)
@@ -413,6 +434,54 @@ def create_string_from_coord_array(coord_array, num_steps):
 			coord_string = coord_string + coord
 	return coord_string
 
+def generate_new_masks():
+	wd = os.getcwd()
+	os.chdir(FLAGS.new_image_dir)
+	subprocess.check_call("gimp -i -b '(batch-mask \"*.tif\" 217)' -b '(gimp-quit 0)'", shell=True)
+	subprocess.check_call("mv mask_* " + FLAGS.masks_dir, shell=True)
+	subprocess.check_call("mv *.tif " + FLAGS.original_images_dir, shell=True)
+	os.chdir(wd)
+
+def generate_new_conditions():
+	new_condition_name = FLAGS.new_condition
+	verified_csv = FLAGS.verified_list
+	if not new_condition_name:
+		new_condition_name = os.path.splitext(verified_csv)[0]
+		FLAGS.new_condition = new_condition_name
+	c_val_folds = FLAGS.cross_val_folds
+	base_path = FLAGS.data_conditions
+
+	subject_list_generator.write_lists(new_condition_name, verified_csv, c_val_folds, base_path)
+
+def pre_verify_subjects():
+	verified_list = FLAGS.verified_list
+	verified_file = open(os.path.join(FLAGS.data_conditions, verified_list), "r")
+	missing_mask_list = []
+	missing_image_list = []
+	exit_bool = False
+	reader = csv.DictReader(verified_file, delimiter = ",")
+	for row in reader:
+		image_base = row['image'][:-8] # Change this when transitioning away from "_patches" bug
+		row_mask = "mask_" + image_base + ".tif"
+		row_image = image_base + ".tif"
+		if not os.path.exists(os.path.join(FLAGS.original_images_dir, row_image)):
+			missing_image_list = missing_image_list + [row_image]
+		if not os.path.exists(os.path.join(FLAGS.masks_dir, row_mask)):
+			missing_mask_list = missing_mask_list + [row_mask]
+	if missing_image_list:
+		exit_bool = True
+		cprint("\nUnable to create binary files due to missing images:", 'white', 'on_red')
+		for image in missing_image_list:
+			cprint(image)
+	print("")
+	if missing_mask_list:
+		if not missing_image_list and not FLAGS.check_new_masks:
+			exit_bool = True
+		cprint("Missing masks:", 'white', 'on_red')
+		for mask in missing_mask_list:
+			cprint(mask)
+	return exit_bool
+
 def get_config():
 	if FLAGS.config == "300":
 		return SmallConfig()
@@ -421,14 +490,21 @@ def get_config():
 
 if __name__ == '__main__':
 
-	if not FLAGS.num_steps:
-		raise ValueError("Must set --num_steps to integer for number of steps in RNN sequence")
+	if FLAGS.check_new_masks:
+		print("Generating new image masks ... ")
+		generate_new_masks()
 
-	# if not FLAGS.num_steps:
-	# 	raise ValueError("must set --num_steps to the length of RNN sequence")
+	if not FLAGS.skip_preverification:
+		exit = pre_verify_subjects()
+		if exit:
+			sys.exit(1)
+		else:
+			cprint("Verification Successful!", 'white', 'on_green')
 
-	#directory = os.fsencode(FLAGS.data_dir)
-	# num_steps = FLAGS.num_steps
+	if FLAGS.generate_conditions:
+		print("Generating new cross-validation conditions ... ")
+		generate_new_conditions()
+		FLAGS.condition_path = os.path.join(FLAGS.data_conditions, FLAGS.new_condition)
 
 	if FLAGS.condition_path:
 		FLAGS.randomized_conditions = True
@@ -441,13 +517,12 @@ if __name__ == '__main__':
 		for row in reader:
 			if int(row["label"]) == 1:
 				create_patch_folder(row["image_name"], "recurrence", config)
-				# write_patch_binary_file(row["image_name"], "recurrence", config)
 			elif int(row["label"]) == 0:
 				create_patch_folder(row["image_name"], "nonrecurrence", config)
-				# write_patch_binary_file(row["image_name"], "nonrecurrence", config)
 
 	if not FLAGS.patches_only:
 		if FLAGS.randomized_conditions:
+			cprint("--> Generating condition binary files", 'white', 'on_green')
 			if not FLAGS.condition_path:
 				raise ValueError("If creating binary files for with randomized subjects, must specify the condition's enclosing folder with --condition_path.")
 			for condition_folder in sorted(os.listdir(FLAGS.condition_path)):
