@@ -494,7 +494,7 @@ if __name__ == '__main__':
 		print("Generating new image masks ... ")
 		generate_new_masks()
 
-	if not FLAGS.skip_preverification:
+	if not FLAGS.skip_preverification and FLAGS.generate_conditions:
 		exit = pre_verify_subjects()
 		if exit:
 			sys.exit(1)
