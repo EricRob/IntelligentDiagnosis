@@ -16,7 +16,7 @@ from tensorflow import flags
 
 # Global variables
 flags.DEFINE_string("subject_list", "verified_images.csv", "Master list of subjects from which to create per-mode subject lists")
-flags.DEFINE_string("base_path", "../data_conditions/", "Location of subject list and where the current testing condition files will be created")
+flags.DEFINE_string("base_path", "/data/recurrence_seq_lstm/data_conditions/", "Location of subject list and where the current testing condition files will be created")
 flags.DEFINE_integer("conditions", 6, "Number of patient sets to create")
 flags.DEFINE_string("condition_name", None, "Name of current testing condition")
 flags.DEFINE_bool("image_processor", False, "List generator is being called rom image_processor.py")
@@ -139,7 +139,8 @@ def generate_subject_lists(subject_dict):
 		final_folder_path = os.path.join(conditions_folder_path, '{0:03d}'.format(FLAGS.conditions) + "_condition")
 		write_subject_lists(final_folder_path, final_condition_train, test_subjects, subject_dict, condition_dict, FLAGS.conditions-1)
 		
-
+		adequate_distribution = subject_condition_distributions(condition_dict)
+		
 		# Make sure all tests contain at least one subject. If not, reshuffle subject list and start over.
 		for condition in condition_dict:
 			if not condition_dict[condition]["recur_test"]:
@@ -148,8 +149,6 @@ def generate_subject_lists(subject_dict):
 			if not condition_dict[condition]["nonrecur_test"]:
 				adequate_distribution = False
 				break
-		
-		adequate_distribution = subject_condition_distributions(condition_dict)
 		if adequate_distribution:
 			cprint("Attempt " + str(count) + " -- Success", 'white', 'on_green')
 		else:
@@ -197,8 +196,12 @@ def write_train_and_valid_files(subject_dict, subject_list, valid_file, train_fi
 		elif len(image_list) == 2:
 			train_file.write(image_list[0] + '\n')
 			valid_file.write(image_list[1] + '\n')
+		elif len(image_list) == 3:
+			train_file.write(image_list[0] + '\n')
+			valid_file.write(image_list[1] + '\n')
+			train_file.write(image_list[2] + '\n')
 		else:
-			num_valid_subjects = len(image_list) // 3
+			num_valid_subjects = len(image_list) // 4
 			for x in range(num_valid_subjects):
 				valid_file.write(image_list.pop(0) + '\n')
 			for image in image_list:

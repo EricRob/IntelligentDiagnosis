@@ -40,7 +40,7 @@ flags.DEFINE_bool("generate_conditions", False, "Generate randomized lists of su
 flags.DEFINE_string("verified_list",  "verified_images.csv", "Master list of subjects from which to create per-mode subject lists")
 flags.DEFINE_string("new_condition", None, "Name of testing condition to create")
 flags.DEFINE_integer("cross_val_folds", 6, "Number of folds for cross-validation when creating new subject lists")
-flags.DEFINE_string("data_conditions","/home/wanglab/Desktop/recurrence_seq_lstm/data_conditions", "Location of data_conditions directory" )
+flags.DEFINE_string("data_conditions","/data/recurrence_seq_lstm/data_conditions", "Location of data_conditions directory" )
 
 flags.DEFINE_string("config", None, "Configuration for generating patches.")
 flags.DEFINE_string("sampling_method", "gauss", "Sampling pattern for generating sequences")
@@ -52,15 +52,15 @@ flags.DEFINE_integer("gauss_tile_size", 2500, "Tile dimensions for splitting sam
 
 flags.DEFINE_bool("check_new_masks", False, "Check for new masks to create")
 flags.DEFINE_string("new_image_dir", '/home/wanglab/Desktop/new_masks/', "location of new images to be masked and moved to image_data")
-flags.DEFINE_string("original_images_dir", '/home/wanglab/Desktop/recurrence_seq_lstm/image_data/original_images', 'location of original_images directory within image_data')
-flags.DEFINE_string("masks_dir", '/home/wanglab/Desktop/recurrence_seq_lstm/image_data/masks', 'location of masks directory within image_data' )
+flags.DEFINE_string("original_images_dir", '/data/recurrence_seq_lstm/image_data/original_images', 'location of original_images directory within image_data')
+flags.DEFINE_string("masks_dir", '/data/recurrence_seq_lstm/image_data/masks', 'location of masks directory within image_data' )
 
 flags.DEFINE_bool("skip_preverification", False, "Skip checking image folders for verified_list images and masks")
 
 FLAGS = flags.FLAGS
 
 class OriginalPatchConfig(object):
-	image_data_folder_path = "../image_data" # Location of images folder
+	image_data_folder_path = '/data/recurrence_seq_lstm/image_data/' # Location of images folder
 	patch_size = 500 # Pixel length and width of each patch square
 	overlap = 30 # Amount of overlap between patches within a sample
 	sample_size = 100 # Final size of patch (usually 100)
@@ -311,8 +311,12 @@ def create_binary_file(label, mode, config, cond_path=None):
 	for line in reader:
 		image_to_ID_dict[line[0].split(".")[0]+"_patches"] = line[1]
 
+	# ********** Default behavior is gauss sampling **********
 	if FLAGS.sampling_method == 'gauss':
 		gauss_sampling(image_to_ID_dict, images_list, bin_file, config)
+
+
+	# ********** Set sampling method to 'column' or 'row' for the following sampling **********
 	else:
 		for image in images_list:
 			counter = 0
@@ -329,8 +333,9 @@ def create_binary_file(label, mode, config, cond_path=None):
 				print("Writing " + image + " -- %i/%i" % (dir_counter, len(images_list)))
 			
 			patch_image_list = os.listdir(patch_folder_path)
-
-			patient_ID_byte_string = str.encode(image_to_ID_dict[image])
+			padded_ID_string = "{:<5}".format(image_to_ID_dict[image])
+			patient_ID_byte_string = str.encode(padded_ID_string)
+			pdb.set_trace()
 			padded_subject_file_name = "{:<100}".format(image[:-8])
 			image_base_name = str.encode(padded_subject_file_name)
 			img_dict = {}

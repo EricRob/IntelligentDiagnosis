@@ -23,7 +23,7 @@ from sklearn.metrics import roc_curve, auc
 flags.DEFINE_string("info","subject","Display per subject or per image info")
 flags.DEFINE_string("base_path", None, "Path of folder containing voting file")
 flags.DEFINE_string("histogram_path", None, "Path for saving folder of histogram images")
-flags.DEFINE_string("og_image_path","/home/wanglab/Desktop/recurrence_seq_lstm/image_data/original_images/","Location of original images for generating heat map")
+flags.DEFINE_string("og_image_path","/data/recurrence_seq_lstm/image_data/original_images/","Location of original images for generating heat map")
 flags.DEFINE_integer("patch_size", 500, "Dimensions of square patches taken from original image to generate the sequences given to the network")
 flags.DEFINE_float("patch_overlap", 0.3, "Overlap portion of patches taken from the original images")
 flags.DEFINE_string("map_path", None, "Path for saving heat maps")
@@ -193,26 +193,35 @@ def across_image_avg(sums, lens):
     return sums / lens
 
 def print_info_per_image(image_dict):
-    for image_name in sorted(image_dict):
-        c1 = collections.Counter(image_dict[image_name]["output"]).most_common(1)
-        truth_label = give_string_label(image_dict[image_name]["labels"][0])
-        network_label = give_string_label(c1[0][0])
-        if truth_label == network_label:
-            color = 'on_green'
-        else:
-            color = 'on_red'
-        cprint("\n" + image_name + " -- " + image_dict[image_name]["id"], 'white', color, attrs=['bold'])
-        print("Label: " + truth_label)
-        print("Network majority vote: %s, %i%% (%i/%i) " % (network_label, int((c1[0][1])/len(image_dict[image_name]["output"])*100), int(c1[0][1]), len(image_dict[image_name]["output"])))
-        unscaled_nr = average_value(image_dict[image_name], "unscaled_nr")
-        unscaled_rec = average_value(image_dict[image_name], "unscaled_rec")
-        scaled_nr = average_value(image_dict[image_name], "scaled_nr")
-        scaled_rec = average_value(image_dict[image_name], "scaled_rec")
-        smax1 = softmax([unscaled_nr, unscaled_rec])
+    results_path = FLAGS.base_path.split("/")
+    x = len(results_path)
+    csv_name = results_path[x-1] + '_per_image_results.csv'
+    with open(os.path.join(FLAGS.base_path,csv_name), 'w', newline='') as csvfile:
+        csvwriter = csv.writer(csvfile)
+        csvwriter.writerow(['subject_id', 'image_name', 'label', 'score', 'accurate_votes', 'total_votes'])
+        for image_name in sorted(image_dict):
+            c1 = collections.Counter(image_dict[image_name]["output"]).most_common(1)
+            truth_label = give_string_label(image_dict[image_name]["labels"][0])
+            network_label = give_string_label(c1[0][0])
+            if truth_label == network_label:
+                color = 'on_green'
+                accurate_votes = int(c1[0][1])
+            else:
+                color = 'on_red'
+                accurate_votes = len(image_dict[image_name]["output"]) - int(c1[0][1])
+            cprint("\n" + image_name + " -- " + image_dict[image_name]["id"], 'white', color, attrs=['bold'])
+            print("Label: " + truth_label)
+            print("Network majority vote: %s, %i%% (%i/%i) " % (network_label, int((c1[0][1])/len(image_dict[image_name]["output"])*100), int(c1[0][1]), len(image_dict[image_name]["output"])))
+            unscaled_nr = average_value(image_dict[image_name], "unscaled_nr")
+            unscaled_rec = average_value(image_dict[image_name], "unscaled_rec")
+            scaled_nr = average_value(image_dict[image_name], "scaled_nr")
+            scaled_rec = average_value(image_dict[image_name], "scaled_rec")
+            smax1 = softmax([unscaled_nr, unscaled_rec])
+            csvwriter.writerow([image_dict[image_name]["id"], image_name, image_dict[image_name]["labels"][0], accurate_votes / len(image_dict[image_name]["output"]), accurate_votes ,len(image_dict[image_name]["output"])])
 
-        print("Unscaled average: %.3f, %.3f" % (unscaled_nr, unscaled_rec) )
-        print("Softmax of unscaled average: " + str(smax1))
-        print("Scaled Average: %.3f, %.3f" % (scaled_nr, scaled_rec))
+            print("Unscaled average: %.3f, %.3f" % (unscaled_nr, unscaled_rec) )
+            print("Softmax of unscaled average: " + str(smax1))
+            print("Scaled Average: %.3f, %.3f" % (scaled_nr, scaled_rec))
 
 def print_info_per_subject(subject_dict, image_dict):
     for subject in subject_dict:
@@ -547,7 +556,10 @@ def write_results_csv(subject_data, recur_dict, nonrecur_dict, auc_dict, total_c
         if nonrecur_dict[subject]['vote'] > 0.5:
             nonrecur_pass += 1
     # pdb.set_trace()
-    with open(os.path.join(FLAGS.base_path, 'test_summary.csv'), 'w', newline='') as csvfile:
+    results_path = FLAGS.base_path.split("/")
+    x = len(results_path)
+    summary_name = results_path[x-1] + '_test_summary.csv'
+    with open(os.path.join(FLAGS.base_path, summary_name), 'w', newline='') as csvfile:
         csvwriter = csv.writer(csvfile)
         csvwriter.writerow(['Recurrent subjects passed:', recur_pass,'','Nonrecurrence subjects passed:', nonrecur_pass])
         csvwriter.writerow(['Recurrence subjects:', len(recur_dict),'','Nonrecurrence subjects:', len(nonrecur_dict)])

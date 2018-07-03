@@ -18,7 +18,7 @@ from shutil import move
 import majority_vote as voter
 
 # Global variables
-flags.DEFINE_string("results_folder", "../results/","Results folder containing all results and voting files")
+flags.DEFINE_string("results_folder", "/data/recurrence_seq_lstm/results/","Results folder containing all results and voting files")
 flags.DEFINE_string('vote_file', 'voting_file.csv', "voting file name")
 flags.DEFINE_bool("overwrite",False,"Overwrite existing summary plots")
 FLAGS = flags.FLAGS
@@ -196,12 +196,7 @@ def main():
 					figure.savefig(results_name)
 					plt.close()
 					count +=1
-	    		# results_files = ['train_results.txt', 'valid_results.txt', 'test_results.txt', 'voting_file.csv']
-	    		# move_path = os.path.join(root, folder,"raw_data")
-	    		# os.makedirs(move_path, exist_ok=True)
-	    		# for f in results_files:
-	    		# 	if os.path.exists(os.path.join(root, folder,f)):
-	    		# 		move(os.path.join(root, folder,f), os.path.join(move_path,f))
+	    		
 	if count == 0:
 		cprint("¸¸♬·¯·♩¸¸♪·¯·♫¸¸No new results to summarize¸¸♬·¯·♩¸¸♪·¯·♫¸¸", 'yellow', attrs=['bold'])
 

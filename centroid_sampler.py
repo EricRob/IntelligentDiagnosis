@@ -26,7 +26,7 @@ FLAGS = flags.FLAGS
 
 # Class declarations
 class OriginalPatchConfig(object):
-	image_data_folder_path = "../image_data" # Location of image to be split into patches
+	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/" # Location of image to be split into patches
 	patch_size = 500 # Pixel length and width of each patch square
 	tile_size = patch_size * 5
 	edge_overlap = 75 # Amount of overlap between patches within a sample
@@ -207,6 +207,7 @@ def sample_from_distribution(mask, tile_info, config):
 	keep_threshold = config.patch_size**2 * (1 - config.patch_keep_percentage/100)
 	remove_tiles = []
 	skip_count = 0
+
 	if not tile_info:
 		return 0
 	for tile in tile_info:
@@ -358,7 +359,9 @@ def generate_sequences(mask_filename, config):
 	adjust_centroids(right_centroids, tile_size)
 
 	cprint("Sampling around centroids...", 'green', 'on_white')
-	tile_count = get_tile_count(tile_centroids, bottom_centroids, right_centroids)
+	tile_count = get_tile_count(tile_grid, bottom_edge, right_edge)
+	centroid_count = get_centroid_count(tile_centroids, bottom_centroids, right_centroids)
+
 	cprint("Tile count: " + str(tile_count))
 	skip_count = 0
 
@@ -367,7 +370,7 @@ def generate_sequences(mask_filename, config):
 	skip_count += sample_from_distribution(mask, right_centroids, config)
 	skip_count += corner_sample_from_distribution(mask, corner_centroid, config, keep_corner)
 
-	cprint("Keeping " + str(tile_count - skip_count) + "/" + str(tile_count) + " tiles")
+	cprint("Keeping " + str(centroid_count - skip_count) + "/" + str(tile_count) + " tiles")
 
 	cprint("Listing sequences...", 'green', 'on_white')
 	sequences = split_and_combine_patch_lists(tile_centroids, bottom_centroids, right_centroids, corner_centroid, keep_corner, config.num_steps)
@@ -395,7 +398,7 @@ def write_image_bin(image_bin, image_name, subject_ID, sequences, config):
 	image_path = os.path.join(config.image_data_folder_path, 'original_images', image_name)
 	image = io.imread(image_path)
 	# Data saved to binary files as [subject ID][image name][coordinates][sequence data]
-	ID_byte_string = str.encode(subject_ID)
+	ID_byte_string = str.encode("{:<5}".format(subject_ID))
 	image_name_byte_string = str.encode("{:<100}".format(image_name[:-4])) #padded to 100 characters
 	for sequence in sequences:
 		coord_byte_string = byte_string_from_coord_array(sequence, config.num_steps)
@@ -416,8 +419,6 @@ def verify_images(all_centroids, image_name, subject_ID, config):
 		os.makedirs(folder_path, exist_ok=True)
 		cprint(all_centroids[tile]['coords'],'red')
 		for y, x in all_centroids[tile]['coords']:
-			if y < 0 or x < 0 or x > image.shape[1] or y > image.shape[0]:
-				pdb.set_trace()
 			patch = image[y:(y+config.patch_size),x:(x+config.patch_size),:]
 			patch_scaled = transform.downscale_local_mean(patch, (config.scaling_factor,config.scaling_factor,1)).astype('uint8')
 			patch_name = os.path.join(folder_path,'' + str(x) + "_" + str(y) + ".tif")
@@ -426,13 +427,21 @@ def verify_images(all_centroids, image_name, subject_ID, config):
 
 def get_tile_count(main, bottom, right):
 	tile_count = 1 # Always include corner
-	if main:
-		tile_count += len(main)
-	if bottom:
-		tile_count += len(bottom)
-	if right:
-		tile_count += len(right)
+	tile_count += main.shape[0]*main.shape[1]
+	tile_count += bottom.shape[0]*bottom.shape[1]
+	tile_count += right.shape[0]*right.shape[1]
 	return tile_count
+
+def get_centroid_count(main, bottom, right):
+	centroid_count = 1 # Always include corner
+	if main:
+		centroid_count += len(main)
+	if bottom:
+		centroid_count += len(bottom)
+	if right:
+		centroid_count += len(right)
+	return centroid_count
+
 def byte_string_from_coord_array(coord_array, num_steps):
 	coord_string = ""
 	for y in np.arange(num_steps):

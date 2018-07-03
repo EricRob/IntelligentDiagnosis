@@ -12,10 +12,12 @@ import numpy as np
 from termcolor import cprint
 from skimage import io
 from tensorflow import flags
+import subprocess
 
 flags.DEFINE_string('image_list', 'large_images.csv', 'File containing list of large images to be split' )
-flags.DEFINE_string('base_path', "/home/wanglab/Desktop/recurrence_seq_lstm/image_data", "")
+flags.DEFINE_string('base_path', "/data/recurrence_seq_lstm/image_data", "")
 flags.DEFINE_string('original_images_folder', 'original_images', 'Folder within base_path containing the original images')
+flags.DEFINE_bool('destructive', False, "Delete images after splitting to free disk space")
 
 # Global variables
 FLAGS = flags.FLAGS
@@ -95,46 +97,46 @@ def split_image_into_ninths(img, large_image_name):
 	y_bottom = y_top * 2
 
 	one = img[0:y_top, 0:x_left, :]
-	two = img[0:y_top, x_left:x_right, :]
-	three = img[0:y_top, x_right:, :]
 	cprint('Saving region 1...', 'green')
 	io.imsave(new_filename + "_N1.tif", one)
 	del one
 
+	two = img[0:y_top, x_left:x_right, :]
 	cprint('Saving region 2...', 'green')
 	io.imsave(new_filename + "_N2.tif", two)
 	del two
 
+	three = img[0:y_top, x_right:, :]
 	cprint('Saving region 3...', 'green')
 	io.imsave(new_filename + "_N3.tif", three)
 	del three
 
 	four = img[y_top:y_bottom, 0:x_left, :]
-	five = img[y_top:y_bottom, x_left:x_right, :]
-	six = img[y_top:y_bottom, x_right:, :]
 	cprint('Saving region 4...', 'green')
 	io.imsave(new_filename + "_N4.tif", four)
 	del four
 
+	five = img[y_top:y_bottom, x_left:x_right, :]
 	cprint('Saving region 5...', 'green')
 	io.imsave(new_filename + "_N5.tif", five)
 	del five
 
+	six = img[y_top:y_bottom, x_right:, :]
 	cprint('Saving region 6...', 'green')
 	io.imsave(new_filename + "_N6.tif", six)
 	del six
 
 	seven = img[y_bottom:, 0:x_left, :]
-	eight = img[y_bottom:, x_left:x_right, :]
-	nine = img[y_bottom:, x_right:, :]
 	cprint('Saving region 7...', 'green')
 	io.imsave(new_filename + "_N7.tif", seven)
 	del seven
 
+	eight = img[y_bottom:, x_left:x_right, :]
 	cprint('Saving region 8...', 'green')
 	io.imsave(new_filename + "_N8.tif", eight)
 	del eight
 
+	nine = img[y_bottom:, x_right:, :]
 	cprint('Saving region 9...', 'green')
 	io.imsave(new_filename + "_N9.tif", nine)
 	del nine
@@ -166,6 +168,9 @@ def main():
 				cprint(large_image_name + 'is extremely large, and was skipped. I assumed this would never happen', 'red')
 			del img
 
+			if FLAGS.destructive:
+				cprint("DESTROYING " + img_path, 'white', 'on_red')
+				subprocess.check_call("rm " + img_path, shell=True)
 
 
 # Main body

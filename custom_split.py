@@ -90,7 +90,8 @@ def main():
 			sys.stdout.write("maxy: ")
 			maxy = int(input())
 
-			suffix = int(suffix) + 1
+			sys.stdout.write("suffix (int): ")
+			suffix = int(input())
 
 
 

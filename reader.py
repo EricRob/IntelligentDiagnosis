@@ -17,8 +17,12 @@ def _generate_half_batch(record_data, min_queue_examples, batch_size, num_steps,
 		[batch_size // 2, sequence_length, image_bytes] size.
 		label_batch: Half batch of labels. 1-D tensor of [batch_size // 2] size.
 	"""
-
-	num_preprocess_threads = 16
+	# From TF documentation: "The batching will be nondeterministic if num_threads > 1"
+	# Ok to have many threads for training, but in testing want a deterministic result.
+	if test_mode:
+		num_preprocess_threads = 1
+	else:
+		num_preprocess_threads = 16 
 	
 	sequence = record_data.sequence
 	label = record_data.label
@@ -27,7 +31,7 @@ def _generate_half_batch(record_data, min_queue_examples, batch_size, num_steps,
 	coords = record_data.patch_coords
 	# Create a batch of this data type's sequences, half the size of the
 	# batch that will be used in the RNN 
-	if test_mode:
+	if False:
 		sequences, label_half_batch, subjects, names, coordss = tf.train.batch(
 			[sequence, label, subject, name, coords],
 			batch_size = (batch_size // 2),
@@ -86,9 +90,9 @@ def _read_from_file(queue, config, class_label):
 	result.sequence_length = config.num_steps
 	result.image_bytes = (result.height * result.width * result.depth)
 
-	result.patient_ID_bytes = 5
-	result.image_name_bytes = 100
-	result.coord_bytes = config.num_steps*2*6 # x and y coords, each are uint32 rather than uint8
+	result.patient_ID_bytes = 5 #uint8
+	result.image_name_bytes = 100 #uint8
+	result.coord_bytes = config.num_steps*2*6 # x and y coords, uint32
 
 	record_bytes = result.image_bytes * result.sequence_length + result.coord_bytes + result.patient_ID_bytes + result.image_name_bytes
 	
@@ -127,7 +131,7 @@ def _read_from_file(queue, config, class_label):
 		result.sequence = tf.reshape(normalized_sequence,
 								[result.sequence_length, result.height * result.width * result.depth]) #result.image_bytes])
 								
-	# result.sequence = tf.cast(result.sequence,tf.float32)
+	result.sequence = tf.cast(result.sequence,tf.float32)
 	result.label = tf.constant(class_label, shape=[1])
 
 	return result
