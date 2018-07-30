@@ -428,12 +428,15 @@ def add_test_condition(subject_data):
             reader = csv.reader(csvfile)
             _ = next(reader) # discard header
             for line in reader:
+                line[0] = line[0].rstrip()
                 if line[0] in subject_data:
                     subject_data[line[0]]["condition"] = line[2]
 
 def save_subjects_vote_bar_graph(image_dict, subject_dict):
     subject_data = analysis_per_subject(subject_dict, image_dict)
     add_test_condition(subject_data)
+    plt.close()
+    figure = plt.figure(figsize=(10,8))
     index = 0
     names =[]
     votes = []
@@ -479,7 +482,7 @@ def save_subjects_vote_bar_graph(image_dict, subject_dict):
                 subject_data[subject]['accurate_votes'] = nonrecur_dict[subject]['accurate_votes']
         plt.bar(index, 0)
         index += 1
-        names.append('^^ %i ^^' % (cond))
+        names.append('Cond %i' % (cond))
 
     plt.xticks(np.arange(len(subject_data.keys()) + total_conditions), names, rotation=90)
     plt.axhline(0.5, color='gray')
@@ -493,6 +496,7 @@ def save_subjects_vote_bar_graph(image_dict, subject_dict):
     x = len(results_path)
     plt.title(results_path[x-1] + " (avg vote = %.4f)" % (vote_avg))
     plt.legend([rec_legend, nonrec_legend], ["Recurrent", "Nonrecurrent"])
+
     plt.savefig(os.path.join(FLAGS.base_path,"majority_voting.jpg"))
     plt.clf()
     auc_dict = per_condition_roc(subject_data, total_conditions)

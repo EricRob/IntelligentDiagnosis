@@ -84,7 +84,7 @@ flags.DEFINE_string("rnn_mode", None,
                     "and lstm_block_cell classes.")
 flags.DEFINE_integer("epochs", None, "Number of epochs to run")
 flags.DEFINE_string("model_path", None, "Location of model to load from last checkpoint")
-flags.DEFINE_bool("save_model", True, "Save model and checkpoints for future testing")
+flags.DEFINE_bool("save_model", False, "Save model and checkpoints for future testing")
 flags.DEFINE_integer("num_steps", 20, "Steps in LSTM sequence")
 flags.DEFINE_bool("save_samples", False, "Save every sequence as a TIFF in a /samples folder")
 
