@@ -7,6 +7,7 @@ Module documentation.
 """
 
 # Imports
+import pickle
 import numpy as np
 import csv
 import os
@@ -24,26 +25,35 @@ from scipy.cluster.vq import vq
 from scipy.spatial import Voronoi, voronoi_plot_2d
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
+from tempfile import TemporaryFile
+from math import isnan
 
 
 flags.DEFINE_integer("test", 0, "Test mode")
-flags.DEFINE_integer('clusters', 25, 'Number of clusters for KMeans Clustering')
+flags.DEFINE_integer('clusters', 8, 'Number of clusters for KMeans Clustering')
 flags.DEFINE_bool('all_cells', False, 'Create histogram showing features of all cells')
+flags.DEFINE_bool('all_features', False, 'Use all QuPath features')
 flags.DEFINE_string('closest_centers', 5, 'Number of closest cluster centers to find when computing regional immune density')
+flags.DEFINE_float('dense_thresh', .3, 'percentage of clusters used to calculate the cluster density feature')
+flags.DEFINE_string('classifier', 'v2', 'Classifier version to use')
+flags.DEFINE_integer('load', 1, 'load >data< array from saved pickle')
+flags.DEFINE_bool('display_clusters', False, 'Display immune clusters in a scatter plot')
+
 
 FLAGS = flags.FLAGS
 
 # Global variables
-DETECTIONS = '/data/QuPath/CellCounter/detections/CUMC'
+DETECTIONS = '/data/recurrence_seq_lstm/image_data/annotations_with_delaunay'
 STATUS_CSV = '/data/recurrence_seq_lstm/IntelligentDiagnosis/recurrence_status.csv'
-OMIT_KEY = ['Class', 'Name', 'ROI', 'Centroid X', 'Centroid Y']
-OMIT_CLASS = ['Other', 'red_cell']
+OMIT_KEY = ['Name', 'ROI', 'Centroid X px', 'Centroid Y px']
+OMIT_CLASS = ['Other', 'red_cell', 'ulceration']
 KEEP_CLASS = ['Tumor', 'Immune cells']
 MASK_LOCATION = '/data/recurrence_seq_lstm/image_data/masks'
-FEATURES = ['Cell: Area', 'Class', 'Centroid X', 'Centroid Y']
+FEATURES = ['Cell: Area', 'Nucleus: Area', 'Nucleus/Cell area ratio', 'Cell: Perimeter', 'Class', 'Centroid X', 'Centroid Y']
 THRESHOLD = 0.15
 COLORS = ['red', 'green']
-FILLER = '                      '
+FILLER = '                                            '
+FEATURE_DIR = '/data/recurrence_seq_lstm/feature_testing'
 # Class declarations
 
 # Function declarations
@@ -61,8 +71,7 @@ def get_bins(rec, non):
 		minimum = np.amin(non)
 	return np.linspace(minimum, maximum, num=100)
 
-
-def show_histogram(RE, NR):
+def show_base_features_histogram(RE, NR):
 
 	for cell_class in RE:
 		n = 0
@@ -70,19 +79,54 @@ def show_histogram(RE, NR):
 			continue
 		cprint('Plotting ' + cell_class, 'green', end="\r")
 		for value in RE[cell_class]:
-			if value not in NR[cell_class] or value in OMIT_KEY:
+			if value not in NR[cell_class] or value in OMIT_KEY or 'Centroid' in value:
 				continue
 			n += 1
 			plt.subplot(4,9,n)
 			rec = convert_nan_to_zero(np.array(RE[cell_class][value]))
 			non = convert_nan_to_zero(np.array(NR[cell_class][value]))
 			bins = get_bins(rec / len(rec), non / len(non))
-			plt.hist(non, stacked=True, bins=100, alpha=0.5, label='Nonrecurrent', density=True)
-			plt.hist(rec, stacked=True, bins=100, alpha=0.5, label="Recurrent", density=True)
+			# plt.hist(non, stacked=True, bins=100, alpha=0.5, label='Nonrecurrent', density=True)
+			# plt.hist(rec, stacked=True, bins=100, alpha=0.5, label="Recurrent", density=True)
+			plt.hist(non,  bins=100, alpha=0.5, label='Nonrecurrent')
+			plt.hist(rec,  bins=100, alpha=0.5, label="Recurrent")
 			plt.xlabel(value)
 		plt.legend(loc='upper right')
 		plt.title(cell_class)
 		plt.show()
+
+def show_delaunay_histogram(delaunay):
+	RE = {}
+	NR = {}
+	for subject in delaunay:
+		if delaunay[subject]['status']:
+			add_delaunay_features(RE, delaunay[subject])
+		else:
+			add_delaunay_features(NR, delaunay[subject])
+	for cell_class in RE:
+		plt.clf()
+		n = 0
+		cprint('Plotting ' + cell_class, 'green')
+		for feature in RE[cell_class]:
+			if 'Centroid' in feature:
+				continue
+			else:
+				n += 1
+				plt.subplot(5,10,n)
+				rec = convert_nan_to_zero(np.array(RE[cell_class][feature]))
+				non = convert_nan_to_zero(np.array(NR[cell_class][feature]))
+				bins = get_bins(rec / len(rec), non / len(non))
+				if 'single' in feature:
+					bins = 25
+				else:
+					bins = 100
+				plt.hist(non, stacked=True, bins=bins, alpha=0.5, label='Nonrecurrent', density=True)
+				plt.hist(rec, stacked=True, bins=bins, alpha=0.5, label="Recurrent", density=True)
+				plt.xlabel(feature)
+			plt.legend(loc='upper right')
+		plt.show()
+
+	return 1
 
 def add_to_cell_dict(cell_dict, subject):
 	for image in subject:
@@ -91,12 +135,24 @@ def add_to_cell_dict(cell_dict, subject):
 		for cell in subject[image]:
 			if cell == 'status':
 				continue
-			# Recurrent Cell
-			cell_class = subject[image][cell]['Class']
+			if FLAGS.all_features:
+				cell_class = subject[image][cell]['Class']
+			else:
+				cell_class = subject[image][cell]['class']
+			
+
+			if cell_class in OMIT_CLASS:
+				continue
+
+			if FLAGS.all_features:
+				cell_class = "immune_and_tumor"
+
 			if cell_class not in cell_dict:
 				cell_dict[cell_class] = {}
+
+
 			for key in subject[image][cell].keys():
-				if key in OMIT_KEY:
+				if key in OMIT_KEY or key == 'Class':
 					continue
 				if key not in cell_dict[cell_class]:
 					cell_dict[cell_class][key] = []
@@ -126,6 +182,7 @@ def create_roc_curve(fpr, tpr, thresholds, roc_auc):
     plt.show()
     # plt.savefig(os.path.join(FLAGS.base_path,"ROC.jpg"))
     # plt.clf()
+
 def run_thresholds(start, stop, samples, labels, values):
 	holds = []
 	accuracies = []
@@ -148,6 +205,7 @@ def run_thresholds(start, stop, samples, labels, values):
 		# print('Threshold: ' + "{0:02f}".format(thresh) + ' NR accuracy:' + str("{0:03f}".format(nr_acc)) + ' RE accuracy: ' + str("{0:03f}".format(rec_acc)))
 		print('Threshold: ' + "{0:02f}".format(thresh) + ' Accuracy: ' + "{0:03f}".format(acc))
 	return holds, accuracies
+
 def load_image_masks(data):
 	re_immune = []
 	re_tumor = []
@@ -204,15 +262,15 @@ def load_image_masks(data):
 	values = np.concatenate((re_portion_np, nr_portion_np))
 
 	# thresholds = [0.1, 0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.19, 0.2]
-	# thresh, acc = run_thresholds(0, .5, 501, labels, values)
+	thresh, acc = run_thresholds(0, .5, 501, labels, values)
 	plt.plot(thresh, acc, lw=2)
 	plt.ylim(0,1)
 	plt.title('Immune cell proportions')
 	plt.axhline(max(acc), c='red')
 	plt.xlabel('Immune cell count / Total cell count')
 	plt.ylabel('Accuracy')
-	plt.text(.1, .8, 'Threshold: 0.192 Accuracy: ' "{0:03f}".format(max(acc)))
-	# plt.show()
+	plt.text(.1, .8, 'Threshold: 0.204 Accuracy: ' "{0:03f}".format(max(acc)))
+	plt.show()
 	
 
 
@@ -246,8 +304,18 @@ def load_image_masks(data):
 def detections(image_name):
 	return main(image_name, True)
 
+def add_all_cell_features(detection, row):
+	for feature in OMIT_KEY:
+		_ = row.pop(feature)
+	for feature in row:
+		if feature == 'Class':
+			detection['Class'] = row[feature]
+		else:
+			detection[feature] = float(row[feature])
+	return 1
+
 def add_cell_features(detection, row):
-	
+
 	detection['cell_area'] = int(row['Cell: Area'])
 	detection['nuc_area'] = int(row['Nucleus: Area'])
 	detection['area_ratio'] = float(row['Nucleus/Cell area ratio'])
@@ -260,6 +328,7 @@ def add_cell_features(detection, row):
 	return 1
 
 def k_means_clustering_and_features(data):
+	print()
 	plt.clf()
 	rec_center_ratio = []
 	rec_center_mean = []
@@ -267,11 +336,21 @@ def k_means_clustering_and_features(data):
 	nr_center_mean = []
 	rec_density = []
 	nr_density = []
+	classy = FLAGS.classifier
+	cell_locs_filename = os.path.join(FEATURE_DIR, classy + '_' + str(FLAGS.clusters) + '_cluster_cell_locations.pickle')
+	if os.path.exists(cell_locs_filename):
+		with open(cell_locs_filename, 'rb') as handle:
+		    cell_locs = pickle.load(handle)
+	else:
+		cell_locs = {}
 	for subject in data:
 		if subject == 'status':
 			continue
 		if 'status' not in data[subject]:
 			continue
+		if subject not in cell_locs:
+			cell_locs[subject] = {}
+			cell_locs[subject]['status'] = data[subject]['status']
 		for image in data[subject]:
 			if 'status' in image:
 				continue
@@ -288,7 +367,7 @@ def k_means_clustering_and_features(data):
 			if image == 'status':
 				continue
 			if not data[subject][image]:
-				cprint('NO CELL DATA: ' + image, 'white', 'on_red')
+				cprint('NO CELL DATA', 'white', 'on_red')
 				continue
 			for cell in data[subject][image]:
 				c_dict = data[subject][image][cell]
@@ -310,34 +389,62 @@ def k_means_clustering_and_features(data):
 				pdb.set_trace()
 			coord_space = coord_space[coord_space[:,0] > 0, :]
 			tumor_space = tumor_space[tumor_space[:,0] > 0, :]
-			plt.scatter(tumor_x, max(coord_space[:,1]) - tumor_y, s=1, label='tumor')
+			# plt.scatter(tumor_x, max(coord_space[:,1]) - tumor_y, s=1, label='tumor')
 			# plt.scatter(immune_x, max(coord_space[:,1]) - immune_y, s=1, label='immune')
-			
-			cprint('Clustering ' + image + '(This may take a while)...', 'grey', 'on_white')
-			kmeans = KMeans(n_clusters=FLAGS.clusters, random_state=0).fit(coord_space)
-			centers = kmeans.cluster_centers_
-			labels = kmeans.labels_
+			os.makedirs(os.path.join(FEATURE_DIR, image), exist_ok=True)
+			centers_filename = os.path.join(FEATURE_DIR, image,classy + image + '_KNNcenters_' + str(FLAGS.clusters) + '_clusters.npy')
+			labels_filename = os.path.join(FEATURE_DIR, image,classy + image + '_KNNcenters_' + str(FLAGS.clusters) + '_labels.npy')
+			if os.path.exists(centers_filename) and not FLAGS.display_clusters:
+				cprint(image)
+				cprint('Loading clusters...', 'grey', 'on_white')
+				centers = np.load(centers_filename)
+				labels = np.load(labels_filename)
+			else:
+				cprint('Clustering ' + image + '...', 'grey', 'on_white')
+				kmeans = KMeans(n_clusters=FLAGS.clusters, random_state=0).fit(coord_space)
+				centers = kmeans.cluster_centers_
+				labels = kmeans.labels_
+				np.save(centers_filename, centers)
+				np.save(labels_filename, labels)
+
+
+
+
 			# centers[:,1] = max(coord_space[:,1]) - centers[:, 1]
 			# bins = np.bincount(labels)
-			center_locs = np.zeros([FLAGS.clusters, 3]).astype(int)
-			center_locs[:,:2] = centers.astype(int)
-			center_locs[:,2] = np.bincount(labels).astype(int)
+			# center_locs = np.zeros([FLAGS.clusters, 3]).astype(int)
+			# center_locs[:,:2] = centers.astype(int)
+			# center_locs[:,2] = np.bincount(labels).astype(int)
+			num_densities = int(FLAGS.dense_thresh*FLAGS.clusters)
+			densities_filename = os.path.join(FEATURE_DIR, image, classy + image + '_' + str(num_densities) + '_of_' + str(FLAGS.clusters) + '_densities.npy')
+			locations_filename = os.path.join(FEATURE_DIR, image, classy + image + '_cells_in_' + str(FLAGS.clusters) + '_clusters.npy')
+			regions_filename = os.path.join(FEATURE_DIR, image, classy + image + '_region_counts_' + str(FLAGS.clusters) + '_clusters.npy')
+			if os.path.exists(locations_filename) and not FLAGS.display_clusters:
+				cprint('Loading cell locations...', 'grey', 'on_white')
+				cell_locations = np.load(locations_filename)
+				region_cell_counts = np.load(regions_filename)
+			else:
+				cprint('Calculating voronoi regions ...', 'yellow')
+				vor = Voronoi(centers)
+				regions, vertices = voronoi_finite_polygons_2d(vor)
+				for region in regions:
+				    polygon = vertices[region]
+				    plt.fill(*zip(*polygon), alpha=0.1)
 
-			cprint('Calculating voronoi regions ...', 'yellow')
-			vor = Voronoi(centers)
-			regions, vertices = voronoi_finite_polygons_2d(vor)
-			for region in regions:
-			    polygon = vertices[region]
-			    plt.fill(*zip(*polygon), alpha=0.1)
+				cprint('Placing cells in regions...', 'yellow')
+				cell_locations = place_cells_in_regions(regions, vertices, coord_space, tumor_space)
+				region_cell_counts = fill_region_cell_counts(centers, cell_locations)
+				np.save(locations_filename, cell_locations)
+				np.save(regions_filename, region_cell_counts)
 
-			cprint('Placing cells in regions...', 'yellow')
-			cell_locations = place_cells_in_regions(regions, vertices, coord_space, tumor_space)
-			region_cell_counts = fill_region_cell_counts(centers, cell_locations)
-			
-			cprint('Calculating region densities...', 'yellow')
-			largest_densities = greatest_n_cluster_densities(region_cell_counts, 0.5, FLAGS.clusters, data[subject]['status'])
-			_ = greatest_n_cluster_densities(region_cell_counts, 0.4, FLAGS.clusters, data[subject]['status'])
-			_ = greatest_n_cluster_densities(region_cell_counts, 0.3, FLAGS.clusters, data[subject]['status'])
+			if os.path.exists(densities_filename):
+				largest_densities = np.load(densities_filename)
+			else:
+				cprint('Calculating region densities...', 'yellow')
+				largest_densities = greatest_n_cluster_densities(region_cell_counts, FLAGS.dense_thresh, FLAGS.clusters, data[subject]['status'])
+				cprint('Saving cluster information', 'green')
+				np.save(densities_filename, largest_densities)
+
 
 
 			# densities = np.zeros(len(region_cell_counts))
@@ -371,38 +478,68 @@ def k_means_clustering_and_features(data):
 				nr_center_mean.append(mean_center)
 				nr_density.append(np.mean(largest_densities))
 
-			# # Plot all points
-			# plt.scatter(coord_space[:,0], max(coord_space[:,1]) - coord_space[:,1], s=4, c=labels, cmap='plasma')
-			# plt.scatter(centers[:, 0], max(coord_space[:,1]) - centers[:, 1], c='black', s=200, alpha=0.8)
-			# dist = (int(vor.max_bound[0] - vor.min_bound[0]), int(vor.max_bound[1] - vor.min_bound[1]))
-			# plt.xlim(vor.min_bound[0] - 0.15*dist[0], vor.max_bound[0] + 0.15*dist[0])
-			# plt.ylim(vor.min_bound[1] - 0.15*dist[1], vor.max_bound[1] + 0.15*dist[1])
-			# plt.title(image + ', status = ' + str(data[subject]['status']))
-			# plt.legend(loc='upper right')
-			# pdb.set_trace()
-			# plt.show()
+			# Plot all points
+			plt.scatter(coord_space[:,0], max(coord_space[:,1]) - coord_space[:,1], s=4, c=labels, cmap='plasma')
+			plt.scatter(centers[:, 0], max(coord_space[:,1]) - centers[:, 1], c='black', s=200, alpha=0.8)
+			dist = (int(vor.max_bound[0] - vor.min_bound[0]), int(vor.max_bound[1] - vor.min_bound[1]))
+			plt.xlim(vor.min_bound[0] - 0.15*dist[0], vor.max_bound[0] + 0.15*dist[0])
+			plt.ylim(vor.min_bound[1] - 0.15*dist[1], vor.max_bound[1] + 0.15*dist[1])
+			plt.title(image + ', status = ' + str(data[subject]['status']))
+			plt.legend(loc='upper right')
+			pdb.set_trace()
+			plt.show()
+			if not os.path.exists(cell_locs_filename):
+				cell_locs[subject][image] = {}
+				cell_locs[subject][image]['cell_locations'] = cell_locations
+				cell_locs[subject][image]['region_counts'] = region_cell_counts
 
-	plt.subplot(3,1,1)
-	plt.hist(rec_center_ratio, stacked=True, bins=25, alpha=0.5, label='Rec immune', density=True)
-	plt.hist(nr_center_ratio, stacked=True, bins=25, alpha=0.5, label="nr immune", density=True)
-	plt.title('min/max ratio')
-	plt.legend(loc='upper right')
+	# plt.subplot(3,1,1)
+	# plt.hist(rec_center_ratio, stacked=True, bins=25, alpha=0.5, label='Rec immune', density=True)
+	# plt.hist(nr_center_ratio, stacked=True, bins=25, alpha=0.5, label="nr immune", density=True)
+	# plt.title('min/max ratio')
+	# plt.legend(loc='upper right')
 
-	plt.subplot(3,1,2)
-	plt.hist(rec_center_mean, stacked=True, bins=25, alpha=0.5,label='Rec tumor', density=True)
-	plt.hist(nr_center_mean, stacked=True, bins=25, alpha=0.5, label="nr tumor", density=True)
-	plt.legend(loc='upper right')
-	plt.title('center_distances')
+	# plt.subplot(3,1,2)
+	# plt.hist(rec_center_mean, stacked=True, bins=25, alpha=0.5,label='Rec tumor', density=True)
+	# plt.hist(nr_center_mean, stacked=True, bins=25, alpha=0.5, label="nr tumor", density=True)
+	# plt.legend(loc='upper right')
+	# plt.title('center_distances')
 
-	plt.subplot(3,1,3)
-	plt.hist(rec_density, stacked=True, bins=25, alpha=0.5,label='Rec tumor', density=True)
-	plt.hist(nr_density, stacked=True, bins=25, alpha=0.5, label="nr tumor", density=True)
-	plt.legend(loc='upper right')
-	plt.title('center_distances')
-	pdb.set_trace()
+	# plt.subplot(3,1,3)
+	# plt.hist(rec_density, stacked=True, bins=25, alpha=0.5,label='Rec tumor', density=True)
+	# plt.hist(nr_density, stacked=True, bins=25, alpha=0.5, label="nr tumor", density=True)
+	# plt.legend(loc='upper right')
+	# plt.title('densities')
+
+
+	# threshold_accuracies(rec_density, nr_density, str(FLAGS.clusters) + ' Cluster Densities, ' + str(FLAGS.dense_thresh) + ' threshold')
+	# plt.show()
+
+	if not os.path.exists(cell_locs_filename)and not FLAGS.test:
+		with open(cell_locs_filename, 'wb') as handle:
+			    pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+	return cell_locs
+def threshold_accuracies(rec_list, nr_list, title="[No title]"):
+	plt.clf()
+	rec_labels = np.ones(len(rec_list))
+	nr_labels = np.zeros(len(nr_list))
+	rec_values = np.array(rec_list)
+	nr_values = np.array(nr_list)
+
+
+	labels = np.concatenate((rec_labels, nr_labels))
+	values = np.concatenate((rec_values, nr_values))
+
+	# thresholds = [0.1, 0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.19, 0.2]
+	thresh, acc = run_thresholds(0, .5, 501, labels, values)
+	plt.plot(thresh, acc, lw=2)
+	plt.ylim(0,1)
+	plt.title(title)
+	plt.axhline(max(acc), c='red')
+	plt.xlabel('Immune cell count / Total cell count')
+	plt.ylabel('Accuracy: ' "{0:03f}".format(max(acc)))
+	# plt.text(.1, .8, 'Accuracy: ' "{0:03f}".format(max(acc)))
 	plt.show()
-	return cell_locations
-
 def greatest_n_cluster_densities(cells, percent, k, status):
 	densities = np.zeros(len(cells))
 	num = 1
@@ -414,7 +551,7 @@ def greatest_n_cluster_densities(cells, percent, k, status):
 	i = int(-(percent * k))
 	largest_densities_ind = np.argpartition(densities, i)[i:]
 	largest_densities = densities[largest_densities_ind]
-	print('Mean density: ' + "{0:.3f}".format(np.mean(largest_densities)) + ', threshold: ' + str(k) + ', status: ' + str(status))
+	print('Mean density: ' + "{0:.3f}".format(np.mean(largest_densities)) + ', threshold: ' + str(percent) + ', status: ' + str(status))
 	return largest_densities
 
 def find_nearest_cluster_centers(centers, k):
@@ -546,68 +683,182 @@ def voronoi_finite_polygons_2d(vor, radius=None):
 
     return new_regions, np.asarray(new_vertices)
 
-def main(image_name=None, image_processor=False):
-	
-	data = {}
-	if image_name:
-		# Current run called from image_processor.py
-		detections_file = image_name + '_Detectionstxt.txt'
-		with open(os.path.join(DETECTIONS, detections_file), 'r') as f:
-			subject = 'subj'
-			data[subject] = {}
-			data[subject][image_name] = {}
-			reader = csv.DictReader(f, delimiter='\t')
-			n = 0
-			for row in reader:
-				if row['Class'] not in OMIT_CLASS:
-					n += 1
-					cell_name = '{0:06}'.format(n)
-					data[subject][image_name][cell_name] = {}
-					add_cell_features(data[subject][image_name][cell_name], row)
-	else:
-		# Current run called directly
-		for (dirpath, dirnames, filenames) in os.walk(DETECTIONS):
-			count = 0
-			shuffle(filenames)
-			for file in filenames:
-				count +=1
-				if FLAGS.test:
-					if count > FLAGS.test:
-						break
-				if 'bleached' in file:
-					cprint('skipping ' + file + ' (' + str(count) + '/' + str(len(filenames)) + ')' + FILLER, 'yellow', end="\r")
+def verify_row_contents(row):
+	skip_row = False
+	for feature in FEATURES:
+		if feature not in row:
+			skip_row = True
+			break
+	return skip_row
+
+def add_delaunay_features(cluster_dict, subject):
+	for image in subject:
+		if image == 'status':
+			continue
+		for cell_class in subject[image]:
+			if cell_class not in cluster_dict:
+				cluster_dict[cell_class] = {}
+				cluster_dict[cell_class]['percent single'] = []
+			for cluster in subject[image][cell_class]:
+				if cluster == 'single_cluster':
+					total_class_clusters = len(subject[image][cell_class]) + subject[image][cell_class][cluster] - 1
+					percent_single = subject[image][cell_class][cluster] / total_class_clusters
+					cluster_dict[cell_class]['percent single'].append(percent_single)
 					continue
+				for feature in subject[image][cell_class][cluster]:
+					if feature not in cluster_dict[cell_class]:
+						cluster_dict[cell_class][feature] = []
+					cluster_dict[cell_class][feature].append(subject[image][cell_class][cluster][feature])
+	return 1
+
+def create_delaunay_features(delaunay, subject, image, row):
+	# Organizing
+	row_class = row['Class']
+	if row_class in OMIT_CLASS:
+		return 1
+	if 'Cluster  mean: Centroid X' not in row:
+		return 1
+	center_x = float(row['Cluster  mean: Centroid X'])
+	center_y = float(row['Cluster  mean: Centroid Y'])
+	if isnan(center_x) or isnan(center_y):
+		return 1
+	else:
+		cluster_location = (int(center_x), int(center_y))
+	if subject not in delaunay:
+		delaunay[subject] = {}
+	if image not in delaunay[subject]:
+		delaunay[subject][image] = {}
+	if row_class not in delaunay[subject][image]:
+		delaunay[subject][image][row_class] = {}
+		delaunay[subject][image][row_class]['single_cluster'] = 0
+	
+	# Adding cluster features
+	if int(row['Cluster  size']) == 1:
+		delaunay[subject][image][row_class]['single_cluster'] += 1
+	elif cluster_location not in delaunay[subject][image][row_class]:
+		delaunay[subject][image][row_class][cluster_location] = {} 
+		for key in row.keys():
+			if 'Cluster' in key or 'Delaunay' in key:
+				delaunay[subject][image][row_class][cluster_location][key] = float(row[key])
+	return 1
+
+def main(image_name=None, image_processor=False):
+	classy = FLAGS.classifier
+	if FLAGS.all_features:
+		data_filename = os.path.join(FEATURE_DIR, classy + 'all_features_all_data.pickle')
+	else:
+		data_filename = os.path.join(FEATURE_DIR, classy + 'all_data.pickle')
+	
+
+
+
+	delaunay_filename = os.path.join(FEATURE_DIR, classy + 'delaunay.pickle')
+	delaunay = {}
+	if FLAGS.load and os.path.exists(delaunay_filename):
+		print('Loading delaunay features')
+		with open(delaunay_filename, 'rb') as handle:
+		    delaunay = pickle.load(handle)
+	if not delaunay:
+		create_delaunay = True
+	else:
+		create_delaunay = False
+	
+
+
+
+
+	if FLAGS.load and os.path.exists(data_filename):
+		print('Loading saved cell data')
+		with open(data_filename, 'rb') as handle:
+		    data = pickle.load(handle)
+	else:
+		data = {}
+		if image_name:
+			# Current run called from image_processor.py
+			detections_file = image_name + '_Detectionstxt.txt'
+			with open(os.path.join(DETECTIONS, detections_file), 'r') as f:
+				subject = 'subj'
+				data[subject] = {}
+				data[subject][image_name] = {}
+				reader = csv.DictReader(f, delimiter='\t')
 				n = 0
-				subject = file[0:2] + "-" + file[3:5]
-				if subject not in data:
-					data[subject] = {}
-				image_name = file[:-18]
-				if image_name not in data[subject]:
-					data[subject][image_name] = {}
-				if file.endswith('.txt') and 'bleached' not in file:
-					# count += 1
-					cprint('scanning ' + file + ' (' + str(count) + '/' + str(len(filenames)) + ')' + FILLER, 'yellow', end="\r")
-					with open(os.path.join(dirpath, file), 'r') as f:
-						reader = csv.DictReader(f, delimiter='\t')
-						# print(reader.fieldnames)
-						for row in reader:
-							n += 1
-							cell_name = '{0:06}'.format(n)
-							data[subject][image_name][cell_name] = {}
-							add_cell_features(data[subject][image_name][cell_name], row)
-		print()
-		print('Done!')			
-						
-	status = {}
-	with open(STATUS_CSV, 'r') as csvfile:
-		cprint('Adding recurrence status...', 'green', 'on_white')
-		reader = csv.reader(csvfile)
-		for row in reader:
-			if row[0] in data:
-				data[row[0]]['status'] = int(row[1])
-				for image in data[row[0]]:
-					if not 'status':
-						data[row[0]][image]['status'] = int(row[1])
+				for row in reader:
+					if row['Class'] not in OMIT_CLASS:
+						n += 1
+						cell_name = '{0:06}'.format(n)
+						data[subject][image_name][cell_name] = {}
+						skip_row=False
+						for feature in FEATURES:
+							if feature not in row:
+								skip_row = True
+								break
+						add_cell_features(data[subject][image_name][cell_name], row)
+		else:
+			# Current run called directly
+			for (dirpath, dirnames, filenames) in os.walk(DETECTIONS):
+				count = 0
+				shuffle(filenames)
+				for file in filenames:
+					count +=1
+					if FLAGS.test:
+						if count > FLAGS.test:
+							break
+					if 'bleached' in file:
+						cprint('skipping ' + file + ' (' + str(count) + '/' + str(len(filenames)) + ')' + FILLER, 'yellow', end="\r")
+						continue
+					n = 0
+					subject = file[0:2] + "-" + file[3:5]
+					if subject not in data:
+						data[subject] = {}
+					image_name = file[:-18]
+					if image_name not in data[subject]:
+						data[subject][image_name] = {}
+					if file.endswith('.txt') and 'bleached' not in file:
+						# count += 1
+						cprint('scanning ' + file + ' (' + str(count) + '/' + str(len(filenames)) + ')' + FILLER, 'yellow', end="\r")
+						with open(os.path.join(dirpath, file), 'r') as f:
+							reader = csv.DictReader(f, delimiter='\t')
+							# print(reader.fieldnames)
+							for row in reader:
+								n += 1
+								cell_name = '{0:06}'.format(n)
+								skip_row = verify_row_contents(row)
+								if skip_row:
+									cprint('skipping ' + image_name + FILLER, 'red')
+									break
+								data[subject][image_name][cell_name] = {}
+								if FLAGS.all_features:
+									add_all_cell_features(data[subject][image_name][cell_name], row)
+								else:
+									add_cell_features(data[subject][image_name][cell_name], row)
+
+								if create_delaunay:
+									create_delaunay_features(delaunay, subject, image_name, row)
+
+							
+		status = {}
+		with open(STATUS_CSV, 'r') as csvfile:
+			cprint('\nAdding recurrence status...', 'green', 'on_white')
+			reader = csv.reader(csvfile)
+			for row in reader:
+				if row[0] in data:
+					data[row[0]]['status'] = int(row[1])
+					for image in data[row[0]]:
+						if not 'status':
+							data[row[0]][image]['status'] = int(row[1])
+				if row[0] in delaunay:
+					delaunay[row[0]]['status'] = int(row[1])
+		if not FLAGS.test:
+			cprint('\nSaving [data] array', 'yellow')
+			with open(data_filename, 'wb') as handle:
+			    pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+		
+		if create_delaunay:
+			cprint('Saving [delaunay] array', 'yellow')
+			with open(delaunay_filename, 'wb') as handle:
+				pickle.dump(delaunay, handle, protocol=pickle.HIGHEST_PROTOCOL)
+		cprint('Done!', 'green')
+
 	if image_processor:
 		image_dict = {}
 		for cell in data['subj'][image_name]:
@@ -624,11 +875,18 @@ def main(image_name=None, image_processor=False):
 					add_to_cell_dict(RE, data[subject])
 				else:
 					add_to_cell_dict(NR, data[subject])
-	# return RE, NR
-	# RE_tumor_cell = count_types[]
-	# show_histogram(RE, NR)
+		show_base_features_histogram(RE, NR)
+
+	show_delaunay_histogram(delaunay)
 	# load_image_masks(data)
+
+	# cell_locations:
+	#   --[subject]
+	#       --[image]
+	#           --[region counts] -> [cluster number, distances to 5 closest regions]
+	#           --[cell_locations] -> [x, y, label, cluster number]
 	cell_locations = k_means_clustering_and_features(data)
+	pdb.set_trace()
 
 # Main body
 if __name__ == '__main__':
