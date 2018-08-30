@@ -337,7 +337,6 @@ def create_overall_roc_curve(image_dict):
 
     fpr, tpr, thresholds = roc_curve(labels, rec_scores, pos_label=1)
     roc_auc = auc(fpr, tpr)
-
     return fpr, tpr, thresholds, roc_auc
 
     # plt.figure()

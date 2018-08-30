@@ -15,7 +15,7 @@ from termcolor import cprint
 import csv
 import subprocess
 from shutil import copyfile
-import centroid_sampler as gauss
+import centroid_sampler_features as gauss
 import subject_list_generator
 
 import tiff_patching
@@ -60,7 +60,7 @@ flags.DEFINE_bool("skip_preverification", False, "Skip checking image folders fo
 FLAGS = flags.FLAGS
 
 class OriginalPatchConfig(object):
-	image_data_folder_path = "/data/recurrence_seq_lstm/image_data" # Location of images folder
+	image_data_folder_path = '/data/recurrence_seq_lstm/image_data/' # Location of images folder
 	patch_size = 500 # Pixel length and width of each patch square
 	overlap = 30 # Amount of overlap between patches within a sample
 	sample_size = 100 # Final size of patch (usually 100)
@@ -256,12 +256,13 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, config):
 			cprint('Creating image binary file for ' + image[:-8], 'white', 'on_green')
 			mask_name = 'mask_' + image[:-8] + '.tif'
 			mask_path = os.path.join(config.image_data_folder_path,'masks', mask_name)
-			sequences, _ = gauss.generate_sequences(mask_path, gauss_config)
+			seq_features = gauss.generate_sequences(mask_path, gauss_config, image[:-8], image_to_ID_dict[image])
+			gauss.regional_verification(seq_features, gauss_config, image[:-8], image_to_ID_dict[image])
 			image_bin = open(image_bin_path, 'wb+')
 			image_tiff_name = image[:-8] + '.tif'
 			image_patch_name = image[:-8] + '_patches'
 			cprint("Writing binary file...", 'green', 'on_white')
-			gauss.write_image_bin(image_bin, image_tiff_name, image_to_ID_dict[image_patch_name], sequences, gauss_config)
+			gauss.write_image_bin(image_bin, image_tiff_name, image_to_ID_dict[image_patch_name], seq_features, gauss_config)
 			image_bin.close()
 
 		cprint("Appending " + image[:-8], 'green')

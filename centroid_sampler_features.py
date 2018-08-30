@@ -16,17 +16,23 @@ from math import floor
 from numpy.lib.stride_tricks import as_strided
 from termcolor import cprint
 import numbers
-from tensorflow import flags
+# from tensorflow import flags
+import qupath_reader as qupath
+import time
+import struct
 
-flags.DEFINE_bool("overwrite", False, "Overwrite image binary files if they exist.")
 
-FLAGS = flags.FLAGS
+# flags.DEFINE_bool("overwrite", False, "Overwrite image binary files if they exist.")
+
+# FLAGS = flags.FLAGS
 
 # Global variables
+FEATURE_LIST = ['total_area', 'cell_perimeter', 'nuc_area', 'cell_area']
 
 # Class declarations
 class OriginalPatchConfig(object):
 	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/" # Location of image to be split into patches
+	features_path = '/data/recurrence_seq_lstm/feature_testing'
 	patch_size = 500 # Pixel length and width of each patch square
 	tile_size = patch_size * 5
 	edge_overlap = 75 # Amount of overlap between patches within a sample
@@ -41,6 +47,7 @@ class OriginalPatchConfig(object):
 	image_width = sample_size
 	image_depth = 3
 	num_steps = 20
+	large_cluster = 1
 
 class YaleConfig(object):
 	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/" # Location of image to be split into patches
@@ -58,6 +65,7 @@ class YaleConfig(object):
 	image_width = sample_size
 	image_depth = 3
 	num_steps = 20
+	large_cluster = 1
 
 # Function declarations
 def extract_tiles(arr, tile_size, edge_overlap):
@@ -285,18 +293,23 @@ def corner_sample_from_distribution(mask, corner, config, keep_corner):
 	return skip_count
 
 
-def split_and_combine_patch_lists(tile_dict, bottom_dict, right_dict, corner_dict, keep_corner, num_steps):
+def split_and_combine_patch_lists(tile_dict, bottom_dict, right_dict, corner_dict, keep_corner, corner_tile_num, num_steps):
 	sequences = []
 	sequences = append_patch_lists(sequences, tile_dict, num_steps)
 	sequences = append_patch_lists(sequences, bottom_dict, num_steps)
 	sequences = append_patch_lists(sequences, right_dict, num_steps)
 	if keep_corner and corner_dict['coords']:
-		sequences = append_corner_patch_lists(sequences, corner_dict['coords'], num_steps)
+		sequences = append_corner_patch_lists(sequences, corner_dict['coords'], num_steps, corner_tile_num)
 	return sequences
 
-def append_corner_patch_lists(patch_list, coords_list, num_steps):
+def append_corner_patch_lists(patch_list, coords_list, num_steps, corner_tile_num):
+	tile = corner_tile_num
+	pdb.set_trace()
 	for n in np.arange(len(coords_list) // num_steps):
 		patch_list = patch_list + [coords_list[(n*num_steps):((n+1)*num_steps)]]
+		add_list = [tile]
+		add_list.append(coords_list[(n*num_steps):((n+1)*num_steps)])
+		patch_list = patch_list + [add_list]
 	return patch_list
 
 def append_patch_lists(patch_list, region_dict, num_steps):
@@ -306,7 +319,10 @@ def append_patch_lists(patch_list, region_dict, num_steps):
 	for tile in region_dict:
 		coords_list = region_dict[tile]['coords']
 		for n in np.arange(len(coords_list) // num_steps):
-			patch_list = patch_list + [coords_list[(n*num_steps):((n+1)*num_steps)]]
+			add_list = [tile]
+			add_list.append(coords_list[(n*num_steps):((n+1)*num_steps)])
+			# patch_list = patch_list + [coords_list[(n*num_steps):((n+1)*num_steps)]]
+			patch_list = patch_list + [add_list]
 	return patch_list
 
 def adjust_centroids(centroids, tile_size):
@@ -328,7 +344,8 @@ def calculate_corner_mass(corner_tile, keep_corner, corner_x, corner_y):
 	corner["centroid"] = (centroid[0]+corner_x, centroid[1]+corner_y)
 	return corner
 
-def generate_sequences(mask_filename, config):
+# Called by image_processor.py directly
+def generate_sequences(mask_filename, config, image_name=None, subject_id=None):
 	tile_size = config.tile_size
 	mask = io.imread(mask_filename)
 	mask = mask[:,:,0]
@@ -379,9 +396,7 @@ def generate_sequences(mask_filename, config):
 	tile_count = get_tile_count(tile_grid, bottom_edge, right_edge)
 	centroid_count = get_centroid_count(tile_centroids, bottom_centroids, right_centroids)
 
-	cprint("Tile count: " + str(tile_count))
 	skip_count = 0
-
 	skip_count += sample_from_distribution(mask, tile_centroids, config)
 	skip_count += sample_from_distribution(mask, bottom_centroids, config)
 	skip_count += sample_from_distribution(mask, right_centroids, config)
@@ -390,44 +405,213 @@ def generate_sequences(mask_filename, config):
 	cprint("Keeping " + str(centroid_count - skip_count) + "/" + str(tile_count) + " tiles")
 
 	cprint("Listing sequences...", 'green', 'on_white')
-	sequences = split_and_combine_patch_lists(tile_centroids, bottom_centroids, right_centroids, corner_centroid, keep_corner, config.num_steps)
 	
-	all_centroids=dict()
+	# sequences is a list of [tile tuple, [lists of tuples]], each tuple in the list of tuples
+	# containing coordinates for a top-left patch corner
+	corner_tile_num = (tile_grid.shape[0], tile_grid.shape[1])
+	sequences = split_and_combine_patch_lists(tile_centroids, bottom_centroids, right_centroids, corner_centroid, keep_corner, corner_tile_num, config.num_steps)
 
-	# if not tile_centroids:
-	# 	if not right_centroids:
-	# 		all_centroids = bottom_centroids
-	# 	else:
-	# 		all_centroids = {**right_centroids, **bottom_centroids}
-	# elif not right_centroids:
-	# 	if not bottom_centroids:
-	# 		all_centroids = tile_centroids
-	# 	else:
-	# 		all_centroids = {**tile_centroids, **bottom_centroids}
-	# elif not bottom_centroids:
-	# 	all_centroids = {**tile_centroids, **right_centroids}
-	# else:
-	# 	all_centroids = {**tile_centroids, **right_centroids, **bottom_centroids}
+	all_cells, all_delaunay = qupath.detections(subject_id, image_name)
+	all_tiles = list(tile_centroids) + list(bottom_centroids) + list(right_centroids)
+	if keep_corner:
+		all_tiles = all_tiles + (tile_grid.shape[0], tile_grid.shape[1])
 
-	return sequences, all_centroids
 
-def write_image_bin(image_bin, image_name, subject_ID, sequences, config):
+	##                                                                             ##
+	##  Place each delaunay cluster and cell into a tile for regional information  ##
+	##                                                                             ##
+	delaunay_in_tiles = sort_delaunay_into_tiles(all_cells, all_delaunay, all_tiles, config)
+
+
+
+	##                                                                             ##
+	##     Add together the delaunay clusters in all passed neighboring tiles      ##
+	##                                                                             ##
+	delaunay_in_neighbors = add_neighboring_tile_info(delaunay_in_tiles, all_tiles, config)
+
+	# Adds features by sequence
+	seq_and_features = process_detections(sequences, delaunay_in_neighbors, mask, config)
+	return seq_and_features
+
+def sort_delaunay_into_tiles(cells, dels, tiles, config):
+	#
+	# ATTN:
+	# Tiles are (y, x), delaunay is (x, y), whoops!!
+	#
+
+	tile_infos = {}
+	for tile in tiles:
+		tile_infos[tile] = {}
+		x_range = (tile[1]*config.tile_size, tile[1]*config.tile_size + config.tile_size)
+		y_range = (tile[0]*config.tile_size, tile[0]*config.tile_size + config.tile_size)
+		for cell_class in list(dels):
+			tile_infos[tile][cell_class] = {}
+			for cluster in list(dels[cell_class]):
+				if not isinstance(cluster, tuple):
+					continue
+				x = cluster[0]
+				y = cluster[1]
+
+				if (x_range[0] <= x < x_range[1]) and (y_range[0] <= y < y_range[1]):
+					tile_infos[tile][cell_class][cluster] = dels[cell_class].pop(cluster)
+	return tile_infos
+
+def add_neighboring_tile_info(dels, tiles, config):
+	del_and_neighbor = {}
+	for tile in dels:
+		del_and_neighbor[tile] = {}
+		neighbors = neighboring_tile_numbers(tile, tiles)
+		for cell_class in dels[tile]:
+			if cell_class not in del_and_neighbor:
+				del_and_neighbor[tile][cell_class] = {}
+
+			for neighbor in neighbors:
+				del_and_neighbor[tile][cell_class] = {**del_and_neighbor[tile][cell_class], **dels[neighbor][cell_class]}
+	return del_and_neighbor
+
+def tile_coords_x_y(tile):
+
+	return (x, y)
+
+def neighboring_tile_numbers(tile, all_tiles):
+	neighbors = []
+	keep_neighbors = []
+	rows = [tile[0] - 1, tile[0], tile[0] + 1]
+	cols = [tile[1] - 1, tile[1], tile[1] + 1]
+	for col in cols:
+		for row in rows:
+			neighbors.append((row, col))
+	for k in neighbors:
+		if k in all_tiles:
+			keep_neighbors.append(k)
+	return keep_neighbors
+
+def timing_estimate(start, now, count, length):
+	avg_time = (now - start) / count
+	remaining_time = (length - count) * avg_time
+	minutes_remaining = int(remaining_time // 60)
+	seconds_remaining = int(remaining_time % 60)
+	minutes_elapsed = int((now - start) // 60)
+	seconds_elapsed = int((now - start) % 60)
+	print('Sequence: ' + str(count) + ' / ' + str(length), ', ' + "{:02d}".format(minutes_elapsed) + ':' + "{:02d}".format(seconds_elapsed) + ' elapsed, '
+		' average: ' + "{0:.2f}".format(round(avg_time,2)) + 's per sequence, '+ "{:02d}".format(minutes_remaining) + ':' + "{:02d}".format(seconds_remaining) + ' remaining', end="\r")
+	return 1
+
+def process_detections(sequences, delaunay_in_neighbors, mask, config):
+	cprint("Processing detections of " + str(len(sequences)) + ' sequences', 'green', 'on_white')
+	seq_detections = {}
+	
+	for item in sequences:
+		# timing_estimate(start, time.time(), count, len(sequences))
+		tile = item[0]
+		seq = item[1]
+
+		for seq_unique in seq:
+			if seq_unique not in seq_detections:
+				seq_key = seq_unique
+				break
+			cprint('DUPLICATE SEQUENCE KEY', 'red', 'on_white')
+		if tile not in seq_detections:
+			seq_detections[tile] = {}
+			seq_detections[tile]['features'] = sequence_features(seq, tile, delaunay_in_neighbors, mask, config)
+			seq_detections[tile]['seq'] = []
+		seq_detections[tile]['seq'].append(seq)
+	return seq_detections
+
+# ********* In Patch coordinates, Y is FIRST coordinate, X is SECOND ***************
+def sequence_features(seq, tile, delys, mask, config):
+	features = {}
+	class_features = {}
+
+	# Summarize info for clusters associated with a given tile
+	for cell_class in delys[tile]:
+		class_features[cell_class] = {}
+		class_features[cell_class]['large_cluster_count'] = 0
+		class_features[cell_class]['small_cluster_count'] = 0
+		class_features[cell_class]['large_cell_count'] = 0
+		class_features[cell_class]['small_cell_count'] = 0
+		class_features[cell_class]['total_cluster_count'] = 0
+		class_features[cell_class]['total_cell_count'] = 0
+		class_features[cell_class]['cell_area'] = 0
+		for cluster in delys[tile][cell_class]:
+			size = delys[tile][cell_class][cluster]['size']
+			if size > config.large_cluster:
+				class_features[cell_class]['large_cluster_count'] += 1
+				class_features[cell_class]['large_cell_count'] += size
+			else:
+				class_features[cell_class]['small_cluster_count'] += 1
+				class_features[cell_class]['small_cell_count'] += size
+			class_features[cell_class]['total_cell_count'] += size
+			class_features[cell_class]['total_cluster_count'] += 1
+			class_features[cell_class]['cell_area'] += size * delys[tile][cell_class][cluster]['mean_cell_area']
+
+	# Process summarized info into 
+	features['imm large / imm total'] = class_features['Immune cells']['large_cell_count'] / class_features['Immune cells']['total_cell_count']
+	features['imm large / all cells'] = class_features['Immune cells']['large_cell_count'] / (class_features['Immune cells']['total_cell_count'] + class_features['Tumor']['total_cell_count'])
+	features['imm large / tumor large'] = class_features['Immune cells']['large_cell_count'] /class_features['Tumor']['large_cell_count']
+	features['imm large / imm small'] = class_features['Immune cells']['large_cell_count'] / class_features['Immune cells']['small_cell_count']
+	features['all imm / all cells'] = class_features['Immune cells']['total_cell_count'] / (class_features['Immune cells']['total_cell_count'] + class_features['Tumor']['total_cell_count'])
+	features['imm area / tumor area'] = class_features['Immune cells']['cell_area'] / class_features['Tumor']['cell_area']
+	features['imm area / total area'] = class_features['Immune cells']['cell_area'] / (class_features['Tumor']['cell_area'] + class_features['Immune cells']['cell_area'])
+	return features
+
+def add_one_feature(feature, cell, seq):
+	if feature not in seq:
+		seq[feature] = 0
+	seq[feature] += cell[feature]
+
+def regional_verification(seq_features, config, image, subject):
+	one_tile = list(seq_features.keys())[0]
+	features_list = sorted(seq_features[one_tile]['features'])
+	header = ['subject', 'image', 'tile', 'sequence_number'] + features_list
+	csv_path = os.path.join(config.features_path, 'regional_features.csv')
+	if not os.path.exists(csv_path):
+		with open(csv_path, 'w') as csvfile:
+			writer = csv.writer(csvfile)
+			writer.writerow(header)
+	with open(csv_path, 'a') as csvfile:
+		writer = csv.writer(csvfile)
+		for tile in seq_features:
+			n = 0
+			for seq in seq_features[tile]['seq']:
+				n += 1
+				row = [subject, image, str(tile), str(n)]
+				for feature in features_list:
+					row.append(seq_features[tile]['features'][feature])
+				writer.writerow(row)
+	return 1
+
+def write_image_bin(image_bin, image_name, subject_ID, seq_features, config):
 	image_path = os.path.join(config.image_data_folder_path, 'original_images', image_name)
 	image = io.imread(image_path)
 	# Data saved to binary files as [subject ID][image name][coordinates][sequence data]
 	ID_byte_string = str.encode("{:<5}".format(subject_ID))
 	image_name_byte_string = str.encode("{:<100}".format(image_name[:-4])) #padded to 100 characters
-	for sequence in sequences:
-		coord_byte_string = byte_string_from_coord_array(sequence, config.num_steps)
-		image_bin.write(ID_byte_string)
-		image_bin.write(image_name_byte_string)
-		image_bin.write(coord_byte_string)
-		for y,x in sequence:
-			patch = image[y:(y+config.patch_size),x:(x+config.patch_size),:]
-			# Need to verify this downscaling method
-			patch_scaled = transform.downscale_local_mean(patch, (config.scaling_factor,config.scaling_factor,1)).astype('uint8')
-			image_bin.write(patch_scaled)
+	count = 0
+	length = 0
+	for tile in seq_features:
+		length += len(seq_features[tile]['seq'])
+	start = time.time()
+	for tile in seq_features:
+		feature_set = seq_features[tile]['features']
+		for sequence in seq_features[tile]['seq']:
+			count += 1
+			timing_estimate(start, time.time(), count, length)
+			coord_byte_string = byte_string_from_coord_array(sequence, config.num_steps)
+			image_bin.write(ID_byte_string)
+			image_bin.write(image_name_byte_string)
+			image_bin.write(coord_byte_string)
+			image_bin.write(struct.pack('i', len(feature_set))) # Number of feautures to follow, used for fixed-length reading of features
+			for feature in feature_set:
+				image_bin.write(struct.pack('d', feature_set[feature]))
 
+			for y,x in sequence:
+				patch = image[y:(y+config.patch_size),x:(x+config.patch_size),:]
+				# Need to verify this downscaling method
+				patch_scaled = transform.downscale_local_mean(patch, (config.scaling_factor,config.scaling_factor,1)).astype('uint8')
+				image_bin.write(patch_scaled)
+
+#Checks if we're actually writing the correct image data as patches of sequences
 def verify_images(all_centroids, image_name, subject_ID, config):
 	image_path = os.path.join(config.image_data_folder_path, 'original_images', image_name)
 	image = io.imread(image_path)
@@ -489,7 +673,7 @@ def main():
 			cprint('Skipping ' + image_name, 'white', 'on_grey')
 			continue
 
-		if os.path.exists(gauss_bin_path) and not FLAGS.overwrite:
+		if os.path.exists(gauss_bin_path):# and not FLAGS.overwrite:
 			cprint('Skipping ' + image_name, 'white', 'on_grey')
 			continue
 		cprint("*-._.-*-._.*" + image_name + "*-._.-*-._.-*", 'white', 'on_green')
