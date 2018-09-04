@@ -48,6 +48,7 @@ class OriginalPatchConfig(object):
 	image_depth = 3
 	num_steps = 20
 	large_cluster = 1
+	pixel_radius = 40
 
 class YaleConfig(object):
 	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/" # Location of image to be split into patches
@@ -304,9 +305,7 @@ def split_and_combine_patch_lists(tile_dict, bottom_dict, right_dict, corner_dic
 
 def append_corner_patch_lists(patch_list, coords_list, num_steps, corner_tile_num):
 	tile = corner_tile_num
-	pdb.set_trace()
 	for n in np.arange(len(coords_list) // num_steps):
-		patch_list = patch_list + [coords_list[(n*num_steps):((n+1)*num_steps)]]
 		add_list = [tile]
 		add_list.append(coords_list[(n*num_steps):((n+1)*num_steps)])
 		patch_list = patch_list + [add_list]
@@ -321,7 +320,6 @@ def append_patch_lists(patch_list, region_dict, num_steps):
 		for n in np.arange(len(coords_list) // num_steps):
 			add_list = [tile]
 			add_list.append(coords_list[(n*num_steps):((n+1)*num_steps)])
-			# patch_list = patch_list + [coords_list[(n*num_steps):((n+1)*num_steps)]]
 			patch_list = patch_list + [add_list]
 	return patch_list
 
@@ -412,9 +410,16 @@ def generate_sequences(mask_filename, config, image_name=None, subject_id=None):
 	sequences = split_and_combine_patch_lists(tile_centroids, bottom_centroids, right_centroids, corner_centroid, keep_corner, corner_tile_num, config.num_steps)
 
 	all_cells, all_delaunay = qupath.detections(subject_id, image_name)
-	all_tiles = list(tile_centroids) + list(bottom_centroids) + list(right_centroids)
+	if not all_cells or not all_delaunay:
+		return None
+
+	all_tiles = list(tile_centroids)
+	if bottom_centroids:
+		all_tiles = all_tiles + list(bottom_centroids)
+	if right_centroids:
+		all_tiles = all_tiles + list(right_centroids)
 	if keep_corner:
-		all_tiles = all_tiles + (tile_grid.shape[0], tile_grid.shape[1])
+		all_tiles.append((tile_grid.shape[0], tile_grid.shape[1]))
 
 
 	##                                                                             ##
@@ -545,15 +550,22 @@ def sequence_features(seq, tile, delys, mask, config):
 			class_features[cell_class]['total_cluster_count'] += 1
 			class_features[cell_class]['cell_area'] += size * delys[tile][cell_class][cluster]['mean_cell_area']
 
-	# Process summarized info into 
-	features['imm large / imm total'] = class_features['Immune cells']['large_cell_count'] / class_features['Immune cells']['total_cell_count']
-	features['imm large / all cells'] = class_features['Immune cells']['large_cell_count'] / (class_features['Immune cells']['total_cell_count'] + class_features['Tumor']['total_cell_count'])
-	features['imm large / tumor large'] = class_features['Immune cells']['large_cell_count'] /class_features['Tumor']['large_cell_count']
-	features['imm large / imm small'] = class_features['Immune cells']['large_cell_count'] / class_features['Immune cells']['small_cell_count']
-	features['all imm / all cells'] = class_features['Immune cells']['total_cell_count'] / (class_features['Immune cells']['total_cell_count'] + class_features['Tumor']['total_cell_count'])
-	features['imm area / tumor area'] = class_features['Immune cells']['cell_area'] / class_features['Tumor']['cell_area']
-	features['imm area / total area'] = class_features['Immune cells']['cell_area'] / (class_features['Tumor']['cell_area'] + class_features['Immune cells']['cell_area'])
+	# Process summarized info into features
+	features['imm large / imm total'] = safe_division(class_features['Immune cells']['large_cell_count'],  class_features['Immune cells']['total_cell_count'])
+	features['imm large / all cells'] = safe_division(class_features['Immune cells']['large_cell_count'], (class_features['Immune cells']['total_cell_count'] + class_features['Tumor']['total_cell_count']))
+	features['imm large / tumor large'] = safe_division(class_features['Immune cells']['large_cell_count'], class_features['Tumor']['large_cell_count'])
+	features['imm large / imm small'] = safe_division(class_features['Immune cells']['large_cell_count'], class_features['Immune cells']['small_cell_count'])
+	features['all imm / all cells'] = safe_division(class_features['Immune cells']['total_cell_count'], (class_features['Immune cells']['total_cell_count'] + class_features['Tumor']['total_cell_count']))
+	features['imm area / tumor area'] = safe_division(class_features['Immune cells']['cell_area'], class_features['Tumor']['cell_area'])
+	features['imm area / total area'] = safe_division(class_features['Immune cells']['cell_area'], (class_features['Tumor']['cell_area'] + class_features['Immune cells']['cell_area']))
+
 	return features
+
+def safe_division(numerator, denominator):
+	if denominator == 0:
+		return 0
+	else:
+		return numerator / denominator
 
 def add_one_feature(feature, cell, seq):
 	if feature not in seq:
@@ -585,8 +597,16 @@ def write_image_bin(image_bin, image_name, subject_ID, seq_features, config):
 	image_path = os.path.join(config.image_data_folder_path, 'original_images', image_name)
 	image = io.imread(image_path)
 	# Data saved to binary files as [subject ID][image name][coordinates][sequence data]
-	ID_byte_string = str.encode("{:<5}".format(subject_ID))
-	image_name_byte_string = str.encode("{:<100}".format(image_name[:-4])) #padded to 100 characters
+	id_str_length = 5
+	name_str_length = 92
+	coord_str_length = config.num_steps*2*6
+
+	num_features = len(next(iter(seq_features.items()))[1]['features'])*8
+	sum_len = id_str_length + name_str_length + coord_str_length + num_features
+	name_str_length += 8 - (sum_len % 8)
+	
+	ID_byte_string = str.encode(subject_ID.rjust(id_str_length))
+	image_name_byte_string = str.encode(image_name[:-4].rjust(name_str_length))
 	count = 0
 	length = 0
 	for tile in seq_features:
@@ -601,7 +621,7 @@ def write_image_bin(image_bin, image_name, subject_ID, seq_features, config):
 			image_bin.write(ID_byte_string)
 			image_bin.write(image_name_byte_string)
 			image_bin.write(coord_byte_string)
-			image_bin.write(struct.pack('i', len(feature_set))) # Number of feautures to follow, used for fixed-length reading of features
+			# image_bin.write(struct.pack('i', len(feature_set))) # Number of feautures to follow, used for fixed-length reading of features
 			for feature in feature_set:
 				image_bin.write(struct.pack('d', feature_set[feature]))
 
@@ -610,6 +630,7 @@ def write_image_bin(image_bin, image_name, subject_ID, seq_features, config):
 				# Need to verify this downscaling method
 				patch_scaled = transform.downscale_local_mean(patch, (config.scaling_factor,config.scaling_factor,1)).astype('uint8')
 				image_bin.write(patch_scaled)
+	print()
 
 #Checks if we're actually writing the correct image data as patches of sequences
 def verify_images(all_centroids, image_name, subject_ID, config):
@@ -677,7 +698,7 @@ def main():
 			cprint('Skipping ' + image_name, 'white', 'on_grey')
 			continue
 		cprint("*-._.-*-._.*" + image_name + "*-._.-*-._.-*", 'white', 'on_green')
-		sequences, all_centroids = generate_sequences(mask, config)
+		sequences = generate_sequences(mask, config)
 		image_bin = open(gauss_bin_path, 'wb+')
 		# verify_images(all_centroids, image_name, image_to_ID_dict[image_name], config)
 		cprint("Writing binary file...", 'green', 'on_white')
