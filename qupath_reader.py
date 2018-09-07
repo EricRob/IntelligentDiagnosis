@@ -1185,8 +1185,11 @@ def main(subject_id = None, image_name=None, image_processor=False):
         data_filename = os.path.join(FEATURE_DIR, classy + 'all_features_all_data.pickle')
     else:
         data_filename = os.path.join(FEATURE_DIR, classy + 'all_data.pickle')
-    
 
+    detections_file = image_name + '_Detectionstxt.txt'
+    if image_processor:
+        if not os.path.exists(os.path.join(DETECTIONS, detections_file)):
+            return None
 
     create_delaunay = True
     delaunay_filename = os.path.join(FEATURE_DIR, classy + '_' + str(QFLAGS.small_d_cluster) + 'smallCluster_' + str(QFLAGS.delaunay_radius) + 'radius_delaunay.pickle')
@@ -1295,6 +1298,7 @@ def main(subject_id = None, image_name=None, image_processor=False):
 
     if image_processor:
         image_dict = {}
+        img_delaunay = {}
         for cell in data['subj'][image_name]:
             image_dict[cell] = data['subj'][image_name][cell]
             img_delaunay = delaunay['subj'][image_name]

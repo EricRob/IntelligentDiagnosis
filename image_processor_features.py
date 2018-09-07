@@ -34,11 +34,11 @@ flags.DEFINE_string("seg_path", None, "Location of segmentations folder")
 flags.DEFINE_string("mode", None, "Create binary file for a specific mode between train, validation, or test")
 
 flags.DEFINE_bool("randomized_conditions", False, "Generate multiple binary files for randomized conditions with subject variability")
-flags.DEFINE_string("condition_path", None, "Path of condition folder with condition subject lists")
+flags.DEFINE_string("condition_path", '/data/recurrence_seq_lstm/data_conditions/batch_8_features', "Path of condition folder with condition subject lists")
 
 flags.DEFINE_bool("generate_conditions", False, "Generate randomized lists of subjects for cross-validation testing")
-flags.DEFINE_string("verified_list",  "verified_images.csv", "Master list of subjects from which to create per-mode subject lists")
-flags.DEFINE_string("new_condition", None, "Name of testing condition to create")
+flags.DEFINE_string("verified_list",  "verified_features.csv", "Master list of subjects from which to create per-mode subject lists")
+flags.DEFINE_string("new_condition", 'verified_features', "Name of testing condition to create")
 flags.DEFINE_integer("cross_val_folds", 6, "Number of folds for cross-validation when creating new subject lists")
 flags.DEFINE_string("data_conditions","/data/recurrence_seq_lstm/data_conditions", "Location of data_conditions directory" )
 
@@ -57,7 +57,12 @@ flags.DEFINE_string("masks_dir", '/data/recurrence_seq_lstm/image_data/masks', '
 
 flags.DEFINE_bool("skip_preverification", False, "Skip checking image folders for verified_list images and masks")
 
+flags.DEFINE_integer('delaunay_radius', 40, 'pixel radius of delaunay triangulation')
+
 FLAGS = flags.FLAGS
+
+DETECTIONS = '/data/QuPath/CellCounter/delaunay_px' + str(FLAGS.delaunay_radius) + '/CUMC/'
+
 
 class OriginalPatchConfig(object):
 	image_data_folder_path = '/data/recurrence_seq_lstm/image_data/' # Location of images folder
@@ -71,6 +76,38 @@ class OriginalPatchConfig(object):
 	recurrence_overlap_percentage = FLAGS.r_overlap
 	nonrecurrence_overlap_percentage = FLAGS.nr_overlap
 	num_steps = FLAGS.num_steps
+
+def query_yes_no(question, default="yes"):
+    """Ask a yes/no question via raw_input() and return their answer.
+
+    "question" is a string that is presented to the user.
+    "default" is the presumed answer if the user just hits <Enter>.
+        It must be "yes" (the default), "no" or None (meaning
+        an answer is required of the user).
+
+    The "answer" return value is True for "yes" or False for "no".
+    """
+    valid = {"yes": True, "y": True, "ye": True,
+             "no": False, "n": False}
+    if default is None:
+        prompt = " [y/n] "
+    elif default == "yes":
+        prompt = " [Y/n] "
+    elif default == "no":
+        prompt = " [y/N] "
+    else:
+        raise ValueError("invalid default answer: '%s'" % default)
+
+    while True:
+        sys.stdout.write(question + prompt)
+        choice = input().lower()
+        if default is not None and choice == '':
+            return valid[default]
+        elif choice in valid:
+            return valid[choice]
+        else:
+            sys.stdout.write("Please respond with 'yes' or 'no' "
+                             "(or 'y' or 'n').\n")
 
 def create_segmentation(seg_path, seg_folder_path, img_dict, patch_folder_path, config):
 	seg_img = io.imread(seg_path)[:,:,0]
@@ -244,7 +281,7 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, config):
 		gauss_config.maximum_seq_per_tile = FLAGS.gauss_seq
 		gauss_config.maximum_std_dev = FLAGS.gauss_stdev
 	gauss_category_folder = "tile" + str(gauss_config.tile_size) + "_std_dev" + str(gauss_config.maximum_std_dev) + "_seq" + str(gauss_config.maximum_seq_per_tile)
-	gauss_folder = os.path.join(config.image_data_folder_path,'gaussian_patches', gauss_category_folder)
+	gauss_folder = os.path.join(config.image_data_folder_path,'feature_patches','gaussian_patches_' + str(gauss_config.pixel_radius) + '_' + str(gauss_config.large_cluster), gauss_category_folder)
 	os.makedirs(gauss_folder, exist_ok=True)
 	# remove_characters = -8
 	for image in images_list:
@@ -253,15 +290,26 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, config):
 		image_bin_name = image[:-8] + ".bin"
 		image_bin_path = os.path.join(gauss_folder, image_bin_name)
 		if not os.path.exists(image_bin_path):
+			detections_filename = os.path.join(DETECTIONS, image[:-8] + '_Detectionstxt.txt')
+			if not os.path.exists(detections_filename):
+				cprint('No detections exist for ' + image[:-8] + ', skipping due to lack of features', 'red')
+				continue
+			if (image[:-8] + "_patches") not in image_to_ID_dict:
+				cprint(image[:-8] + ' not in image dictionary, skipping', 'red')
+				pdb.set_trace()	
+				continue
 			cprint('Creating image binary file for ' + image[:-8], 'white', 'on_green')
 			mask_name = 'mask_' + image[:-8] + '.tif'
 			mask_path = os.path.join(config.image_data_folder_path,'masks', mask_name)
 			seq_features = gauss.generate_sequences(mask_path, gauss_config, image[:-8], image_to_ID_dict[image])
+			if not seq_features:
+				cprint('No detections exist, skipping due to lack of features', 'red')
+				continue
 			gauss.regional_verification(seq_features, gauss_config, image[:-8], image_to_ID_dict[image])
 			image_bin = open(image_bin_path, 'wb+')
 			image_tiff_name = image[:-8] + '.tif'
 			image_patch_name = image[:-8] + '_patches'
-			cprint("Writing binary file...", 'green', 'on_white')
+			# cprint("Writing binary file...", 'green', 'on_white')
 			gauss.write_image_bin(image_bin, image_tiff_name, image_to_ID_dict[image_patch_name], seq_features, gauss_config)
 			image_bin.close()
 
@@ -315,12 +363,16 @@ def create_binary_file(label, mode, config, cond_path=None):
 	for line in reader:
 		image_to_ID_dict[line[0].split(".")[0]+"_patches"] = line[1]
 
-	# ********** Default behavior is gauss sampling **********
+	#                                                          #
+	# ********** Default behavior is gauss sampling ********** #
+	#                                                          #
 	if FLAGS.sampling_method == 'gauss':
 		gauss_sampling(image_to_ID_dict, images_list, bin_file, config)
 
 
-	# ********** Set sampling method to 'column' or 'row' for the following sampling **********
+	#                                                                                           #
+	# ********** Set sampling method to 'column' or 'row' for the following sampling ********** #
+	#                                                                                           #
 	else:
 		for image in images_list:
 			counter = 0
@@ -339,7 +391,6 @@ def create_binary_file(label, mode, config, cond_path=None):
 			patch_image_list = os.listdir(patch_folder_path)
 			padded_ID_string = "{:<5}".format(image_to_ID_dict[image])
 			patient_ID_byte_string = str.encode(padded_ID_string)
-			pdb.set_trace()
 			padded_subject_file_name = "{:<100}".format(image[:-8])
 			image_base_name = str.encode(padded_subject_file_name)
 			img_dict = {}
@@ -452,6 +503,8 @@ def generate_new_masks():
 	os.chdir(wd)
 
 def generate_new_conditions():
+	if not query_yes_no("Do you want to generate new testing conditions?", default="no"):
+		return False
 	new_condition_name = FLAGS.new_condition
 	verified_csv = FLAGS.verified_list
 	if not new_condition_name:
@@ -461,6 +514,7 @@ def generate_new_conditions():
 	base_path = FLAGS.data_conditions
 
 	subject_list_generator.write_lists(new_condition_name, verified_csv, c_val_folds, base_path)
+	return True
 
 def pre_verify_subjects():
 	verified_list = FLAGS.verified_list
@@ -512,7 +566,10 @@ if __name__ == '__main__':
 
 	if FLAGS.generate_conditions:
 		print("Generating new cross-validation conditions ... ")
-		generate_new_conditions()
+		exit = generate_new_conditions()
+		if exit:
+			cprint('Check default flag settings before proceeding', 'red')
+			sys.exit(1)
 		FLAGS.condition_path = os.path.join(FLAGS.data_conditions, FLAGS.new_condition)
 
 	if FLAGS.condition_path:

@@ -28,6 +28,7 @@ import struct
 
 # Global variables
 FEATURE_LIST = ['total_area', 'cell_perimeter', 'nuc_area', 'cell_area']
+DETECTION_SAMPLING = False
 
 # Class declarations
 class OriginalPatchConfig(object):
@@ -256,6 +257,40 @@ def sample_from_distribution(mask, tile_info, config):
 				tile_info[tile]["coords"] = tile_info[tile]["coords"] + [(y,x)]
 		if counter >= config.maximum_sample_count:
 			remove_tiles = remove_tiles + [tile]
+			# cprint("Skipping " + str(tile), 'red')
+			skip_count += 1
+
+	for tile in remove_tiles:
+		del tile_info[tile]
+	return skip_count
+
+def detection_sample_from_dist(mask, tile_centroids, config, all_cells):
+	keep_threshold = config.patch_size**2 * (1 - config.patch_keep_percentage/100)
+	remove_tiles = []
+	skip_count = 0
+
+	if not tile_info:
+		return 0
+	for tile in tile_info:
+		std_dev = config.maximum_std_dev
+		
+		sequence_count = int(round(tile_info[tile]["density"] * config.maximum_seq_per_tile))
+		samples = sequence_count * config.num_steps
+		tile_info[tile]["coords"] = []
+		counter = 0
+		while (len(tile_info[tile]["coords"]) < samples) and (counter < 10000):
+			counter += 1
+			x = int(round(np.random.normal(tile_info[tile]["centroid"][1], std_dev)))
+			x = x - config.patch_size // 2 # centroid should be in the center of the patch, x should be left edge. Shift over from center to left edge.
+			y = int(round(np.random.normal(tile_info[tile]["centroid"][0], std_dev)))
+			y = y - config.patch_size // 2 # centroid should be in center of the patch, y should be top edge. Shift up from center to top.
+			if x < 0 or y < 0 or x+config.patch_size > mask.shape[1] or y+config.patch_size > mask.shape[0]:
+				continue
+			patch = mask[y:(y+config.patch_size), x:(x+config.patch_size)]
+			if np.sum(patch) <= keep_threshold:	
+				tile_info[tile]["coords"] = tile_info[tile]["coords"] + [(y,x)]
+		if counter >= config.maximum_sample_count:
+			remove_tiles = remove_tiles + [tile]
 			cprint("Skipping " + str(tile), 'red')
 			skip_count += 1
 
@@ -292,7 +327,6 @@ def corner_sample_from_distribution(mask, corner, config, keep_corner):
 		cprint("Keep corner!", 'green', 'on_white')
 
 	return skip_count
-
 
 def split_and_combine_patch_lists(tile_dict, bottom_dict, right_dict, corner_dict, keep_corner, corner_tile_num, num_steps):
 	sequences = []
@@ -348,10 +382,18 @@ def generate_sequences(mask_filename, config, image_name=None, subject_id=None):
 	mask = io.imread(mask_filename)
 	mask = mask[:,:,0]
 	mask[mask > 0] = 1
-	cprint("Extracting tiles...", 'green', 'on_white')
+	all_cells, all_delaunay = qupath.detections(subject_id, image_name)
+	# for cell_class in all_delaunay:
+	# 	for centroid in all_delaunay[cell_class]:
+	# 		if not isinstance(centroid, tuple):
+	# 			continue
+	# 		for feature in all_delaunay[cell_class][centroid]:
+	# 			if not float(all_delaunay[cell_class][centroid][feature]):
+	# 				pdb.set_trace()
+	# cprint("Extracting tiles...", 'green', 'on_white')
 	tile_grid, bottom_edge, right_edge = extract_tiles(mask, tile_size, config.edge_overlap)
 
-	cprint("Thresholding tiles...", 'green', 'on_white')
+	# cprint("Thresholding tiles...", 'green', 'on_white')
 	keep_tile_grid_list = threshold_tiles(tile_grid, config.tile_keep_percentage)
 
 	keep_bottom_edge_list = threshold_tiles(bottom_edge, config.tile_keep_percentage)
@@ -377,10 +419,10 @@ def generate_sequences(mask_filename, config, image_name=None, subject_id=None):
 	corner_y = tile_grid.shape[0]*tile_size
 	corner_x = tile_grid.shape[1]*tile_size
 	keep_corner = corner_threshold(corner_tile, config.tile_keep_percentage)
-	if keep_corner:
-		cprint("corner passes threshold", 'white', 'on_red')
+	# if keep_corner:
+	# 	cprint("corner passes threshold", 'white', 'on_red')
 
-	cprint("Calculating centroids...", 'green', 'on_white')
+	# cprint("Calculating centroids...", 'green', 'on_white')
 	tile_centroids = calculate_main_tile_masses(tile_grid, keep_tile_grid_list, config)
 	bottom_centroids = calculate_bottom_tile_masses(bottom_edge, keep_bottom_edge_list, config)
 	right_centroids = calculate_right_tile_masses(right_edge, keep_right_edge_list, config)
@@ -390,26 +432,29 @@ def generate_sequences(mask_filename, config, image_name=None, subject_id=None):
 	adjust_centroids(bottom_centroids, tile_size)
 	adjust_centroids(right_centroids, tile_size)
 
-	cprint("Sampling around centroids...", 'green', 'on_white')
+	# cprint("Sampling around centroids...", 'green', 'on_white')
 	tile_count = get_tile_count(tile_grid, bottom_edge, right_edge)
 	centroid_count = get_centroid_count(tile_centroids, bottom_centroids, right_centroids)
 
 	skip_count = 0
-	skip_count += sample_from_distribution(mask, tile_centroids, config)
-	skip_count += sample_from_distribution(mask, bottom_centroids, config)
-	skip_count += sample_from_distribution(mask, right_centroids, config)
-	skip_count += corner_sample_from_distribution(mask, corner_centroid, config, keep_corner)
+	if DETECTION_SAMPLING:
+		skip_count += detection_sample_from_dist(mask, tile_centroids, config, all_cells)
+	else:
+		skip_count += sample_from_distribution(mask, tile_centroids, config)
+		skip_count += sample_from_distribution(mask, bottom_centroids, config)
+		skip_count += sample_from_distribution(mask, right_centroids, config)
+		skip_count += corner_sample_from_distribution(mask, corner_centroid, config, keep_corner)
 
 	cprint("Keeping " + str(centroid_count - skip_count) + "/" + str(tile_count) + " tiles")
 
-	cprint("Listing sequences...", 'green', 'on_white')
+	# cprint("Listing sequences...", 'green', 'on_white')
 	
 	# sequences is a list of [tile tuple, [lists of tuples]], each tuple in the list of tuples
 	# containing coordinates for a top-left patch corner
 	corner_tile_num = (tile_grid.shape[0], tile_grid.shape[1])
 	sequences = split_and_combine_patch_lists(tile_centroids, bottom_centroids, right_centroids, corner_centroid, keep_corner, corner_tile_num, config.num_steps)
 
-	all_cells, all_delaunay = qupath.detections(subject_id, image_name)
+	# all_cells, all_delaunay = qupath.detections(subject_id, image_name)
 	if not all_cells or not all_delaunay:
 		return None
 
@@ -426,7 +471,7 @@ def generate_sequences(mask_filename, config, image_name=None, subject_id=None):
 	##  Place each delaunay cluster and cell into a tile for regional information  ##
 	##                                                                             ##
 	delaunay_in_tiles = sort_delaunay_into_tiles(all_cells, all_delaunay, all_tiles, config)
-
+	remove_empty_delaunay_tiles(delaunay_in_tiles, all_tiles)
 
 
 	##                                                                             ##
@@ -435,8 +480,18 @@ def generate_sequences(mask_filename, config, image_name=None, subject_id=None):
 	delaunay_in_neighbors = add_neighboring_tile_info(delaunay_in_tiles, all_tiles, config)
 
 	# Adds features by sequence
-	seq_and_features = process_detections(sequences, delaunay_in_neighbors, mask, config)
+	seq_and_features = process_detections(sequences, delaunay_in_neighbors, all_tiles, mask, config)
 	return seq_and_features
+
+def remove_empty_delaunay_tiles(dels, all_tiles):
+	remove_list = []
+	for tile in dels:
+		if not dels[tile]['Tumor']:
+			remove_list.append(tile)
+	for tile in remove_list:
+		dels.pop(tile)
+		all_tiles.remove(tile)
+	return
 
 def sort_delaunay_into_tiles(cells, dels, tiles, config):
 	#
@@ -471,6 +526,8 @@ def add_neighboring_tile_info(dels, tiles, config):
 				del_and_neighbor[tile][cell_class] = {}
 
 			for neighbor in neighbors:
+				if neighbor not in dels:
+					continue
 				del_and_neighbor[tile][cell_class] = {**del_and_neighbor[tile][cell_class], **dels[neighbor][cell_class]}
 	return del_and_neighbor
 
@@ -502,15 +559,16 @@ def timing_estimate(start, now, count, length):
 		' average: ' + "{0:.2f}".format(round(avg_time,2)) + 's per sequence, '+ "{:02d}".format(minutes_remaining) + ':' + "{:02d}".format(seconds_remaining) + ' remaining', end="\r")
 	return 1
 
-def process_detections(sequences, delaunay_in_neighbors, mask, config):
+def process_detections(sequences, delaunay_in_neighbors, all_tiles, mask, config):
 	cprint("Processing detections of " + str(len(sequences)) + ' sequences', 'green', 'on_white')
 	seq_detections = {}
-	
+	tile_skip_list = []
 	for item in sequences:
 		# timing_estimate(start, time.time(), count, len(sequences))
 		tile = item[0]
 		seq = item[1]
-
+		if tile not in all_tiles or tile in tile_skip_list:
+			continue
 		for seq_unique in seq:
 			if seq_unique not in seq_detections:
 				seq_key = seq_unique
@@ -520,13 +578,19 @@ def process_detections(sequences, delaunay_in_neighbors, mask, config):
 			seq_detections[tile] = {}
 			seq_detections[tile]['features'] = sequence_features(seq, tile, delaunay_in_neighbors, mask, config)
 			seq_detections[tile]['seq'] = []
-		seq_detections[tile]['seq'].append(seq)
+		if not seq_detections[tile]['features']:
+			tile_skip_list.append(tile)
+			seq_detections.pop(tile)
+		else:
+			seq_detections[tile]['seq'].append(seq)
 	return seq_detections
 
 # ********* In Patch coordinates, Y is FIRST coordinate, X is SECOND ***************
 def sequence_features(seq, tile, delys, mask, config):
 	features = {}
 	class_features = {}
+	if tile not in delys:
+		return 0
 
 	# Summarize info for clusters associated with a given tile
 	for cell_class in delys[tile]:
@@ -558,6 +622,10 @@ def sequence_features(seq, tile, delys, mask, config):
 	features['all imm / all cells'] = safe_division(class_features['Immune cells']['total_cell_count'], (class_features['Immune cells']['total_cell_count'] + class_features['Tumor']['total_cell_count']))
 	features['imm area / tumor area'] = safe_division(class_features['Immune cells']['cell_area'], class_features['Tumor']['cell_area'])
 	features['imm area / total area'] = safe_division(class_features['Immune cells']['cell_area'], (class_features['Tumor']['cell_area'] + class_features['Immune cells']['cell_area']))
+
+	# for feature in features:
+	# 	if not features[feature]:
+	# 		pdb.set_trace()
 
 	return features
 
@@ -615,20 +683,35 @@ def write_image_bin(image_bin, image_name, subject_ID, seq_features, config):
 	for tile in seq_features:
 		feature_set = seq_features[tile]['features']
 		for sequence in seq_features[tile]['seq']:
+			if not len(sequence) == 20:
+				pdb.set_trace()
 			count += 1
 			timing_estimate(start, time.time(), count, length)
 			coord_byte_string = byte_string_from_coord_array(sequence, config.num_steps)
+			if not len(ID_byte_string) == 5:
+				pdb.set_trace()
+			if not len(image_name_byte_string) == 99:
+				pdb.set_trace()
+			if not len(coord_byte_string) == 20*2*6:
+				pdb.set_trace()
 			image_bin.write(ID_byte_string)
 			image_bin.write(image_name_byte_string)
 			image_bin.write(coord_byte_string)
 			# image_bin.write(struct.pack('i', len(feature_set))) # Number of feautures to follow, used for fixed-length reading of features
+			feat_count = 0
 			for feature in feature_set:
+				# if float(feature_set[feature]) == 0:
+				# 	pdb.set_trace()
+				# if not feature_set[feature]:
+				# 	pdb.set_trace()
+				feat_count += 1
 				image_bin.write(struct.pack('d', feature_set[feature]))
-
 			for y,x in sequence:
 				patch = image[y:(y+config.patch_size),x:(x+config.patch_size),:]
 				# Need to verify this downscaling method
 				patch_scaled = transform.downscale_local_mean(patch, (config.scaling_factor,config.scaling_factor,1)).astype('uint8')
+				if not patch_scaled.size == 30000:
+					pdb.set_trace()
 				image_bin.write(patch_scaled)
 	print()
 
@@ -701,7 +784,7 @@ def main():
 		sequences = generate_sequences(mask, config)
 		image_bin = open(gauss_bin_path, 'wb+')
 		# verify_images(all_centroids, image_name, image_to_ID_dict[image_name], config)
-		cprint("Writing binary file...", 'green', 'on_white')
+		# cprint("Writing binary file...", 'green', 'on_white')
 		write_image_bin(image_bin, image_name, image_to_ID_dict[image_name], sequences, config)
 		image_bin.close()
 		print('\n')
