@@ -630,7 +630,7 @@ class TestConfig(object):
   test_mode = 1
   num_features = 7
 
-def create_voting_file(subject_ids, names, labels, unscaled_logits, scaled_logits, output, coords, csv_file):
+def create_voting_file(subject_ids, names, labels, unscaled_logits, scaled_logits, output, coords, features, csv_file):
   # output[0][x][0]
   # labels[0][x]
   # unscaled_logits[0][x][0,1]
@@ -647,7 +647,8 @@ def create_voting_file(subject_ids, names, labels, unscaled_logits, scaled_logit
               unscaled_logits[0][x][1],
               scaled_logits[0][x][0],
               scaled_logits[0][x][1],
-              coords[0][x].tobytes().decode("utf-8") 
+              coords[0][x].tobytes().decode("utf-8"),
+              features[0][x] 
               ]
     writer.writerow(new_row)
     x += 1
@@ -679,7 +680,6 @@ def run_epoch(session, model, results_file, epoch_count, csv_file=None, eval_op=
   costs = 0.0
   iters = 0
   state = session.run(model.initial_state)
-
   fetches = {
       "cost": model.cost,
       "final_state": model.final_state,
@@ -690,7 +690,8 @@ def run_epoch(session, model, results_file, epoch_count, csv_file=None, eval_op=
       "scaled_logits": model.scaled_logits,
       "subject_ids": model.subject_ids,
       "names": model.names,
-      "coords": model.coords
+      "coords": model.coords,
+      'features': model.features
   }
   if eval_op is not None:
     fetches["eval_op"] = eval_op
@@ -709,11 +710,16 @@ def run_epoch(session, model, results_file, epoch_count, csv_file=None, eval_op=
     subject_ids = vals["subject_ids"]
     names = vals["names"]
     coords = vals["coords"]
+    features = vals['features']
+
     if test_mode:
-      create_voting_file(subject_ids, names, labels, unscaled_logits, scaled_logits, output, coords, csv_file)
+      create_voting_file(subject_ids, names, labels, unscaled_logits, scaled_logits, output, coords, features, csv_file)
     if FLAGS.save_samples:
       save_sample_image(input_data, labels, model, step, epoch_count, vals)
     
+    if np.isnan(cost):
+      pdb.set_trace()
+
     costs += cost
     iters += model.input.num_steps
 
