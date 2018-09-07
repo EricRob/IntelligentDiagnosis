@@ -28,7 +28,9 @@ import struct
 
 # Global variables
 FEATURE_LIST = ['total_area', 'cell_perimeter', 'nuc_area', 'cell_area']
-DETECTION_SAMPLING = False
+DETECTION_SAMPLING = True
+OTHER_TILE_THRESHOLD = 0.8
+OTHER_PATCH_THRESHOLD = 0.5
 
 # Class declarations
 class OriginalPatchConfig(object):
@@ -264,13 +266,56 @@ def sample_from_distribution(mask, tile_info, config):
 		del tile_info[tile]
 	return skip_count
 
-def detection_sample_from_dist(mask, tile_centroids, config, all_cells):
+def corner_detection_sample_from_dist(mask, corner, config, keep_corner, all_cells):
+	if not keep_corner:
+		return 1
+	keep_threshold = config.patch_size**2 * (1 - config.patch_keep_percentage/100)
+	std_dev = config.maximum_std_dev
+	sequence_count = int(round(corner["density"] * config.maximum_seq_per_tile))
+	samples = sequence_count * config.num_steps
+	corner['coords'] = []
+	counter = 0
+	skip_count = 0
+	corner = place_cells_in_tiles(corner, all_cells, config, corner=True)
+	corner = remove_garbage_tiles(corner, config, corner=True)
+
+	if not corner:
+		cprint("Skipping corner", 'red')
+		return 1
+	
+	while(len(corner['coords']) < samples) and (counter < 10000):
+		counter += 1
+		x = int(round(np.random.normal(corner["centroid"][1], std_dev)))
+		x = x - config.patch_size // 2 # centroid should be in the center of the patch, x should be left edge. Shift over from center to left edge.
+		y = int(round(np.random.normal(corner["centroid"][0], std_dev)))
+		y = y - config.patch_size // 2 # centroid should be in center of the patch, y should be top edge. Shift up from center to top.
+		patch = mask[y:(y+config.patch_size), x:(x+config.patch_size)]
+		if x < 0 or y < 0 or x+config.patch_size > mask.shape[1] or y+config.patch_size > mask.shape[0]:
+			continue
+		if np.sum(patch) > keep_threshold:
+			continue
+		cells_in_patch = find_cells_in_patch(corner['cells'], coord_tuple)
+		if cells_in_patch[2] >= OTHER_PATCH_THRESHOLD or cells_in_patch[2] == 0:
+			continue
+		corner['coords'] = corner['coords'] + [(y,x)]
+	if counter >= 10000:
+		cprint("Skipping corner", 'red')
+		corner['centroid'] = []
+		skip_count = 1
+	else:
+		cprint("Keep corner!", 'green', 'on_white')
+
+	return skip_count
+
+def detection_sample_from_dist(mask, tile_info, config, all_cells):
+	if not tile_info:
+		return 0
 	keep_threshold = config.patch_size**2 * (1 - config.patch_keep_percentage/100)
 	remove_tiles = []
 	skip_count = 0
+	place_cells_in_tiles(tile_info, all_cells, config)
+	remove_garbage_tiles(tile_info, config)
 
-	if not tile_info:
-		return 0
 	for tile in tile_info:
 		std_dev = config.maximum_std_dev
 		
@@ -278,17 +323,22 @@ def detection_sample_from_dist(mask, tile_centroids, config, all_cells):
 		samples = sequence_count * config.num_steps
 		tile_info[tile]["coords"] = []
 		counter = 0
-		while (len(tile_info[tile]["coords"]) < samples) and (counter < 10000):
+		while (len(tile_info[tile]["coords"]) < samples) and (counter < 20000):
 			counter += 1
 			x = int(round(np.random.normal(tile_info[tile]["centroid"][1], std_dev)))
 			x = x - config.patch_size // 2 # centroid should be in the center of the patch, x should be left edge. Shift over from center to left edge.
 			y = int(round(np.random.normal(tile_info[tile]["centroid"][0], std_dev)))
 			y = y - config.patch_size // 2 # centroid should be in center of the patch, y should be top edge. Shift up from center to top.
+			coord_tuple = (y, y+config.patch_size, x, x+config.patch_size)
 			if x < 0 or y < 0 or x+config.patch_size > mask.shape[1] or y+config.patch_size > mask.shape[0]:
 				continue
 			patch = mask[y:(y+config.patch_size), x:(x+config.patch_size)]
-			if np.sum(patch) <= keep_threshold:	
-				tile_info[tile]["coords"] = tile_info[tile]["coords"] + [(y,x)]
+			if np.sum(patch) > keep_threshold:
+				continue
+			cells_in_patch = find_cells_in_patch(tile_info[tile]['cells'], coord_tuple)
+			if cells_in_patch[2] >= OTHER_PATCH_THRESHOLD or cells_in_patch[2] == 0:
+				continue
+			tile_info[tile]["coords"] = tile_info[tile]["coords"] + [(y,x)]
 		if counter >= config.maximum_sample_count:
 			remove_tiles = remove_tiles + [tile]
 			cprint("Skipping " + str(tile), 'red')
@@ -298,7 +348,85 @@ def detection_sample_from_dist(mask, tile_centroids, config, all_cells):
 		del tile_info[tile]
 	return skip_count
 
-def corner_sample_from_distribution(mask, corner, config, keep_corner):
+def find_cells_in_patch(cells, coord_tuple):
+	y_bot, y_top, x_left, x_right = coord_tuple
+	other_count = tumor_count = imm_count = total = 0
+	for cell_class in cells:
+		for cell in cells[cell_class]:
+			y, x = cells[cell_class][cell]['loc']
+			if (y_bot <= y <= y_top) and (x_left <= x <= x_right):
+				total += 1
+				cell_class = cells[cell_class][cell]['class']
+				if cell_class == 'Tumor':
+					tumor_count += 1
+				elif cell_class == 'Immune cells':
+					imm_count += 1
+				elif cell_class == 'Other':
+					other_count += 1
+	if not total:
+		return (0,0,0)
+	else:
+		return (tumor_count / total, imm_count / total, other_count / total)
+
+def place_cells_in_tiles(tiles, cells, config, corner=False):
+	half_tile = config.tile_size // 2
+
+	if corner:
+		tile = tiles
+		tiles = {}
+		tiles['corner'] = tile
+
+	for tile in tiles:
+		other_count = 0
+		tumor_count = 0
+		imm_count = 0
+		x_left = tiles[tile]['centroid'][1] - half_tile
+		x_right = x_left + config.tile_size
+		y_bottom = tiles[tile]['centroid'][0] - half_tile
+		y_top = y_bottom + config.tile_size
+		tiles[tile]['cells'] = {}
+		for cell in cells:
+			if (x_left <= cells[cell]['x'] <= x_right) and (y_bottom <= cells[cell]['y'] <= y_top):
+				cell_class = cells[cell]['class']
+				if cell_class not in tiles[tile]['cells']:
+					tiles[tile]['cells'][cell_class] = {}
+				tiles[tile]['cells'][cell_class][cell] = cells[cell]
+				tiles[tile]['cells'][cell_class][cell]['loc'] = (cells[cell]['y'], cells[cell]['x'])
+				if cell_class == 'Tumor':
+					tumor_count += 1
+				elif cell_class == 'Immune cells':
+					imm_count += 1
+				elif cell_class == 'Other':
+					other_count += 1
+		tiles[tile]['counts'] = (tumor_count, imm_count, other_count)
+	if corner:
+		return tiles['corner']
+	return 
+
+def remove_garbage_tiles(tiles, config, corner=False):
+	remove_list = []
+	if corner:
+		tile = tiles
+		tiles = {}
+		tiles['corner'] = tile
+	for tile in tiles:
+		tumor_count, imm_count, other_count = tiles[tile]['counts']
+		total = tumor_count + imm_count + other_count
+		if total == 0:
+			remove_list.append(tile)
+		else:
+			other_portion = other_count / total
+			if other_portion > OTHER_TILE_THRESHOLD:
+				remove_list.append(tile)
+	for tile in remove_list:
+		cprint('REMOVING GARBAGE TILE ' + str(tile) + ', verify original image before testing', 'red')
+		del tiles[tile]
+	if corner:
+		return tiles
+	return
+
+
+def corner_sample_from_distribution(mask, tile_info, config, all_cells):
 	if not keep_corner:
 		return 1
 	keep_threshold = config.patch_size**2 * (1 - config.patch_keep_percentage/100)
@@ -439,6 +567,9 @@ def generate_sequences(mask_filename, config, image_name=None, subject_id=None):
 	skip_count = 0
 	if DETECTION_SAMPLING:
 		skip_count += detection_sample_from_dist(mask, tile_centroids, config, all_cells)
+		skip_count += detection_sample_from_dist(mask, bottom_centroids, config, all_cells)
+		skip_count += detection_sample_from_dist(mask, right_centroids, config, all_cells)
+		skip_count += corner_detection_sample_from_dist(mask, corner_centroid, config, keep_corner, all_cells)
 	else:
 		skip_count += sample_from_distribution(mask, tile_centroids, config)
 		skip_count += sample_from_distribution(mask, bottom_centroids, config)
@@ -765,13 +896,13 @@ def main():
 	image_to_ID_dict = dict()
 	for line in reader:
 		image_to_ID_dict[line[0]] = line[1]
-	os.makedirs(os.path.join(config.image_data_folder_path,'gaussian_patches'), exist_ok=True)
+	gauss_folder = os.makedirs(os.path.join(config.image_data_folder_path,'gaussian_patches_other_sampling'), exist_ok=True)
 	mask_path = os.path.join(config.image_data_folder_path, "masks")
 	mask_list = [os.path.join(config.image_data_folder_path, mask_path, f) for f in os.listdir(mask_path) if os.path.isfile(os.path.join(mask_path, f))]
 	for mask in mask_list:
 		image_name = mask.split('/')[-1][5:]
 		image_path = os.path.join(config.image_data_folder_path, 'original_images', image_name)
-		gauss_bin_path = os.path.join(config.image_data_folder_path,'gaussian_patches',image_name.split('.')[0] + '.bin')
+		gauss_bin_path = os.path.join(gauss_folder, image_name.split('.')[0] + '.bin')
 		
 		if image_name not in image_to_ID_dict:
 			cprint('Skipping ' + image_name, 'white', 'on_grey')

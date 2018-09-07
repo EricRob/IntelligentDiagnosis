@@ -34,7 +34,7 @@ flags.DEFINE_string("seg_path", None, "Location of segmentations folder")
 flags.DEFINE_string("mode", None, "Create binary file for a specific mode between train, validation, or test")
 
 flags.DEFINE_bool("randomized_conditions", False, "Generate multiple binary files for randomized conditions with subject variability")
-flags.DEFINE_string("condition_path", '/data/recurrence_seq_lstm/data_conditions/batch_8_features', "Path of condition folder with condition subject lists")
+flags.DEFINE_string("condition_path", '/data/recurrence_seq_lstm/data_conditions/batch_8_features_sampling', "Path of condition folder with condition subject lists")
 
 flags.DEFINE_bool("generate_conditions", False, "Generate randomized lists of subjects for cross-validation testing")
 flags.DEFINE_string("verified_list",  "verified_features.csv", "Master list of subjects from which to create per-mode subject lists")
@@ -281,7 +281,7 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, config):
 		gauss_config.maximum_seq_per_tile = FLAGS.gauss_seq
 		gauss_config.maximum_std_dev = FLAGS.gauss_stdev
 	gauss_category_folder = "tile" + str(gauss_config.tile_size) + "_std_dev" + str(gauss_config.maximum_std_dev) + "_seq" + str(gauss_config.maximum_seq_per_tile)
-	gauss_folder = os.path.join(config.image_data_folder_path,'feature_patches','gaussian_patches_' + str(gauss_config.pixel_radius) + '_' + str(gauss_config.large_cluster), gauss_category_folder)
+	gauss_folder = os.path.join(config.image_data_folder_path,'feature_patches','OTHER_gaussian_patches_' + str(gauss_config.pixel_radius) + '_' + str(gauss_config.large_cluster), gauss_category_folder)
 	os.makedirs(gauss_folder, exist_ok=True)
 	# remove_characters = -8
 	for image in images_list:
