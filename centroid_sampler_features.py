@@ -268,44 +268,45 @@ def sample_from_distribution(mask, tile_info, config):
 
 def corner_detection_sample_from_dist(mask, corner, config, keep_corner, all_cells):
 	if not keep_corner:
-		return 1
+		return 1, None
 	keep_threshold = config.patch_size**2 * (1 - config.patch_keep_percentage/100)
 	std_dev = config.maximum_std_dev
 	sequence_count = int(round(corner["density"] * config.maximum_seq_per_tile))
 	samples = sequence_count * config.num_steps
-	corner['coords'] = []
+	
 	counter = 0
 	skip_count = 0
 	corner = place_cells_in_tiles(corner, all_cells, config, corner=True)
 	corner = remove_garbage_tiles(corner, config, corner=True)
-
+	
 	if not corner:
 		cprint("Skipping corner", 'red')
-		return 1
-	
-	while(len(corner['coords']) < samples) and (counter < 10000):
+		return 1, None
+	corner['corner']['coords'] = []
+	while(len(corner['corner']['coords']) < samples) and (counter < 10000):
 		counter += 1
-		x = int(round(np.random.normal(corner["centroid"][1], std_dev)))
+		x = int(round(np.random.normal(corner['corner']["centroid"][1], std_dev)))
 		x = x - config.patch_size // 2 # centroid should be in the center of the patch, x should be left edge. Shift over from center to left edge.
-		y = int(round(np.random.normal(corner["centroid"][0], std_dev)))
+		y = int(round(np.random.normal(corner['corner']["centroid"][0], std_dev)))
 		y = y - config.patch_size // 2 # centroid should be in center of the patch, y should be top edge. Shift up from center to top.
+		coord_tuple = (y, y+config.patch_size, x, x+config.patch_size)
 		patch = mask[y:(y+config.patch_size), x:(x+config.patch_size)]
 		if x < 0 or y < 0 or x+config.patch_size > mask.shape[1] or y+config.patch_size > mask.shape[0]:
 			continue
 		if np.sum(patch) > keep_threshold:
 			continue
-		cells_in_patch = find_cells_in_patch(corner['cells'], coord_tuple)
+		cells_in_patch = find_cells_in_patch(corner['corner']['cells'], coord_tuple)
 		if cells_in_patch[2] >= OTHER_PATCH_THRESHOLD or cells_in_patch[2] == 0:
 			continue
-		corner['coords'] = corner['coords'] + [(y,x)]
+		corner['corner']['coords'] = corner['corner']['coords'] + [(y,x)]
 	if counter >= 10000:
 		cprint("Skipping corner", 'red')
-		corner['centroid'] = []
+		corner['corner']['centroid'] = []
 		skip_count = 1
 	else:
 		cprint("Keep corner!", 'green', 'on_white')
 
-	return skip_count
+	return skip_count, corner
 
 def detection_sample_from_dist(mask, tile_info, config, all_cells):
 	if not tile_info:
@@ -461,8 +462,14 @@ def split_and_combine_patch_lists(tile_dict, bottom_dict, right_dict, corner_dic
 	sequences = append_patch_lists(sequences, tile_dict, num_steps)
 	sequences = append_patch_lists(sequences, bottom_dict, num_steps)
 	sequences = append_patch_lists(sequences, right_dict, num_steps)
-	if keep_corner and corner_dict['coords']:
-		sequences = append_corner_patch_lists(sequences, corner_dict['coords'], num_steps, corner_tile_num)
+
+	if DETECTION_SAMPLING:
+		if keep_corner and corner_dict['corner']['coords']:
+			sequences = append_corner_patch_lists(sequences, corner_dict['corner']['coords'], num_steps, corner_tile_num)
+	else:
+		if keep_corner and corner_dict['coords']:
+			sequences = append_corner_patch_lists(sequences, corner_dict['coords'], num_steps, corner_tile_num)
+	
 	return sequences
 
 def append_corner_patch_lists(patch_list, coords_list, num_steps, corner_tile_num):
@@ -569,7 +576,10 @@ def generate_sequences(mask_filename, config, image_name=None, subject_id=None):
 		skip_count += detection_sample_from_dist(mask, tile_centroids, config, all_cells)
 		skip_count += detection_sample_from_dist(mask, bottom_centroids, config, all_cells)
 		skip_count += detection_sample_from_dist(mask, right_centroids, config, all_cells)
-		skip_count += corner_detection_sample_from_dist(mask, corner_centroid, config, keep_corner, all_cells)
+		skip_corner, corner_centroid = corner_detection_sample_from_dist(mask, corner_centroid, config, keep_corner, all_cells)
+		skip_count += skip_corner
+		if not corner_centroid:
+			keep_corner = False
 	else:
 		skip_count += sample_from_distribution(mask, tile_centroids, config)
 		skip_count += sample_from_distribution(mask, bottom_centroids, config)
