@@ -53,6 +53,7 @@ class OriginalPatchConfig(object):
 	num_steps = 20
 	large_cluster = 1
 	pixel_radius = 40
+	MINIMUM_PATCH_CELLS = 20
 
 class YaleConfig(object):
 	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/" # Location of image to be split into patches
@@ -73,6 +74,7 @@ class YaleConfig(object):
 	num_steps = 20
 	large_cluster = 1
 	pixel_radius = 40
+	MINIMUM_PATCH_CELLS = 20
 
 class QuPathConfig(object):
 	test = 0
@@ -313,7 +315,7 @@ def corner_detection_sample_from_dist(mask, corner, config, keep_corner, all_cel
 		if np.sum(patch) > keep_threshold:
 			continue
 		cells_in_patch = find_cells_in_patch(corner['corner']['cells'], coord_tuple)
-		if cells_in_patch[2] >= OTHER_PATCH_THRESHOLD or cells_in_patch[3] < MINIMUM_PATCH_CELLS:
+		if cells_in_patch[2] >= OTHER_PATCH_THRESHOLD or cells_in_patch[3] < config.MINIMUM_PATCH_CELLS:
 			continue
 		corner['corner']['coords'] = corner['corner']['coords'] + [(y,x)]
 	if counter >= 10000:
@@ -354,7 +356,7 @@ def detection_sample_from_dist(mask, tile_info, config, all_cells):
 			if np.sum(patch) > keep_threshold:
 				continue
 			cells_in_patch = find_cells_in_patch(tile_info[tile]['cells'], coord_tuple)
-			if cells_in_patch[2] >= OTHER_PATCH_THRESHOLD or cells_in_patch[3] < MINIMUM_PATCH_CELLS:
+			if cells_in_patch[2] >= OTHER_PATCH_THRESHOLD or cells_in_patch[3] < config.MINIMUM_PATCH_CELLS:
 				continue
 			tile_info[tile]["coords"] = tile_info[tile]["coords"] + [(y,x)]
 		if counter >= config.maximum_sample_count:

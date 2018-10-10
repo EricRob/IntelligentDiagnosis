@@ -285,7 +285,7 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, config):
 		gauss_config.maximum_std_dev = FLAGS.gauss_stdev
 	gauss_category_folder = "tile" + str(gauss_config.tile_size) + "_std_dev" + str(gauss_config.maximum_std_dev) + "_seq" + str(gauss_config.maximum_seq_per_tile)
 	#pdb.set_trace()
-	gauss_folder = os.path.join(config.image_data_folder_path,'feature_patches','OTHER_gaussian_patches_' + str(gauss_config.pixel_radius) + '_' + str(gauss_config.large_cluster), gauss_category_folder)
+	gauss_folder = os.path.join(config.image_data_folder_path,'feature_patches','OTHER_gaussian_patches_' + str(gauss_config.pixel_radius) + '_min' + str(gauss_config.MINIMUM_PATCH_CELLS) + '_' + str(gauss_config.large_cluster), gauss_category_folder)
 	os.makedirs(gauss_folder, exist_ok=True)
 	# remove_characters = -8
 	for image in images_list:
