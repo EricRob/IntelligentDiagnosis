@@ -174,7 +174,7 @@ def main():
 	for root, dirs, _ in os.walk(FLAGS.results_folder):
 		for folder in dirs:
 			files = os.listdir(os.path.join(root,folder))
-			
+			#pdb.set_trace()
 			if not (has_results_files(files) and (FLAGS.vote_file in files)):
 				pass
 			else:

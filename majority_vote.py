@@ -209,7 +209,7 @@ def print_info_per_image(image_dict):
             else:
                 color = 'on_red'
                 accurate_votes = len(image_dict[image_name]["output"]) - int(c1[0][1])
-            cprint("\n" + image_name + " -- " + image_dict[image_name]["id"], 'white', color, attrs=['bold'])
+            cprint("\n" + image_name.strip() + " -- " + image_dict[image_name]["id"].strip(), 'white', color, attrs=['bold'])
             print("Label: " + truth_label)
             print("Network majority vote: %s, %i%% (%i/%i) " % (network_label, int((c1[0][1])/len(image_dict[image_name]["output"])*100), int(c1[0][1]), len(image_dict[image_name]["output"])))
             unscaled_nr = average_value(image_dict[image_name], "unscaled_nr")
@@ -217,7 +217,7 @@ def print_info_per_image(image_dict):
             scaled_nr = average_value(image_dict[image_name], "scaled_nr")
             scaled_rec = average_value(image_dict[image_name], "scaled_rec")
             smax1 = softmax([unscaled_nr, unscaled_rec])
-            csvwriter.writerow([image_dict[image_name]["id"], image_name, image_dict[image_name]["labels"][0], accurate_votes / len(image_dict[image_name]["output"]), accurate_votes ,len(image_dict[image_name]["output"])])
+            csvwriter.writerow([image_dict[image_name]["id"].strip(), image_name.strip(), image_dict[image_name]["labels"][0], accurate_votes / len(image_dict[image_name]["output"]), accurate_votes ,len(image_dict[image_name]["output"])])
 
             print("Unscaled average: %.3f, %.3f" % (unscaled_nr, unscaled_rec) )
             print("Softmax of unscaled average: " + str(smax1))

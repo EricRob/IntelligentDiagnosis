@@ -17,7 +17,7 @@ from numpy.lib.stride_tricks import as_strided
 from termcolor import cprint
 import numbers
 # from tensorflow import flags
-import qupath_reader as qupath
+import qupath_lstm as qupath
 import time
 import struct
 
@@ -73,6 +73,20 @@ class YaleConfig(object):
 	num_steps = 20
 	large_cluster = 1
 	pixel_radius = 40
+
+class QuPathConfig(object):
+	test = 0
+	clusters = 8
+	all_cells = False
+	all_features = False
+	closest_centers = 5
+	classifier = 'v2'
+	feature_directory = '/data/recurrence_seq_lstm/feature_testing'
+	detections = '/data/yale_qupath/measurements/'
+	small_d_cluster = 3
+	delaunay_radius = 40
+	load = False
+	omit_class = ['red_cell', 'ulceration']
 
 # Function declarations
 def extract_tiles(arr, tile_size, edge_overlap):
@@ -515,13 +529,15 @@ def calculate_corner_mass(corner_tile, keep_corner, corner_x, corner_y):
 	return corner
 
 # Called by image_processor.py directly
-def generate_sequences(mask_filename, config, image_name=None, subject_id=None):
+def generate_sequences(mask_filename, config, image_name=None, subject_id=None, detections=None):
 	tile_size = config.tile_size
 	mask = io.imread(mask_filename)
 	mask = mask[:,:,0]
 	mask[mask > 0] = 1
 	#pdb.set_trace()
-	all_cells, all_delaunay = qupath.detections(subject_id, image_name)
+	qu_config = QuPathConfig()
+	qu_config.detections = detections
+	all_cells, all_delaunay = qupath.detections(subject_id, image_name, qu_config)
 	# for cell_class in all_delaunay:
 	# 	for centroid in all_delaunay[cell_class]:
 	# 		if not isinstance(centroid, tuple):

@@ -15,7 +15,7 @@ from termcolor import cprint
 import csv
 import subprocess
 from shutil import copyfile
-import centroid_sampler_features as gauss
+import centroid_lstm as gauss
 import subject_list_generator
 
 import tiff_patching
@@ -36,7 +36,7 @@ flags.DEFINE_string("mode", None, "Create binary file for a specific mode betwee
 flags.DEFINE_bool("randomized_conditions", False, "Generate multiple binary files for randomized conditions with subject variability")
 flags.DEFINE_string("condition_path", None, "Path of condition folder with condition subject lists")
 
-flags.DEFINE_bool("generate_conditions", True, "Generate randomized lists of subjects for cross-validation testing")
+flags.DEFINE_bool("generate_conditions", False, "Generate randomized lists of subjects for cross-validation testing")
 flags.DEFINE_string("verified_list",  "YALE_CUMC.csv", "Master list of subjects from which to create per-mode subject lists")
 flags.DEFINE_string("new_condition", 'YALE_CUMC', "Name of testing condition to create")
 flags.DEFINE_integer("cross_val_folds", 6, "Number of folds for cross-validation when creating new subject lists")
@@ -58,11 +58,13 @@ flags.DEFINE_string("masks_dir", '/data/recurrence_seq_lstm/image_data/masks', '
 flags.DEFINE_bool("skip_preverification", True, "Skip checking image folders for verified_list images and masks")
 
 flags.DEFINE_integer('delaunay_radius', 40, 'pixel radius of delaunay triangulation')
+flags.DEFINE_string('detections_path', '/data/yale_qupath/measurements', 'Path to location of qupath cell detection information')
 
 FLAGS = flags.FLAGS
+FILLER = '                                            '
 
 #DETECTIONS = '/data/QuPath/CellCounter/delaunay_px' + str(FLAGS.delaunay_radius) + '/CUMC/'
-DETECTIONS = '/data/yale_qupath/measurements'
+# DETECTIONS = '/data/yale_qupath/measurements'
 
 
 class OriginalPatchConfig(object):
@@ -293,7 +295,7 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, config):
 		image_bin_path = os.path.join(gauss_folder, image_bin_name)
 		#pdb.set_trace()
 		if not os.path.exists(image_bin_path):
-			detections_filename = os.path.join(DETECTIONS, image[:-8] + '_Detectionstxt.txt')
+			detections_filename = os.path.join(FLAGS.detections_path, image[:-8] + '_Detectionstxt.txt')
 			if not os.path.exists(detections_filename):
 				cprint('No detections exist for ' + image[:-8] + ', skipping due to lack of features', 'red')
 				continue
@@ -304,7 +306,7 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, config):
 			cprint('Creating image binary file for ' + image[:-8], 'white', 'on_green')
 			mask_name = 'mask_' + image[:-8] + '.tif'
 			mask_path = os.path.join(config.image_data_folder_path,'masks', mask_name)
-			seq_features = gauss.generate_sequences(mask_path, gauss_config, image[:-8], image_to_ID_dict[image])
+			seq_features = gauss.generate_sequences(mask_path, gauss_config, image[:-8], image_to_ID_dict[image], detections=FLAGS.detections_path)
 			if not seq_features:
 				cprint('No detections exist, skipping due to lack of features', 'red')
 				continue
@@ -316,7 +318,7 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, config):
 			gauss.write_image_bin(image_bin, image_tiff_name, image_to_ID_dict[image_patch_name], seq_features, gauss_config)
 			image_bin.close()
 
-		cprint("Appending " + image[:-8], 'green')
+		cprint("Appending " + image[:-8] + FILLER, 'green', end="\r")
 		image_bin = open(image_bin_path, 'rb+')
 		image_bytes = image_bin.read(os.path.getsize(image_bin_path))
 		bin_file.write(image_bytes)
@@ -570,7 +572,7 @@ if __name__ == '__main__':
 	if FLAGS.generate_conditions:
 		print("Generating new cross-validation conditions ... ")
 		exit = generate_new_conditions()
-		if exit:
+		if not exit:
 			cprint('Check default flag settings before proceeding', 'red')
 			sys.exit(1)
 		FLAGS.condition_path = os.path.join(FLAGS.data_conditions, FLAGS.new_condition)

@@ -35,7 +35,7 @@ import matplotlib.image as mpimg
 
 warnings.simplefilter('ignore', Image.DecompressionBombWarning)
 
-parser = argparse.ArgumentParser(description='Process QuPath detections and results for feature creation')
+# parser = argparse.ArgumentParser(description='Process QuPath detections and results for feature creation')
 
 # flags.DEFINE_integer("test", 0, "Test mode")
 # flags.DEFINE_integer('clusters', 8, 'Number of clusters for KMeans Clustering')
@@ -52,42 +52,42 @@ parser = argparse.ArgumentParser(description='Process QuPath detections and resu
 # flags.DEFINE_integer('small_d_cluster', 1, 'size of small cluster for class comparison')
 # flags.DEFINE_integer('delaunay_radius', 50, 'pixel radius of delaunay triangulation')
 
-parser.add_argument('--test', default=0, type=int, help='test mode')
-parser.add_argument('--clusters', default=8, type=int, help='Number of clusters for KMeans Clustering')
-parser.add_argument('--all_cells', default=False, type=bool, help='Create histogram showing features of all cells')
-parser.add_argument('--all_features', default=False, type=bool, help='Use all QuPath features')
-parser.add_argument('--closest_centers', default=5, type=str, help='Number of closest cluster centers to find when computing regional immune density')
-parser.add_argument('--dense_thresh', default=3, type=float, help='percentage of clusters used to calculate the cluster density feature')
-parser.add_argument('--classifier', default='v2', type=str, help='Classifier version to use')
-parser.add_argument('--load', default=True, type=bool, help='load >data< array from saved pickle')
-parser.add_argument('--display_clusters', default=False, type=bool, help='Display immune clusters in a scatter plot')
-parser.add_argument('--show_delaunay', default=False, type=str, help='Show histograms of delaunay triangulation')
-parser.add_argument('--detections_dir', default='/data/QuPath/CellCounter/detections_v2', type=str, help="Directory of QuPath detections files that should be used.")
-parser.add_argument('--overwrite_saved', default=False, type=bool, help='overwrite existing data (not implemented everywhere!)')
-parser.add_argument('--small_d_cluster', default=3, type=int, help='size of small cluster for class comparison')
-parser.add_argument('--delaunay_radius', default=40, type=int, help='pixel radius of delaunay triangulation')
-parser.add_argument('--yale', default=False, type=bool, help='Processing yale data (as opposed to CUMC)')
+# parser.add_argument('--test', default=0, type=int, help='test mode')
+# parser.add_argument('--clusters', default=8, type=int, help='Number of clusters for KMeans Clustering')
+# parser.add_argument('--all_cells', default=False, type=bool, help='Create histogram showing features of all cells')
+# parser.add_argument('--all_features', default=False, type=bool, help='Use all QuPath features')
+# parser.add_argument('--closest_centers', default=5, type=str, help='Number of closest cluster centers to find when computing regional immune density')
+# parser.add_argument('--dense_thresh', default=3, type=float, help='percentage of clusters used to calculate the cluster density feature')
+# parser.add_argument('--classifier', default='v2', type=str, help='Classifier version to use')
+# parser.add_argument('--load', default=True, type=bool, help='load >data< array from saved pickle')
+# parser.add_argument('--display_clusters', default=False, type=bool, help='Display immune clusters in a scatter plot')
+# parser.add_argument('--show_delaunay', default=False, type=str, help='Show histograms of delaunay triangulation')
+# parser.add_argument('--detections_dir', default='/data/QuPath/CellCounter/detections_v2', type=str, help="Directory of QuPath detections files that should be used.")
+# parser.add_argument('--overwrite_saved', default=False, type=bool, help='overwrite existing data (not implemented everywhere!)')
+# parser.add_argument('--small_d_cluster', default=3, type=int, help='size of small cluster for class comparison')
+# parser.add_argument('--delaunay_radius', default=40, type=int, help='pixel radius of delaunay triangulation')
+# parser.add_argument('--yale', default=False, type=bool, help='Processing yale data (as opposed to CUMC)')
 
-QFLAGS = parser.parse_args()
+# QFLAGS = parser.parse_args()
 
 # Global variables
-DETECTIONS = '/data/QuPath/CellCounter/delaunay_px' + str(QFLAGS.delaunay_radius) + '/CUMC/'
-if QFLAGS.yale:
-    DETECTIONS = '/data/yale_qupath/measurements/'
-else:
-    DETECTIONS = '/data/QuPath/CellCounter/delaunay_px' + str(QFLAGS.delaunay_radius) + '/CUMC/'
-DETECTIONS = '/data/yale_qupath/measurements'
+# DETECTIONS = '/data/QuPath/CellCounter/delaunay_px' + str(QFLAGS.delaunay_radius) + '/CUMC/'
+# if QFLAGS.yale:
+#     DETECTIONS = '/data/yale_qupath/measurements/'
+# else:
+#     DETECTIONS = '/data/QuPath/CellCounter/delaunay_px' + str(QFLAGS.delaunay_radius) + '/CUMC/'
+# DETECTIONS = '/data/yale_qupath/measurements'
 
 STATUS_CSV = '/data/recurrence_seq_lstm/IntelligentDiagnosis/recurrence_status.csv'
 OMIT_KEY = ['Name', 'ROI', 'Centroid X px', 'Centroid Y px']
-OMIT_CLASS = [ 'red_cell', 'ulceration']
+# OMIT_CLASS = [ 'red_cell', 'ulceration']
 KEEP_CLASS = ['Other', 'Tumor', 'Immune cells']
 MASK_LOCATION = '/data/recurrence_seq_lstm/image_data/masks'
 FEATURES = ['Cell: Area', 'Nucleus: Area', 'Nucleus/Cell area ratio', 'Cell: Perimeter', 'Class', 'Centroid X', 'Centroid Y']
 THRESHOLD = 0.15
 COLORS = ['red', 'green']
 FILLER = '                                            '
-FEATURE_DIR = '/data/recurrence_seq_lstm/feature_testing'
+# FEATURE_DIR = '/data/recurrence_seq_lstm/feature_testing'
 ORIGINAL_IMAGE_DIR = '/data/recurrence_seq_lstm/image_data/original_images'
 DATA_STORAGE = '/data/recurrence_seq_lstm/feature_testing/delaunay_grid_search.csv'
 # Class declarations
@@ -327,8 +327,8 @@ def load_image_masks(data):
 
     return
 
-def detections(subject_id, image_name):
-    return main(subject_id, image_name, image_processor=True)
+def detections(subject_id, image_name, config):
+    return main(subject_id, image_name, image_processor=True, config=config)
 
 def add_all_cell_features(detection, row):
     for feature in OMIT_KEY:
@@ -872,7 +872,7 @@ def add_dense_histogram_features(cluster_dict, subject):
                     cluster_dict[cell_class][feature].append(np.mean(within_image_features[cell_class][feature]))
     return 1
 
-def create_delaunay_features(delaunay, subject, image, row):
+def create_delaunay_features(delaunay, subject, image, row, config):
  
 ####################################################
 ##                                                ##
@@ -883,7 +883,7 @@ def create_delaunay_features(delaunay, subject, image, row):
 
     # Organizing
     row_class = row['Class']
-    if row_class in OMIT_CLASS:
+    if row_class in config.omit_class:
         return 1
     if 'Cluster  mean: Centroid X' not in row:
         return 1
@@ -925,13 +925,12 @@ def delaunay_feature_list(cluster, row):
     cluster['hematoxylin_OD_mean'] = float(row['Cluster  mean: Nucleus: Hematoxylin OD mean'])
     cluster['eosin_OD_mean'] = float(row['Cluster  mean: Nucleus: Eosin OD mean'])
 
-    # I know these two are switched. I'm pretty sure QuPath put these results in the wrong category.
+    # I know these two are switched. I'm pretty sure QuPath put these results in the wrong category because in all instances 'mean' > 'max'.
     cluster['delaunay_max_area'] = float(row['Cluster  mean: Delaunay: Mean triangle area'])
     cluster['delaunay_mean_area'] = float(row['Cluster  mean: Delaunay: Max triangle area'])
 
 
     return 1
-
 
 def value_for_csv(rec, non, labels, lo, hi, num):
     values = np.concatenate((rec, non))
@@ -945,7 +944,6 @@ def value_for_csv(rec, non, labels, lo, hi, num):
             area = area + ((sens[i-1] + sens[i])*(spec[i] - spec[i-1])/2)
 
     return [max_acc, area]
-
 
 def show_delaunay_histogram(delaunay):
     RE = {}
@@ -1193,11 +1191,16 @@ def row_has_nan(row):
         return True
     return False
 
-def main(subject_id = None, image_name=None, image_processor=False):
+def main(subject_id = None, image_name=None, image_processor=False, config=None):
     # cprint('radius: ' + str(QFLAGS.delaunay_radius) + 'px, small cluster: ' + str(QFLAGS.small_d_cluster), 'white', 'on_green')
     #pdb.set_trace()
-    classy = QFLAGS.classifier
-    if QFLAGS.all_features:
+
+    QFLAGS = config # (In case there are any unexpected variables, because this is a sloppy fix)
+    
+    classy = config.classifier
+    FEATURE_DIR = config.feature_directory
+    DETECTIONS = config.detections
+    if config.all_features:
         data_filename = os.path.join(FEATURE_DIR, classy + 'all_features_all_data.pickle')
     else:
         data_filename = os.path.join(FEATURE_DIR, classy + 'all_data.pickle')
@@ -1208,11 +1211,11 @@ def main(subject_id = None, image_name=None, image_processor=False):
             return None
 
     create_delaunay = True
-    delaunay_filename = os.path.join(FEATURE_DIR, classy + '_' + str(QFLAGS.small_d_cluster) + 'smallCluster_' + str(QFLAGS.delaunay_radius) + 'radius_delaunay.pickle')
+    delaunay_filename = os.path.join(FEATURE_DIR, classy + '_' + str(config.small_d_cluster) + 'smallCluster_' + str(config.delaunay_radius) + 'radius_delaunay.pickle')
     if QFLAGS.yale:
-        delaunay_filename = os.path.join(FEATURE_DIR, 'yale_' + str(QFLAGS.small_d_cluster) + 'smallCluster_radius_delaunay.pickle')
+        delaunay_filename = os.path.join(FEATURE_DIR, 'yale_' + str(config.small_d_cluster) + 'smallCluster_radius_delaunay.pickle')
 
-    if QFLAGS.load and os.path.exists(delaunay_filename) and not image_processor:
+    if config.load and os.path.exists(delaunay_filename) and not image_processor:
         print('Loading delaunay features')
         with open(delaunay_filename, 'rb') as handle:
             delaunay = pickle.load(handle)
@@ -1221,7 +1224,7 @@ def main(subject_id = None, image_name=None, image_processor=False):
         delaunay = {}
 
     if not create_delaunay:
-        if QFLAGS.load and os.path.exists(data_filename) and not image_processor:
+        if config.load and os.path.exists(data_filename) and not image_processor:
             print('Loading saved cell data')
             with open(data_filename, 'rb') as handle:
                 data = pickle.load(handle)
@@ -1246,7 +1249,7 @@ def main(subject_id = None, image_name=None, image_processor=False):
                         cell_name = '{0:06}'.format(n)
                         data[subject][image_name][cell_name] = {}
                         add_cell_features(data[subject][image_name][cell_name], row)
-                        create_delaunay_features(delaunay, subject, image_name, row)
+                        create_delaunay_features(delaunay, subject, image_name, row, config)
         else:
             # Current run called directly
             
@@ -1320,7 +1323,7 @@ def main(subject_id = None, image_name=None, image_processor=False):
                     if row[0] in delaunay:
                         delaunay[row[0]]['status'] = int(row[1])
 
-        if not QFLAGS.test and not image_processor:
+        if not config.test and not image_processor:
             cprint('\nSaving [data] array', 'yellow')
             with open(data_filename, 'wb') as handle:
                 pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
