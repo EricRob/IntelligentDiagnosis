@@ -55,10 +55,11 @@ flags.DEFINE_string("new_image_dir", '/home/wanglab/Desktop/new_masks/', "locati
 flags.DEFINE_string("original_images_dir", '/data/recurrence_seq_lstm/image_data/original_images', 'location of original_images directory within image_data')
 flags.DEFINE_string("masks_dir", '/data/recurrence_seq_lstm/image_data/masks', 'location of masks directory within image_data' )
 
-flags.DEFINE_bool("skip_preverification", True, "Skip checking image folders for verified_list images and masks")
+flags.DEFINE_bool("preverify", False, "Check image folders for verified_list images and masks")
 
 flags.DEFINE_integer('delaunay_radius', 40, 'pixel radius of delaunay triangulation')
-flags.DEFINE_string('detections_path', '/data/yale_qupath/measurements', 'Path to location of qupath cell detection information')
+flags.DEFINE_string('detections_path', '/data/QuPath/CellCounter/delaunay_px40/CUMC', 'Path to location of qupath cell detection information')
+flags.DEFINE_bool('include_features', True, 'Whether to add features to writing image binary (features still used for restricting sampling)')
 
 FLAGS = flags.FLAGS
 FILLER = '                                            '
@@ -79,6 +80,7 @@ class OriginalPatchConfig(object):
 	recurrence_overlap_percentage = FLAGS.r_overlap
 	nonrecurrence_overlap_percentage = FLAGS.nr_overlap
 	num_steps = FLAGS.num_steps
+	add_features = FLAGS.include_features
 
 def query_yes_no(question, default="yes"):
     """Ask a yes/no question via raw_input() and return their answer.
@@ -278,14 +280,26 @@ def get_patch_coords(img_dict, image_list):
 def gauss_sampling(image_to_ID_dict, images_list, bin_file, config):
 	if FLAGS.config == 'yale':
 		gauss_config = gauss.YaleConfig()
+		cprint('Using Yale configuration', 'blue', 'on_white')
+
+	elif FLAGS.config == 'sinai':
+		gauss_config = gauss.SinaiConfig()
+		cprint('Using Sinai configuration', 'magenta', 'on_white')
 	else:
 		gauss_config = gauss.OriginalPatchConfig()
 		gauss_config.tile_size = FLAGS.gauss_tile_size
 		gauss_config.maximum_seq_per_tile = FLAGS.gauss_seq
 		gauss_config.maximum_std_dev = FLAGS.gauss_stdev
-	gauss_category_folder = "tile" + str(gauss_config.tile_size) + "_std_dev" + str(gauss_config.maximum_std_dev) + "_seq" + str(gauss_config.maximum_seq_per_tile)
-	#pdb.set_trace()
-	gauss_folder = os.path.join(config.image_data_folder_path,'feature_patches','OTHER_gaussian_patches_' + str(gauss_config.pixel_radius) + '_min' + str(gauss_config.MINIMUM_PATCH_CELLS) + '_' + str(gauss_config.large_cluster), gauss_category_folder)
+		cprint('Using Original configuration', 'green', 'on_grey')
+	print('OTHER_PATCH_THRESHOLD: ' + str(gauss_config.OTHER_PATCH_THRESHOLD))
+	print('MINIMUM_PATCH_CELLS: ' + str(gauss_config.MINIMUM_PATCH_CELLS))
+	if FLAGS.include_features:
+		prepend = "FEATURES_"
+	else:
+		prepend = "NoFEATURES_"
+	gauss_config.add_features = FLAGS.include_features
+	gauss_category_folder = prepend + "tile" + str(gauss_config.tile_size) + "_std_dev" + str(gauss_config.maximum_std_dev) + "_seq" + str(gauss_config.maximum_seq_per_tile)
+	gauss_folder = os.path.join(config.image_data_folder_path,'feature_patches','OTHER_gaussian_patches_' + str(gauss_config.pixel_radius) + '_min' + str(gauss_config.MINIMUM_PATCH_CELLS) + '_' + str(gauss_config.large_cluster) + '_' + str(int(gauss_config.OTHER_PATCH_THRESHOLD*100)) + 'p', gauss_category_folder)
 	os.makedirs(gauss_folder, exist_ok=True)
 	# remove_characters = -8
 	for image in images_list:
@@ -522,8 +536,8 @@ def generate_new_conditions():
 	return True
 
 def pre_verify_subjects():
-	verified_list = FLAGS.verified_list
-	verified_file = open(os.path.join(FLAGS.data_conditions, verified_list), "r")
+	verified_path = os.path.join(FLAGS.data_conditions, FLAGS.verified_list)
+	verified_file = open(verified_path, "r")
 	missing_mask_list = []
 	missing_image_list = []
 	exit_bool = False
@@ -562,7 +576,7 @@ if __name__ == '__main__':
 		print("Generating new image masks ... ")
 		generate_new_masks()
 
-	if not FLAGS.skip_preverification and FLAGS.generate_conditions:
+	if FLAGS.preverify:
 		exit = pre_verify_subjects()
 		if exit:
 			sys.exit(1)

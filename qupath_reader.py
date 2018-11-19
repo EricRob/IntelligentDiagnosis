@@ -59,24 +59,32 @@ parser.add_argument('--all_features', default=False, type=bool, help='Use all Qu
 parser.add_argument('--closest_centers', default=5, type=str, help='Number of closest cluster centers to find when computing regional immune density')
 parser.add_argument('--dense_thresh', default=3, type=float, help='percentage of clusters used to calculate the cluster density feature')
 parser.add_argument('--classifier', default='v2', type=str, help='Classifier version to use')
-parser.add_argument('--load', default=True, type=bool, help='load >data< array from saved pickle')
+parser.add_argument('--load_pickles', default=False, type=bool, help='load >data< array from saved pickle')
 parser.add_argument('--display_clusters', default=False, type=bool, help='Display immune clusters in a scatter plot')
 parser.add_argument('--show_delaunay', default=False, type=str, help='Show histograms of delaunay triangulation')
-parser.add_argument('--detections_dir', default='/data/QuPath/CellCounter/detections_v2', type=str, help="Directory of QuPath detections files that should be used.")
+parser.add_argument('--detections_dir', default='/data/QuPath/CellCounter/delaunay_px40/CUMC/', type=str, help="Directory of QuPath detections files that should be used.")
 parser.add_argument('--overwrite_saved', default=False, type=bool, help='overwrite existing data (not implemented everywhere!)')
 parser.add_argument('--small_d_cluster', default=3, type=int, help='size of small cluster for class comparison')
 parser.add_argument('--delaunay_radius', default=40, type=int, help='pixel radius of delaunay triangulation')
-parser.add_argument('--yale', default=False, type=bool, help='Processing yale data (as opposed to CUMC)')
+parser.add_argument('--yale', default=False, type=bool, help='Processing yale data (as opposed to CUMC or Sinai)')
+parser.add_argument('--sinai', default=False, type=bool, help='Processing sinai data (as opposed to CUMC or Yale')
+parser.add_argument('--subject_list', default=None, type=str, help='List of subjects for feature analysis')
+parser.add_argument('--loader', default=False, type=bool, help='load and load_pickles don\'t seem to work, so maybe this will.')
 
 QFLAGS = parser.parse_args()
 
 # Global variables
-DETECTIONS = '/data/QuPath/CellCounter/delaunay_px' + str(QFLAGS.delaunay_radius) + '/CUMC/'
-if QFLAGS.yale:
-    DETECTIONS = '/data/yale_qupath/measurements/'
-else:
-    DETECTIONS = '/data/QuPath/CellCounter/delaunay_px' + str(QFLAGS.delaunay_radius) + '/CUMC/'
-DETECTIONS = '/data/yale_qupath/measurements'
+# DETECTIONS = '/data/QuPath/CellCounter/delaunay_px' + str(QFLAGS.delaunay_radius) + '/CUMC/'
+# if QFLAGS.yale:
+#     DETECTIONS = '/data/yale_qupath/measurements/'
+# else:
+#     DETECTIONS = '/data/QuPath/CellCounter/delaunay_px' + str(QFLAGS.delaunay_radius)
+#     if QFLAGS.sinai:
+#         DETECTIONS = os.path.join(DETECTIONS, 'Sinai')
+#     else:
+#         DETECTIONS = os.path.join(DETECTIONS, 'CUMC')
+DETECTIONS = QFLAGS.detections_dir
+# DETECTIONS = '/data/yale_qupath/measurements'
 
 STATUS_CSV = '/data/recurrence_seq_lstm/IntelligentDiagnosis/recurrence_status.csv'
 OMIT_KEY = ['Name', 'ROI', 'Centroid X px', 'Centroid Y px']
@@ -90,6 +98,12 @@ FILLER = '                                            '
 FEATURE_DIR = '/data/recurrence_seq_lstm/feature_testing'
 ORIGINAL_IMAGE_DIR = '/data/recurrence_seq_lstm/image_data/original_images'
 DATA_STORAGE = '/data/recurrence_seq_lstm/feature_testing/delaunay_grid_search.csv'
+
+ADD_NAME = ""
+if QFLAGS.sinai:
+    ADD_NAME = ADD_NAME + "_sinai"
+if QFLAGS.yale:
+    ADD_NAME = ADD_NAME + "_yale"
 # Class declarations
 
 # Function declarations
@@ -364,10 +378,11 @@ def k_means_clustering_and_features(data, delaunay):
     nr_density = []
     classy = QFLAGS.classifier
 
-    cell_locs_filename = os.path.join(FEATURE_DIR, classy + '_' + str(QFLAGS.clusters) + '_cluster_cell_locations.pickle')
-    dense_delaunay_filename = os.path.join(FEATURE_DIR, classy + '_' + str(QFLAGS.clusters) + '_cluster_dense_delaunay.pickle')
 
-    if os.path.exists(dense_delaunay_filename):
+    cell_locs_filename = os.path.join(FEATURE_DIR, classy + '_' + str(QFLAGS.clusters) + ADD_NAME + '_cluster_cell_locations.pickle')
+    dense_delaunay_filename = os.path.join(FEATURE_DIR, classy + '_' + str(QFLAGS.clusters) + ADD_NAME + '_cluster_dense_delaunay.pickle')
+
+    if os.path.exists(dense_delaunay_filename) and QFLAGS.loader:
         create_dense_delaunay = False
         cprint('Loading dense delaunay pickle', 'yellow')
         with open(dense_delaunay_filename, 'rb') as handle:
@@ -376,7 +391,7 @@ def k_means_clustering_and_features(data, delaunay):
         create_dense_delaunay = True
         dense_delaunay = {}
     
-    if os.path.exists(cell_locs_filename):
+    if os.path.exists(cell_locs_filename) and QFLAGS.loader:
         cprint('Loading cell locations pickle', 'yellow')
         with open(cell_locs_filename, 'rb') as handle:
             cell_locs = pickle.load(handle)
@@ -435,9 +450,13 @@ def k_means_clustering_and_features(data, delaunay):
                         coord_space[n,1] = int(c_dict['y']) 
                     n += 1
             if not len(coord_space[:,0] > 0):
+                cpring('No immune cells in detections for ' + image + '!, Check qupath output.', 'red', 'on_white')
                 pdb.set_trace()
             coord_space = coord_space[coord_space[:,0] > 0, :]
             tumor_space = tumor_space[tumor_space[:,0] > 0, :]
+            if coord_space.shape[0] < QFLAGS.clusters:
+                cprint('Too few immune cells for clustering, skipping ' + image, 'red', 'on_white')
+                continue
             # plt.scatter(tumor_x, max(coord_space[:,1]) - tumor_y, s=1, label='tumor')
             # plt.scatter(immune_x, max(coord_space[:,1]) - immune_y, s=1, label='immune')
             os.makedirs(os.path.join(FEATURE_DIR, image), exist_ok=True)
@@ -504,6 +523,10 @@ def k_means_clustering_and_features(data, delaunay):
             densest_regions = find_densest_regions(largest_densities, region_cell_counts)
 
             if create_dense_delaunay:
+                if subject not in delaunay:
+                    continue
+                if image not in delaunay[subject]:
+                    continue
                 dense_delaunay[subject][image] = find_delaunay_clusters_in_densest_regions(regions, vertices, densest_regions, delaunay[subject][image])
 
             if data[subject]['status']:
@@ -1021,10 +1044,13 @@ def show_delaunay_histogram(delaunay):
     nr_portion_six = nr_imm_large_count / nr_imm_small_count
     stats.append([re_portion_six, nr_portion_six, 0, 10, 10001])
 
+    plot_row = [QFLAGS.classifier]
     if QFLAGS.yale:
-        plot_row = ['yale', QFLAGS.small_d_cluster]
+        plot_row.append('yale')
+        plot_row.append(QFLAGS.small_d_cluster)
     else:
-        plot_row = [QFLAGS.delaunay_radius, QFLAGS.small_d_cluster]
+        plot_row.append(QFLAGS.delaunay_radius)
+        plot_row.append(QFLAGS.small_d_cluster)
 
     for stat in stats:
         csv_vals = value_for_csv(stat[0], stat[1], labels, stat[2], stat[3], stat[4])
@@ -1113,7 +1139,7 @@ def dense_delaunay_histogram(d_delaunay):
                 continue
             else:
                 n += 1
-                plt.subplot(4,5,n)
+                plt.subplot(7,8,n)
                 rec = convert_nan_to_zero(np.array(RE[cell_class][feature]))
                 non = convert_nan_to_zero(np.array(NR[cell_class][feature]))
                 bins = get_bins(rec / len(rec), non / len(non))
@@ -1187,20 +1213,24 @@ def dense_delaunay_histogram(d_delaunay):
     return 1
 
 def row_has_nan(row):
-    if row['Centroid X'] == 'NaN':
-        return True
-    elif row['Centroid Y'] == 'NaN':
-        return True
+    skip_set = ['Centroid X', 'Centroid Y', 'Cell: Area']
+    for feature in skip_set:
+        if feature not in row:
+            return True
+        else:
+            if row[feature] == 'NaN':
+                return True
     return False
 
 def main(subject_id = None, image_name=None, image_processor=False):
     # cprint('radius: ' + str(QFLAGS.delaunay_radius) + 'px, small cluster: ' + str(QFLAGS.small_d_cluster), 'white', 'on_green')
     #pdb.set_trace()
     classy = QFLAGS.classifier
+
     if QFLAGS.all_features:
-        data_filename = os.path.join(FEATURE_DIR, classy + 'all_features_all_data.pickle')
+        data_filename = os.path.join(FEATURE_DIR, classy + ADD_NAME + 'all_features_all_data.pickle')
     else:
-        data_filename = os.path.join(FEATURE_DIR, classy + 'all_data.pickle')
+        data_filename = os.path.join(FEATURE_DIR, classy + ADD_NAME + 'all_data.pickle')
 
     if image_processor:
         detections_file = image_name + '_Detectionstxt.txt'
@@ -1208,11 +1238,10 @@ def main(subject_id = None, image_name=None, image_processor=False):
             return None
 
     create_delaunay = True
-    delaunay_filename = os.path.join(FEATURE_DIR, classy + '_' + str(QFLAGS.small_d_cluster) + 'smallCluster_' + str(QFLAGS.delaunay_radius) + 'radius_delaunay.pickle')
+    delaunay_filename = os.path.join(FEATURE_DIR, classy + ADD_NAME + '_' + str(QFLAGS.small_d_cluster) + 'smallCluster_' + str(QFLAGS.delaunay_radius) + 'radius_delaunay.pickle')
     if QFLAGS.yale:
         delaunay_filename = os.path.join(FEATURE_DIR, 'yale_' + str(QFLAGS.small_d_cluster) + 'smallCluster_radius_delaunay.pickle')
-
-    if QFLAGS.load and os.path.exists(delaunay_filename) and not image_processor:
+    if QFLAGS.load_pickles and os.path.exists(delaunay_filename) and not image_processor:
         print('Loading delaunay features')
         with open(delaunay_filename, 'rb') as handle:
             delaunay = pickle.load(handle)
@@ -1221,7 +1250,7 @@ def main(subject_id = None, image_name=None, image_processor=False):
         delaunay = {}
 
     if not create_delaunay:
-        if QFLAGS.load and os.path.exists(data_filename) and not image_processor:
+        if QFLAGS.load_pickles and os.path.exists(data_filename) and not image_processor:
             print('Loading saved cell data')
             with open(data_filename, 'rb') as handle:
                 data = pickle.load(handle)
@@ -1240,6 +1269,7 @@ def main(subject_id = None, image_name=None, image_processor=False):
                 n = 0
                 for row in reader:
                     if row['Class'] not in OMIT_CLASS:
+
                         if row_has_nan(row):
                             continue
                         n += 1
@@ -1247,9 +1277,21 @@ def main(subject_id = None, image_name=None, image_processor=False):
                         data[subject][image_name][cell_name] = {}
                         add_cell_features(data[subject][image_name][cell_name], row)
                         create_delaunay_features(delaunay, subject, image_name, row)
+                if n == 0:
+                    pdb.set_trace()
         else:
             # Current run called directly
-            
+            subject_load_list = []
+            image_load_list = []
+            if QFLAGS.subject_list:
+                with open(QFLAGS.subject_list, 'r') as load_file:
+                # load_file = open(load_list, 'r')
+                    reader = csv.reader(load_file, delimiter=',')
+                    _ = next(reader) #discard header line
+                    for line in reader:
+                        if line[0] not in subject_load_list:
+                            subject_load_list.append(line[0])
+                        image_load_list.append(line[1][:-4])
             # Read image_to_subject_ID csv file to get subject dictionary
             image_to_ID_csv_file = open(os.path.join('/data/recurrence_seq_lstm/image_data',"image_to_subject_ID.csv"),"r")
             reader = csv.reader(image_to_ID_csv_file, delimiter=",")
@@ -1262,28 +1304,39 @@ def main(subject_id = None, image_name=None, image_processor=False):
                 count = 0
                 shuffle(filenames)
                 for file in filenames:
+                    image_name = file[:-18]
                     if not file.endswith('.txt'):
-                        cprint('skipping ' + file + ', not a text file (' + str(count) + '/' + str(len(filenames)) + ')' + FILLER, 'yellow', end="\r")
+                        # cprint('skipping ' + file + ', not a text file (' + str(count) + '/' + str(len(filenames)) + ')' + FILLER, 'yellow', end="\r")
                         continue
-                    count +=1
+                    
                     if QFLAGS.test:
                         if count > QFLAGS.test:
                             break
                     if 'bleached' in file:
-                        cprint('skipping ' + file + ' (' + str(count) + '/' + str(len(filenames)) + ')' + FILLER, 'yellow', end="\r")
+                        # cprint('skipping ' + file + ' (' + str(count) + '/' + str(len(filenames)) + ')' + FILLER, 'yellow', end="\r")
                         continue
                     n = 0
-                    image_name = file[:-18]
+                    
                     if image_name not in image_to_ID_dict:
+                        cprint(image_name + ' not in image_to_ID_dict!!!!', 'white', 'on_red')
                         pdb.set_trace()
                     subject = image_to_ID_dict[image_name]
+                    if QFLAGS.subject_list:
+                        if subject not in subject_load_list:
+                            continue
+                        elif image_name not in image_load_list:
+                            continue
+                        else:
+                            count +=1
+                            cprint('scanning ' + image_name + ' (' + str(count) + '/' + str(len(image_load_list)) + ')' + FILLER, 'yellow', 'on_white', end="\r")
+
                     if subject not in data:
                         data[subject] = {}
                     if image_name not in data[subject]:
                         data[subject][image_name] = {}
                     if file.endswith('.txt') and 'bleached' not in file:
                         # count += 1
-                        cprint('scanning ' + file + ' (' + str(count) + '/' + str(len(filenames)) + ')' + FILLER, 'yellow', end="\r")
+                        # cprint('scanning ' + file + ' (' + str(count) + '/' + str(len(filenames)) + ')' + FILLER, 'yellow', end="\r")
                         with open(os.path.join(dirpath, file), 'r') as f:
                             reader = csv.DictReader(f, delimiter='\t')
                             # print(reader.fieldnames)
@@ -1377,12 +1430,10 @@ def main(subject_id = None, image_name=None, image_processor=False):
     #       --[image]
     #           --[region counts] -> [cluster number, distances to 5 closest regions]
     #           --[cell_locations] -> [x, y, label, cluster number]
-
-
     cell_locations, d_delaunay = k_means_clustering_and_features(data, delaunay)
     if QFLAGS.show_delaunay:
         show_delaunay_histogram(delaunay)
-        # dense_delaunay_histogram(d_delaunay)
+        dense_delaunay_histogram(d_delaunay)
 
 
 # Main body

@@ -121,8 +121,10 @@ def _read_from_file(queue, config, class_label):
 	result.image_name, index = process_slice(index, result.image_name_bytes, record_data)
 	result.patch_coords, index = process_slice(index, result.coord_bytes, record_data)
 
+	# features are taken from float64 stream, they are taken out as a single block of data.
 	feature_index = index // result.one_feature_bytes
 	result.features, feature_index = process_slice(feature_index, result.num_features, feature_data)
+	
 	# result.feature_2, feature_index = process_slice(feature_index, 1, feature_data, 1)
 	# result.feature_3, feature_index = process_slice(feature_index, 1, feature_data, 1)
 	# result.feature_4, feature_index = process_slice(feature_index, 1, feature_data, 1)

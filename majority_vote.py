@@ -38,7 +38,10 @@ FLAGS = flags.FLAGS
 # Function declarations
 
 def average_value(data, value):
-	return sum(data[value]) / len(data[value])
+    if not len(data[value]):
+        return 0
+    else:
+    	return sum(data[value]) / len(data[value])
 
 def softmax(x):
 	e_x = np.exp(x - np.max(x))
@@ -127,11 +130,15 @@ def create_histogram_data_per_subject(subject_image_list, image_dict, truth_labe
 
 def generate_heat_map_single_image(image_info):
     # raw_patch_info = sum_neighboring_patches(image_info)
+
+    # Dictionary with patch coordinates as keys and dict of ['nr', 'rec', 'softmax', 'avg_softmax'] as values
     raw_patch_info = image_info["coords"]
+    pdb.set_trace()
     original_img_shape = io.imread(os.path.join(FLAGS.og_image_path,image_info["name"] + ".tif")).shape
     x_length = original_img_shape[1]
     y_length = original_img_shape[0]
     label = int(image_info["labels"][0])
+    pdb.set_trace()
     tiff_arr = np.zeros((y_length, x_length), dtype=np.uint8)
     #heat_arr = np.zeros((y_length, x_length), dtype=np.float32)
     stride = 500

@@ -174,7 +174,7 @@ def subject_condition_distributions(condition_dict):
 	recur_portion = round(recur_count / (recur_count + nonrecur_count), 1)
 	for cond in condition_dict:
 		cond_portion = round(condition_dict[cond]['recur_test_count'] / (condition_dict[cond]['nonrecur_test_count'] + condition_dict[cond]['recur_test_count']), 1)
-		if (abs(round(cond_portion - recur_portion, 1)) > 0.1):
+		if (abs(round(cond_portion - recur_portion, 1)) > 0.2):
 			if one_off:
 				return False
 			else:

@@ -18,6 +18,7 @@ flags.DEFINE_string('image_list', 'large_images.csv', 'File containing list of l
 flags.DEFINE_string('base_path', "/data/recurrence_seq_lstm/image_data", "")
 flags.DEFINE_string('original_images_folder', 'original_images', 'Folder within base_path containing the original images')
 flags.DEFINE_bool('destructive', False, "Delete images after splitting to free disk space")
+flags.DEFINE_bool('force_split', False, "Force images to be split (only into halves)")
 
 # Global variables
 FLAGS = flags.FLAGS
@@ -153,8 +154,11 @@ def main():
 			cprint("Loading " + large_image_name + " into memory", 'yellow')
 			img = io.imread(img_path)
 			size = os.path.getsize(img_path)
-			if size < 4000000000:
-				cprint(large_image_name + 'is under 4GB, will not split', 'yellow')
+			if size < 4000000000 and not FLAGS.force_split:
+				cprint(large_image_name + ' is under 4GB, will not split', 'yellow')
+			elif size < 4000000000 and FLAGS.force_split:
+				cprint("Splitting " + large_image_name + ' into half', 'yellow')
+				split_image_in_half(img, large_image_name)
 			elif size < 8000000000:
 				cprint("Splitting " + large_image_name + ' into half', 'yellow')
 				split_image_in_half(img, large_image_name)

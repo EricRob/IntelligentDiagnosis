@@ -907,7 +907,7 @@ def create_delaunay_features(delaunay, subject, image, row, config):
     
     # Adding cluster features
     if cluster_location not in delaunay[subject][image][row_class]:
-        if int(row['Cluster  size']) <= QFLAGS.small_d_cluster:
+        if int(row['Cluster  size']) <= config.small_d_cluster:
             delaunay[subject][image][row_class]['small_cluster_count'] += 1
             delaunay[subject][image][row_class]['small_cluster_size'].append(int(row['Cluster  size']))
         else:
@@ -925,7 +925,7 @@ def delaunay_feature_list(cluster, row):
     cluster['hematoxylin_OD_mean'] = float(row['Cluster  mean: Nucleus: Hematoxylin OD mean'])
     cluster['eosin_OD_mean'] = float(row['Cluster  mean: Nucleus: Eosin OD mean'])
 
-    # I know these two are switched. I'm pretty sure QuPath put these results in the wrong category because in all instances 'mean' > 'max'.
+    # I know these two are switched. I'm pretty sure QuPath put these results in the wrong category because in all instances 'mean' >= 'max'.
     cluster['delaunay_max_area'] = float(row['Cluster  mean: Delaunay: Mean triangle area'])
     cluster['delaunay_mean_area'] = float(row['Cluster  mean: Delaunay: Max triangle area'])
 
@@ -1185,9 +1185,17 @@ def dense_delaunay_histogram(d_delaunay):
     return 1
 
 def row_has_nan(row):
+    if 'Centroid X' not in row:
+        return True
+    if 'Centroid Y' not in row:
+        return True
+    if 'Cell: Area' not in row:
+        return True
     if row['Centroid X'] == 'NaN':
         return True
     elif row['Centroid Y'] == 'NaN':
+        return True
+    elif row['Cell: Area'] == 'NaN':
         return True
     return False
 
@@ -1200,6 +1208,7 @@ def main(subject_id = None, image_name=None, image_processor=False, config=None)
     classy = config.classifier
     FEATURE_DIR = config.feature_directory
     DETECTIONS = config.detections
+    OMIT_CLASS = config.omit_class
     if config.all_features:
         data_filename = os.path.join(FEATURE_DIR, classy + 'all_features_all_data.pickle')
     else:
@@ -1233,7 +1242,6 @@ def main(subject_id = None, image_name=None, image_processor=False, config=None)
         if image_processor:
             # Current run called from image_processor.py
             detections_file = image_name + '_Detectionstxt.txt'
-            
             with open(os.path.join(DETECTIONS, detections_file), 'r') as f:
 
                 subject = 'subj'

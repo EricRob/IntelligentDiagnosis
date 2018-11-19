@@ -29,13 +29,13 @@ import struct
 # Global variables
 FEATURE_LIST = ['total_area', 'cell_perimeter', 'nuc_area', 'cell_area']
 DETECTION_SAMPLING = True
-OTHER_TILE_THRESHOLD = 0.8
-OTHER_PATCH_THRESHOLD = 0.5
-MINIMUM_PATCH_CELLS = 20
+# OTHER_TILE_THRESHOLD = 0.8
+# OTHER_PATCH_THRESHOLD = 0.5
+# MINIMUM_PATCH_CELLS = 20
 
 # Class declarations
 class OriginalPatchConfig(object):
-	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/" # Location of image to be split into patches
+	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/original_images" # Location of image to be split into patches
 	features_path = '/data/recurrence_seq_lstm/feature_testing'
 	patch_size = 500 # Pixel length and width of each patch square
 	tile_size = patch_size * 5
@@ -45,7 +45,7 @@ class OriginalPatchConfig(object):
 	patch_keep_percentage = 75 # Percentage of patch that must be data (i.e. non-background)
 	tile_keep_percentage = 35 # Percentage of tile that must contain cell data (i.e. non-background)
 	maximum_std_dev = 3 * patch_size # Std dev size for a tile with 100% density
-	maximum_seq_per_tile = 3 # Round number of sequences to the nearest integer
+	maximum_seq_per_tile = 6 # Round number of sequences to the nearest integer
 	maximum_sample_count = 10000
 	image_height = sample_size
 	image_width = sample_size
@@ -53,10 +53,37 @@ class OriginalPatchConfig(object):
 	num_steps = 20
 	large_cluster = 1
 	pixel_radius = 40
-	MINIMUM_PATCH_CELLS = 20
+	MINIMUM_PATCH_CELLS = 50 #1
+	add_features = True
+	OTHER_PATCH_THRESHOLD = 0.1 #0.5
+	OTHER_TILE_THRESHOLD = 0.8
+
+class SinaiConfig(object):
+	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/original_images" # Location of image to be split into patches
+	features_path = '/data/recurrence_seq_lstm/feature_testing'
+	patch_size = 500 # Pixel length and width of each patch square
+	tile_size = patch_size * 5
+	edge_overlap = 75 # Amount of overlap between patches within a sample
+	sample_size = 100 # Final size of patch (usually 100)
+	scaling_factor = patch_size / sample_size
+	patch_keep_percentage = 75 # Percentage of patch that must be data (i.e. non-background)
+	tile_keep_percentage = 35 # Percentage of tile that must contain cell data (i.e. non-background)
+	maximum_std_dev = 3 * patch_size # Std dev size for a tile with 100% density
+	maximum_seq_per_tile = 6 # Round number of sequences to the nearest integer
+	maximum_sample_count = 10000
+	image_height = sample_size
+	image_width = sample_size
+	image_depth = 3
+	num_steps = 20
+	large_cluster = 1
+	pixel_radius = 40
+	MINIMUM_PATCH_CELLS = 50
+	add_features = True
+	OTHER_PATCH_THRESHOLD = 0.10
+	OTHER_TILE_THRESHOLD = 0.8
 
 class YaleConfig(object):
-	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/" # Location of image to be split into patches
+	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/original_images/yale_small_tiffs" # Location of image to be split into patches
 	features_path = '/data/recurrence_seq_lstm/feature_testing'
 	patch_size = 250 # Pixel length and width of each patch square
 	tile_size = patch_size * 5
@@ -74,7 +101,10 @@ class YaleConfig(object):
 	num_steps = 20
 	large_cluster = 1
 	pixel_radius = 40
-	MINIMUM_PATCH_CELLS = 20
+	MINIMUM_PATCH_CELLS = 20 #50
+	add_features = True
+	OTHER_PATCH_THRESHOLD = 0.5 #0.1
+	OTHER_TILE_THRESHOLD = 0.8
 
 class QuPathConfig(object):
 	test = 0
@@ -89,6 +119,7 @@ class QuPathConfig(object):
 	delaunay_radius = 40
 	load = False
 	omit_class = ['red_cell', 'ulceration']
+	yale = 0
 
 # Function declarations
 def extract_tiles(arr, tile_size, edge_overlap):
@@ -315,7 +346,7 @@ def corner_detection_sample_from_dist(mask, corner, config, keep_corner, all_cel
 		if np.sum(patch) > keep_threshold:
 			continue
 		cells_in_patch = find_cells_in_patch(corner['corner']['cells'], coord_tuple)
-		if cells_in_patch[2] >= OTHER_PATCH_THRESHOLD or cells_in_patch[3] < config.MINIMUM_PATCH_CELLS:
+		if cells_in_patch[2] >= config.OTHER_PATCH_THRESHOLD or cells_in_patch[3] < config.MINIMUM_PATCH_CELLS:
 			continue
 		corner['corner']['coords'] = corner['corner']['coords'] + [(y,x)]
 	if counter >= 10000:
@@ -356,7 +387,7 @@ def detection_sample_from_dist(mask, tile_info, config, all_cells):
 			if np.sum(patch) > keep_threshold:
 				continue
 			cells_in_patch = find_cells_in_patch(tile_info[tile]['cells'], coord_tuple)
-			if cells_in_patch[2] >= OTHER_PATCH_THRESHOLD or cells_in_patch[3] < config.MINIMUM_PATCH_CELLS:
+			if cells_in_patch[2] >= config.OTHER_PATCH_THRESHOLD or cells_in_patch[3] < config.MINIMUM_PATCH_CELLS:
 				continue
 			tile_info[tile]["coords"] = tile_info[tile]["coords"] + [(y,x)]
 		if counter >= config.maximum_sample_count:
@@ -436,7 +467,7 @@ def remove_garbage_tiles(tiles, config, corner=False):
 			remove_list.append(tile)
 		else:
 			other_portion = other_count / total
-			if other_portion > OTHER_TILE_THRESHOLD:
+			if other_portion > config.OTHER_TILE_THRESHOLD:
 				remove_list.append(tile)
 	for tile in remove_list:
 		# cprint('REMOVING GARBAGE TILE ' + str(tile) + ', verify original image before testing', 'red')
@@ -825,9 +856,9 @@ def regional_verification(seq_features, config, image, subject):
 	return 1
 
 def write_image_bin(image_bin, image_name, subject_ID, seq_features, config):
-	image_path = os.path.join(config.image_data_folder_path, 'original_images', image_name)
+	image_path = os.path.join(config.image_data_folder_path, image_name)
 	image = io.imread(image_path)
-	# Data saved to binary files as [subject ID][image name][coordinates][sequence data]
+	# Data saved to binary files as [subject ID][image name][feature count][features][coordinates][sequence data]
 	id_str_length = 5
 	name_str_length = 92
 	coord_str_length = config.num_steps*2*6
@@ -835,6 +866,11 @@ def write_image_bin(image_bin, image_name, subject_ID, seq_features, config):
 	num_features = len(next(iter(seq_features.items()))[1]['features'])*8
 	sum_len = id_str_length + name_str_length + coord_str_length + num_features
 	name_str_length += 8 - (sum_len % 8)
+	
+	# If not adding features, to maintain fixed-length writing need to add another space of padding.
+	# Length is changed because float64 processing of features requires (data length % 8) == 0
+	if not config.add_features:
+		name_str_length += 1
 	
 	ID_byte_string = str.encode(subject_ID.rjust(id_str_length))
 	image_name_byte_string = str.encode(image_name[:-4].rjust(name_str_length))
@@ -846,39 +882,48 @@ def write_image_bin(image_bin, image_name, subject_ID, seq_features, config):
 	for tile in seq_features:
 		feature_set = seq_features[tile]['features']
 		for sequence in seq_features[tile]['seq']:
-			if not len(sequence) == 20:
+			if not len(sequence) == config.num_steps:
 				pdb.set_trace()
 			count += 1
 			timing_estimate(start, time.time(), count, length)
 			coord_byte_string = byte_string_from_coord_array(sequence, config.num_steps)
 			if not len(ID_byte_string) == 5:
+				cprint('Length error: ID byte string', 'red')
 				pdb.set_trace()
-			if not len(image_name_byte_string) == 99:
+			if not len(image_name_byte_string) == 99: # This should be 100 for config.add_features = False
+				cprint('Length error: image name byte string', 'red')
 				pdb.set_trace()
 			if not len(coord_byte_string) == 20*2*6:
+				cprint('Length error: coordinate byte string', 'red')
 				pdb.set_trace()
 			image_bin.write(ID_byte_string)
 			image_bin.write(image_name_byte_string)
 			image_bin.write(coord_byte_string)
-			# image_bin.write(struct.pack('i', len(feature_set))) # Number of feautures to follow, used for fixed-length reading of features
-			feat_count = 0
-			for feature in feature_set:
-				# if float(feature_set[feature]) == 0:
-				# 	pdb.set_trace()
-				# if not feature_set[feature]:
-				# 	pdb.set_trace()
-				feat_count += 1
-				image_bin.write(struct.pack('d', feature_set[feature]))
+			if config.add_features:
+				# **number of features does not currently work, the feature count is specified in LSTM network config
+				# image_bin.write(struct.pack('i', len(feature_set))) # Number of feautures to follow, used for fixed-length reading of features
+				for feature in feature_set:
+					# if float(feature_set[feature]) == 0:
+					# 	pdb.set_trace()
+					# if not feature_set[feature]:
+					# 	pdb.set_trace()
+					image_bin.write(struct.pack('d', feature_set[feature]))
 			for y,x in sequence:
 				patch = image[y:(y+config.patch_size),x:(x+config.patch_size),:]
 				# Need to verify this downscaling method				
 				pyr = transform.pyramid_gaussian(patch, downscale=config.scaling_factor, multichannel=True)
+				_scaled = False
 				for p in pyr: 	
-					if p.shape[0] == 100:
+					if _scaled:
+						continue
+					if p.shape[0] == config.sample_size:
 						patch_scaled = (p*255).astype('uint8')
+						_scaled = True
 						#patch_scaled = patch_scaled.astype('uint8')
+
 				# patch_scaled = transform.downscale_local_mean(patch, (config.scaling_factor,config.scaling_factor,1)).astype('uint8')
-				if not patch_scaled.size == 30000:
+				if not patch_scaled.size == ((config.sample_size**2)*config.image_depth):
+					cprint('Length error: patch size', 'red')
 					pdb.set_trace()
 				image_bin.write(patch_scaled)
 	print()

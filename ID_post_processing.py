@@ -193,6 +193,7 @@ def main():
 					figure.tight_layout(rect=[0, 0.03, 1, 0.95])
 					figure.set_size_inches(15, 12)
 					cprint("Summarizing and saving " + folder, 'magenta', 'on_white')
+					print()
 					figure.savefig(results_name)
 					plt.close()
 					count +=1
