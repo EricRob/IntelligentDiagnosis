@@ -49,6 +49,8 @@ flags.DEFINE_string("patches_only",False,"Generate only patches for new images, 
 flags.DEFINE_integer("gauss_seq", 6, "Number of sequences to generate per tile with gaussian sampling")
 flags.DEFINE_integer("gauss_stdev", 1500, "Standard deviation of pixel distance from center for gaussian sampling")
 flags.DEFINE_integer("gauss_tile_size", 2500, "Tile dimensions for splitting sample image for gauss distribution")
+flags.DEFINE_integer('min_patch', None, 'Minimum number of detections in patch area (if not specified, uses config default)')
+flags.DEFINE_integer('patch_thresh', None , 'Threshold for \"Other\" detection percentage in a patch area (if not specified, uses config default)')
 
 flags.DEFINE_bool("check_new_masks", False, "Check for new masks to create")
 flags.DEFINE_string("new_image_dir", '/home/wanglab/Desktop/new_masks/', "location of new images to be masked and moved to image_data")
@@ -63,7 +65,7 @@ flags.DEFINE_bool('include_features', True, 'Whether to add features to writing 
 
 FLAGS = flags.FLAGS
 FILLER = '                                            '
-
+SKIP_LIST = []
 #DETECTIONS = '/data/QuPath/CellCounter/delaunay_px' + str(FLAGS.delaunay_radius) + '/CUMC/'
 # DETECTIONS = '/data/yale_qupath/measurements'
 
@@ -277,20 +279,35 @@ def get_patch_coords(img_dict, image_list):
 				img_dict[x_coord][y_coord] = image_name	
 	return img_dict
 
-def gauss_sampling(image_to_ID_dict, images_list, bin_file, config):
+def gauss_sampling(image_to_ID_dict, images_list, bin_file, mode, config):
 	if FLAGS.config == 'yale':
-		gauss_config = gauss.YaleConfig()
+		if mode == 'test':
+			gauss_config = gauss.YaleConfig_test()
+		else:
+			gauss_config = gauss.YaleConfig_train()
 		cprint('Using Yale configuration', 'blue', 'on_white')
 
 	elif FLAGS.config == 'sinai':
-		gauss_config = gauss.SinaiConfig()
+		if mode == 'test':
+			gauss_config = gauss.SinaiConfig_test()
+		else:
+			gauss_config = gauss.SinaiConfig_train()
 		cprint('Using Sinai configuration', 'magenta', 'on_white')
 	else:
-		gauss_config = gauss.OriginalPatchConfig()
+		if mode == 'test':
+			gauss_config = gauss.OriginalPatchConfig_test()
+		else:
+			gauss_config = gauss.OriginalPatchConfig_train()
 		gauss_config.tile_size = FLAGS.gauss_tile_size
 		gauss_config.maximum_seq_per_tile = FLAGS.gauss_seq
 		gauss_config.maximum_std_dev = FLAGS.gauss_stdev
 		cprint('Using Original configuration', 'green', 'on_grey')
+	
+	if FLAGS.min_patch:
+		gauss_config.MINIMUM_PATCH_CELLS = FLAGS.min_patch
+	if FLAGS.patch_thresh:
+		gauss_config.OTHER_PATCH_THRESHOLD = FLAGS.patch_thresh / 100
+
 	print('OTHER_PATCH_THRESHOLD: ' + str(gauss_config.OTHER_PATCH_THRESHOLD))
 	print('MINIMUM_PATCH_CELLS: ' + str(gauss_config.MINIMUM_PATCH_CELLS))
 	if FLAGS.include_features:
@@ -305,6 +322,9 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, config):
 	for image in images_list:
 		if not image:
 			continue
+		if image in SKIP_LIST:
+			cprint('Skipping ' + image + ', already skipped in current run', 'red')
+			continue
 		image_bin_name = image[:-8] + ".bin"
 		image_bin_path = os.path.join(gauss_folder, image_bin_name)
 		#pdb.set_trace()
@@ -312,6 +332,7 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, config):
 			detections_filename = os.path.join(FLAGS.detections_path, image[:-8] + '_Detectionstxt.txt')
 			if not os.path.exists(detections_filename):
 				cprint('No detections exist for ' + image[:-8] + ', skipping due to lack of features', 'red')
+				SKIP_LIST.append(image)
 				continue
 			if (image[:-8] + "_patches") not in image_to_ID_dict:
 				cprint(image[:-8] + ' not in image dictionary, skipping', 'red')
@@ -323,6 +344,7 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, config):
 			seq_features = gauss.generate_sequences(mask_path, gauss_config, image[:-8], image_to_ID_dict[image], detections=FLAGS.detections_path)
 			if not seq_features:
 				cprint('No detections exist, skipping due to lack of features', 'red')
+				SKIP_LIST.append(image)
 				continue
 			gauss.regional_verification(seq_features, gauss_config, image[:-8], image_to_ID_dict[image])
 			image_bin = open(image_bin_path, 'wb+')
@@ -386,7 +408,7 @@ def create_binary_file(label, mode, config, cond_path=None):
 	# ********** Default behavior is gauss sampling ********** #
 	#                                                          #
 	if FLAGS.sampling_method == 'gauss':
-		gauss_sampling(image_to_ID_dict, images_list, bin_file, config)
+		gauss_sampling(image_to_ID_dict, images_list, bin_file, mode, config)
 
 
 	#                                                                                           #

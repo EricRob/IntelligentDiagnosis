@@ -209,11 +209,11 @@ def write_train_and_valid_files(subject_dict, subject_list, valid_file, train_fi
 	train_file.close()
 	valid_file.close()
 
-def write_lists(new_condition_name, verified_csv, c_val_folds, base_path):
+def write_lists(new_condition_name, verified_csv, cross_val_folds, base_path):
 	FLAGS.image_processor = True
 	FLAGS.condition_name = new_condition_name
 	FLAGS.subject_list = verified_csv
-	FLAGS.conditions = c_val_folds
+	FLAGS.conditions = cross_val_folds
 	FLAGS.base_path = base_path
 	main()
 	return True
