@@ -191,6 +191,10 @@ def preprocess_train_data():
 
 def swap_machine():
 	if ARGS.omen:
+		global RESULTS_DIR
+		global DATA_CONDITIONS
+		global SCRIPT_DIR
+		
 		if ARGS.preprocess:
 			print('*** Unable to preprocess data from OMEN, please check command line arguments. ***')
 			return 1
