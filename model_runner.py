@@ -9,6 +9,7 @@ import argparse
 import os
 import pdb
 from termcolor import cprint
+from datetime import datetime
 import subprocess
 
 # Global variables
@@ -26,13 +27,14 @@ parser.add_argument('--cross_valid', default=False, type=str, help='Data set for
 parser.add_argument('--folds', default=6, type=int, help='Number of cross validation folds (should almost always be 6)')
 parser.add_argument('--config', default='test', type=str, help='Run network in test or train mode')
 
-parser.add_argument('--preprocess', default=False, type=bool, help='Create data before testing or running network')
+parser.add_argument('--preprocess', default=False, action='store_true', help='Create data before testing or running network')
 parser.add_argument('--detections', default='/data/yale_qupath/measurements/', type=str, help='Location of qupath output for preprocessing')
 parser.add_argument('--pp_config', default=None, type=str, help='Configuration for preprocessing')
 
-parser.add_argument('--summarize', default=True, type=bool, help='Summarize results using majority_vote.py')
-parser.add_argument('--create_script', default=False, type=bool, help='Create .sh script with network list')
-parser.add_argument('--run_nets', default=True, type=bool, help='Run networks in network list')
+parser.add_argument('--summarize', default=False, action='store_true', help='Summarize results using majority_vote.py')
+parser.add_argument('--create_script', default=False, action='store_true', help='Create .sh script with network list')
+parser.add_argument('--no_execute', default=False, action='store_true', help='Skip running networks (i.e. only create scripts)')
+parser.add_argument('--omen', default=False, action='store_true', help='Model runner is running on OMEN rather than PrecisionTower')
 
 
 ARGS = parser.parse_args()
@@ -115,6 +117,7 @@ def test_cross_valid_data():
 			retest_list.append(model[0] + model[1])
 	retest(retest_list)
 
+
 def test_outside_data():
 	retest_list = []
 	python_base = 'python3 recurrence_lstm_features.py'
@@ -142,6 +145,7 @@ def train_cross_valid_data():
 	if ARGS.create_script:
 		script_name = os.path.join(SCRIPT_DIR, ARGS.name + '.sh')
 		script = open(script_name, 'wt+')
+		script.write("##\n## Script created automatically on " + datetime.now().strftime('%Y-%m-%d, at %H:%M:%S') + '\n##\n\n')
 	
 	for data in data_list:
 		recur = ' --recur_data_path=' + os.path.join(DATA_CONDITIONS, data[0], data[1], 'recurrence')
@@ -149,13 +153,23 @@ def train_cross_valid_data():
 		results = ' --results_prepend=' + ARGS.name + '_' + data[2]
 		run_line = python_base + recur + nonrecur + train_middle + results
 		try:
-			# if ARGS.run_nets:
-				# subprocess.check_call(run_line, shell=True)
+			if not ARGS.no_execute:
+				subprocess.check_call(run_line, shell=True)
 			if ARGS.create_script:
 				script.write(run_line + '\n')
 		except:
 			cprint('Error training with ' + ARGS.data + '(condition ' + data[0] + ', ' + data[1] + '), must retest!', 'red')
 			retest_list.append(data[0] + '/' + data[2])
+	if ARGS.summarize:
+		concatenate = 'python3 concatenate_voting_csv.py --condition_name=' + ARGS.name
+		majority_vote = 'python3 majority_vote.py --base_path=' + os.path.join(RESULTS_DIR, ARGS.name)
+		if ARGS.create_script:
+			script.write(concatenate + '\n')
+			script.write(majority_vote + '\n')
+		if not ARGS.no_execute:
+			subprocess.check_call(concatenate, shell=True)
+			subprocess.check_call(majority_vote, shell=True)
+
 	if ARGS.create_script:
 		script.close()
 		subprocess.check_call('chmod +x ' + script_name, shell=True)
@@ -175,8 +189,22 @@ def preprocess_train_data():
 		cprint('Unable to generate preprocessing data! Must exit!', 'red')
 		sys.exit(1)
 
+def swap_machine():
+	if ARGS.omen:
+		if ARGS.preprocess:
+			print('*** Unable to preprocess data from OMEN, please check command line arguments. ***')
+			return 1
+		RESULTS_DIR = '/home/wanglab/ID_net/results'
+		DATA_CONDITIONS = '/home/wanglab/ID_net/data_conditions/'
+		SCRIPT_DIR = '/home/wanglab/ID_net/IntelligentDiagnosis/'
+	return 0
+
 def main():
 
+
+	exit = swap_machine()
+	if exit:
+		sys.exit(1)
 	if ARGS.config == 'test':
 		if not ARGS.model:
 			cprint('TEST CONFIG: NO MODEL SPECIFIED FOR TESTING', 'red')
