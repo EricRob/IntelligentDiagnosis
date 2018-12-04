@@ -32,7 +32,7 @@ parser.add_argument('--detections', default='/data/yale_qupath/measurements/', t
 parser.add_argument('--pp_config', default=None, type=str, help='Configuration for preprocessing')
 
 parser.add_argument('--summarize', default=False, action='store_true', help='Summarize results using majority_vote.py')
-parser.add_argument('--create_script', default=False, action='store_true', help='Create .sh script with network list')
+parser.add_argument('--no_script', default=False, action='store_true', help='Skip creating .sh script with network list')
 parser.add_argument('--no_execute', default=False, action='store_true', help='Skip running networks (i.e. only create scripts)')
 parser.add_argument('--omen', default=False, action='store_true', help='Model runner is running on OMEN rather than PrecisionTower')
 
@@ -142,7 +142,7 @@ def train_cross_valid_data():
 	python_base = 'python3 recurrence_lstm_features.py'
 	train_middle = ' --epochs=50 --save_model=True'
 	data_list = get_data_list()
-	if ARGS.create_script:
+	if not ARGS.no_script:
 		script_name = os.path.join(SCRIPT_DIR, ARGS.name + '.sh')
 		script = open(script_name, 'wt+')
 		script.write("##\n## Script created automatically on " + datetime.now().strftime('%Y-%m-%d, at %H:%M:%S') + '\n##\n\n')
@@ -155,7 +155,7 @@ def train_cross_valid_data():
 		try:
 			if not ARGS.no_execute:
 				subprocess.check_call(run_line, shell=True)
-			if ARGS.create_script:
+			if not ARGS.no_script:
 				script.write(run_line + '\n')
 		except:
 			cprint('Error training with ' + ARGS.data + '(condition ' + data[0] + ', ' + data[1] + '), must retest!', 'red')
@@ -163,14 +163,14 @@ def train_cross_valid_data():
 	if ARGS.summarize:
 		concatenate = 'python3 concatenate_voting_csv.py --condition_name=' + ARGS.name
 		majority_vote = 'python3 majority_vote.py --base_path=' + os.path.join(RESULTS_DIR, ARGS.name)
-		if ARGS.create_script:
+		if not ARGS.no_script:
 			script.write(concatenate + '\n')
 			script.write(majority_vote + '\n')
 		if not ARGS.no_execute:
 			subprocess.check_call(concatenate, shell=True)
 			subprocess.check_call(majority_vote, shell=True)
 
-	if ARGS.create_script:
+	if not ARGS.no_script:
 		script.close()
 		subprocess.check_call('chmod +x ' + script_name, shell=True)
 		print("script saved!")
