@@ -87,6 +87,7 @@ flags.DEFINE_string("model_path", None, "Location of model to load from last che
 flags.DEFINE_bool("save_model", False, "Save model and checkpoints for future testing")
 flags.DEFINE_integer("num_steps", 20, "Steps in LSTM sequence")
 flags.DEFINE_bool("save_samples", False, "Save every sequence as a TIFF in a /samples folder")
+flags.DEFINE_bool("omen_run", False, "Running from OMEN (rather than PrecisionTower)")
 
 FLAGS = flags.FLAGS
 BASIC = "basic"
@@ -660,7 +661,11 @@ def save_sample_image(input_data, label, model, step, epoch_count, vals):
   arr = batch[0,:,:,:]
   seq_pixels = model.num_steps * model.image_size
   arr = np.reshape(arr, (model.batch_size, seq_pixels, model.image_size, model.image_depth))
-  samples_folder = os.path.join("/data/recurrence_seq_lstm/samples/",FLAGS.results_prepend)
+  if FLAGS.omen_run:
+    samples_folder = os.path.join('home','wanglab', 'ID_net', 'samples', FLAGS.results_prepend)
+  else:
+    samples_folder = os.path.join('data','recurrence_seq_lstm', 'samples', FLAGS.results_prepend)
+  
   os.makedirs(samples_folder, exist_ok=True)
   for x in range(model.batch_size):
     subject_folder = os.path.join(samples_folder, vals['subject_ids'][0][x].tobytes().decode("utf-8"))
@@ -821,6 +826,8 @@ def main(_):
 
   if not FLAGS.nonrecur_data_path:
     raise ValueError("Must set --nonrecur_data_path to recurrence data directory")
+  
+  #If training (not testing) need to set these training parameters (but they are set by default in flags)
   if config.test_mode == 0:
     if not FLAGS.learning_rate:
       raise ValueError("Must set --learning_rate hyperparameter")
@@ -829,6 +836,7 @@ def main(_):
       raise ValueError("Must set --keep_prob hyperparameter (dropout rate)")
     config.learning_rate = FLAGS.learning_rate
     config.keep_prob = FLAGS.keep_prob
+  
   # gpus = [
   #     x.name for x in device_lib.list_local_devices() if x.device_type == "GPU"
   # ]
@@ -837,22 +845,24 @@ def main(_):
   #       "Your machine has only %d gpus "
   #       "which is fewer than the requested --num_gpus=%d."
   #       % (len(gpus), FLAGS.num_gpus))
-  
-  results_prepend = FLAGS.results_prepend
 
   if FLAGS.epochs:
     config.max_max_epoch = FLAGS.epochs
 
-  base_directory = "/data/recurrence_seq_lstm/"
-  results_directory = "results/" + results_prepend #+ "_lr" + str(config.learning_rate) + "_kp" + str(int(config.keep_prob*100))
-  results_path = os.path.join(base_directory, results_directory)
+  if FLAGS.omen_run:
+    base_directory = os.path.join('/home', 'wanglab', 'ID_net')
+  else:
+    base_directory = os.path.join('/data', 'recurrence_seq_lstm')
+  results_path = os.path.join(base_directory, "results", FLAGS.results_prepend) #+ "_lr" + str(config.learning_rate) + "_kp" + str(int(config.keep_prob*100))
   
   cprint("Data Sources:", 'white', 'on_magenta')
   cprint(FLAGS.recur_data_path, 'magenta', 'on_white')
   cprint(FLAGS.nonrecur_data_path, 'magenta', 'on_white')
+  if FLAGS.config == 'test':
+    cprint('Testing with model %s' % (FLAGS.model_path), 'white', 'on_magenta' )
   cprint("Results saved to %s" % (results_path), 'white', 'on_magenta')
   
-  os.makedirs(os.path.join(base_directory, results_directory), exist_ok=True)
+  os.makedirs(os.path.join(base_directory, 'results', FLAGS.results_prepend), exist_ok=True)
   if config.test_mode == 0:  
     # os.makedirs(os.path.join(base_directory,"samples"), exist_ok=True)
     train_file = open(os.path.join(results_path,"train_results.txt"), 'at+')
@@ -981,7 +991,7 @@ def main(_):
             avg_test_cost = run_epoch(session, mtest, test_file, i + 1, verbose=True)
           print("Avg Test Cost: %.3f" % avg_test_cost)
 
-          if FLAGS.save_model:
+          if FLAGS.save_model and (i > config.max_max_epoch / 2):
             saver.save(session, FLAGS.save_path, global_step=sv.global_step)
      
         train_file.close()
