@@ -21,7 +21,7 @@ SCRIPT_DIR = '/home/wanglab/Desktop/recurrence_seq_lstm/IntelligentDiagnosis'
 parser = argparse.ArgumentParser(description='Run a set of recurrence models on a given data set')
 
 parser.add_argument('--model', default=None, type=str, help='Base name of models to run')
-parser.add_argument('--data', default=DATA_DEFAULT, type=str, help='Base path of network binary files')
+parser.add_argument('--data', default=DATA_DEFAULT, type=str, help='[NOT WHOLE PATH] Folder of network binary files')
 parser.add_argument('--name', default=None, type=str, required=True, help='Name of results file to save')
 parser.add_argument('--cross_valid', default=False, type=str, help='Data set for cross validation testing')
 parser.add_argument('--folds', default=6, type=int, help='Number of cross validation folds (should almost always be 6)')
@@ -78,9 +78,22 @@ def get_data_list():
 					n += 1
 	return data_list
 
+def get_script_file():
+	script_name = os.path.join(SCRIPT_DIR, ARGS.name + '.sh')
+	script = open(script_name, 'wt+')
+	script.write("##\n## Script created automatically on " + datetime.now().strftime('%Y-%m-%d, at %H:%M:%S') + '\n##\n\n')
+	return script, script_name
+
+def save_script(script_file, script_name):
+	script_file.close()
+	subprocess.check_call('chmod +x ' + script_name, shell=True)
+	print("script saved!")
+
 def test_default_data():
 	retest_list = []
 	models_list = get_models_list()
+	if not ARGS.no_script:
+		script, script_name = get_script_file()
 	python_base = 'python3 recurrence_lstm_features.py'
 	model_path_base = ' --model_path=' + RESULTS_DIR
 	recur = ' --recur_data_path=' + os.path.join(ARGS.data, 'recurrence')
@@ -92,18 +105,29 @@ def test_default_data():
 			base_path = ' --base_path=' + os.path.join(RESULTS_DIR, name)
 			majority_vote = 'python3 majority_vote.py' + base_path
 		try:
-			subprocess.check_call(run_line, shell=True)
-			subprocess.check_call(majority_vote, shell=True)
+			if not ARGS.no_execute:
+				subprocess.check_call(run_line, shell=True)
+				if ARGS.summarize:
+					subprocess.check_call(majority_vote, shell=True)
+			if not ARGS.no_script:
+				script.write(run_line + '\n')
+				if ARGS.summarize:
+					script.write(majority_vote + '\n')
 
 		except:
-			cprint('Error testing ' + model[0] + model[1] + ' with default data (' + ARGS.data + '), must retest!', 'red')
+			cprint('Error while testing ' + model[0] + model[1] + ' with default data (' + ARGS.data + '), must retest!', 'red')
 			retest_list.append(model[0]+model[1])
+	if not ARGS.no_script:
+		save_script(script, script_name)
 	retest(retest_list)
 
 def test_cross_valid_data():
 	retest_list = []
 	python_base = 'python3 recurrence_lstm_features.py'
 	models_list = get_models_list()
+	if not ARGS.no_script:
+		script, script_name = get_script_file()
+
 	for model in sorted(models_list):
 		recur = ' --recur_data_path=' + os.path.join(DATA_CONDITIONS, ARGS.cross_valid, model[1] + "_condition", 'recurrence')
 		nonrecur = ' --nonrecur_data_path=' + os.path.join(DATA_CONDITIONS, ARGS.cross_valid, model[1] + "_condition", 'nonrecurrence')
@@ -111,10 +135,15 @@ def test_cross_valid_data():
 		results = ' --results_prepend=' + ARGS.name + '_' + model[1]
 		run_line = python_base + recur + nonrecur + CONFIG + model_name + results
 		try:
-			subprocess.check_call(run_line, shell=True)
+			if not ARGS.no_execute:
+				subprocess.check_call(run_line, shell=True)
+			if not ARGS.no_script:
+				script.write(run_line + '\n')
 		except:
 			cprint('Error testing ' + model[0] + model[1] + ' with cross validation data ' + ARGS.cross_valid + '(condition ' + model[1] + '), must retest!', 'red')
 			retest_list.append(model[0] + model[1])
+	if not ARGS.no_script:
+		save_script(script, script_name)
 	retest(retest_list)
 
 
@@ -143,9 +172,7 @@ def train_cross_valid_data():
 	train_middle = ' --epochs=50 --save_model=True'
 	data_list = get_data_list()
 	if not ARGS.no_script:
-		script_name = os.path.join(SCRIPT_DIR, ARGS.name + '.sh')
-		script = open(script_name, 'wt+')
-		script.write("##\n## Script created automatically on " + datetime.now().strftime('%Y-%m-%d, at %H:%M:%S') + '\n##\n\n')
+		script, script_name = get_script_file()
 	
 	for data in data_list:
 		recur = ' --recur_data_path=' + os.path.join(DATA_CONDITIONS, data[0], data[1], 'recurrence')
@@ -171,9 +198,7 @@ def train_cross_valid_data():
 			subprocess.check_call(majority_vote, shell=True)
 
 	if not ARGS.no_script:
-		script.close()
-		subprocess.check_call('chmod +x ' + script_name, shell=True)
-		print("script saved!")
+		save_script(script, script_name)
 
 	retest(retest_list)
 
@@ -194,7 +219,7 @@ def swap_machine():
 		global RESULTS_DIR
 		global DATA_CONDITIONS
 		global SCRIPT_DIR
-		
+
 		if ARGS.preprocess:
 			print('*** Unable to preprocess data from OMEN, please check command line arguments. ***')
 			return 1
