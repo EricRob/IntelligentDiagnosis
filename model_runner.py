@@ -95,6 +95,8 @@ def test_default_data():
 	if not ARGS.no_script:
 		script, script_name = get_script_file()
 	python_base = 'python3 recurrence_lstm_features.py'
+	if ARGS.omen:
+		python_base = python_base + ' --omen_run=True'
 	model_path_base = ' --model_path=' + RESULTS_DIR
 	recur = ' --recur_data_path=' + os.path.join(ARGS.data, 'recurrence')
 	nonrecur = ' --nonrecur_data_path=' + os.path.join(ARGS.data, 'nonrecurrence')
@@ -124,6 +126,8 @@ def test_default_data():
 def test_cross_valid_data():
 	retest_list = []
 	python_base = 'python3 recurrence_lstm_features.py'
+	if ARGS.omen:
+		python_base = python_base + ' --omen_run=True'
 	models_list = get_models_list()
 	if not ARGS.no_script:
 		script, script_name = get_script_file()
@@ -150,6 +154,8 @@ def test_cross_valid_data():
 def test_outside_data():
 	retest_list = []
 	python_base = 'python3 recurrence_lstm_features.py'
+	if ARGS.omen:
+		python_base = python_base + ' --omen_run=True'
 	models_list = get_models_list()
 	data_list = get_data_list()
 	for model in sorted(models_list):
@@ -169,6 +175,8 @@ def test_outside_data():
 def train_cross_valid_data():
 	retest_list = []
 	python_base = 'python3 recurrence_lstm_features.py'
+	if ARGS.omen:
+		python_base = python_base + ' --omen_run=True'
 	train_middle = ' --epochs=50 --save_model=True'
 	data_list = get_data_list()
 	if not ARGS.no_script:
