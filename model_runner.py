@@ -80,9 +80,12 @@ def get_data_list():
 					n += 1
 	return data_list
 
-def get_script_file():
+def get_script_file(new=True):
 	script_name = os.path.join(SCRIPT_DIR, ARGS.name + '.sh')
-	script = open(script_name, 'at+')
+	if new:
+		script = open(script_name, 'wt+')
+	else:
+		script = open(script_name, 'at+')
 	script.write("##\n## Script created automatically on " + datetime.now().strftime('%Y-%m-%d, at %H:%M:%S') + '\n##\n\n')
 	return script, script_name
 
@@ -95,7 +98,7 @@ def test_default_data():
 	retest_list = []
 	models_list = get_models_list()
 	if not ARGS.no_script:
-		script, script_name = get_script_file()
+		script, script_name = get_script_file(new=False)
 	python_base = 'python3 recurrence_lstm_features.py'
 	if ARGS.omen:
 		python_base = python_base + ' --omen_run=True'
@@ -126,7 +129,8 @@ def test_default_data():
 		model = ' --model=' + model[0][:-1]
 		condition = ' --condition=' + ARGS.name
 		run_line = python_base + model + condition
-		script.write(run_line + '\n')
+		if not ARGS.no_script:
+			script.write(run_line + '\n')
 		if not ARGS.no_execute:
 			subprocess.check_call(run_line, shell=True)
 
