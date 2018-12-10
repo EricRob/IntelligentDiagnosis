@@ -32,7 +32,7 @@ from tempfile import TemporaryFile
 from math import isnan
 import matplotlib.image as mpimg
 
-
+Image.MAX_IMAGE_PIXELS = None
 warnings.simplefilter('ignore', Image.DecompressionBombWarning)
 
 parser = argparse.ArgumentParser(description='Process QuPath detections and results for feature creation')
@@ -54,22 +54,22 @@ parser = argparse.ArgumentParser(description='Process QuPath detections and resu
 
 parser.add_argument('--test', default=0, type=int, help='test mode')
 parser.add_argument('--clusters', default=8, type=int, help='Number of clusters for KMeans Clustering')
-parser.add_argument('--all_cells', default=False, type=bool, help='Create histogram showing features of all cells')
-parser.add_argument('--all_features', default=False, type=bool, help='Use all QuPath features')
+parser.add_argument('--all_cells',  default=False, action='store_true', help='Create histogram showing features of all cells')
+parser.add_argument('--all_features', default=False, action='store_true', help='Use all QuPath features')
 parser.add_argument('--closest_centers', default=5, type=str, help='Number of closest cluster centers to find when computing regional immune density')
 parser.add_argument('--dense_thresh', default=3, type=float, help='percentage of clusters used to calculate the cluster density feature')
 parser.add_argument('--classifier', default='v2', type=str, help='Classifier version to use')
-parser.add_argument('--load_pickles', default=False, type=bool, help='load >data< array from saved pickle')
-parser.add_argument('--display_clusters', default=False, type=bool, help='Display immune clusters in a scatter plot')
-parser.add_argument('--show_delaunay', default=False, type=str, help='Show histograms of delaunay triangulation')
+parser.add_argument('--load_pickles',  default=False, action='store_true',  help='load >data< array from saved pickle')
+parser.add_argument('--display_clusters', default=False, action='store_true', help='Display immune clusters in a scatter plot')
+parser.add_argument('--show_delaunay', default=False, action='store_true', help='Show histograms of delaunay triangulation')
 parser.add_argument('--detections_dir', default='/data/QuPath/CellCounter/delaunay_px40/CUMC/', type=str, help="Directory of QuPath detections files that should be used.")
-parser.add_argument('--overwrite_saved', default=False, type=bool, help='overwrite existing data (not implemented everywhere!)')
-parser.add_argument('--small_d_cluster', default=3, type=int, help='size of small cluster for class comparison')
+parser.add_argument('--overwrite_saved', default=False, action='store_true', help='overwrite existing data (not implemented everywhere!)')
+parser.add_argument('--small_d_cluster', default=1, type=int, help='size of small cluster for class comparison')
 parser.add_argument('--delaunay_radius', default=40, type=int, help='pixel radius of delaunay triangulation')
-parser.add_argument('--yale', default=False, type=bool, help='Processing yale data (as opposed to CUMC or Sinai)')
-parser.add_argument('--sinai', default=False, type=bool, help='Processing sinai data (as opposed to CUMC or Yale')
+parser.add_argument('--yale',  default=False, action='store_true',  help='Processing yale data (as opposed to CUMC or Sinai)')
+parser.add_argument('--sinai',  default=False, action='store_true',  help='Processing sinai data (as opposed to CUMC or Yale')
 parser.add_argument('--subject_list', default=None, type=str, help='List of subjects for feature analysis')
-parser.add_argument('--loader', default=False, type=bool, help='load and load_pickles don\'t seem to work, so maybe this will.')
+parser.add_argument('--no_load', default=False, action='store_true', help='load and load_pickles don\'t seem to work, so maybe this will.')
 
 QFLAGS = parser.parse_args()
 
@@ -382,7 +382,7 @@ def k_means_clustering_and_features(data, delaunay):
     cell_locs_filename = os.path.join(FEATURE_DIR, classy + '_' + str(QFLAGS.clusters) + ADD_NAME + '_cluster_cell_locations.pickle')
     dense_delaunay_filename = os.path.join(FEATURE_DIR, classy + '_' + str(QFLAGS.clusters) + ADD_NAME + '_cluster_dense_delaunay.pickle')
 
-    if os.path.exists(dense_delaunay_filename) and QFLAGS.loader:
+    if os.path.exists(dense_delaunay_filename) and not QFLAGS.no_load:
         create_dense_delaunay = False
         cprint('Loading dense delaunay pickle', 'yellow')
         with open(dense_delaunay_filename, 'rb') as handle:
@@ -391,7 +391,7 @@ def k_means_clustering_and_features(data, delaunay):
         create_dense_delaunay = True
         dense_delaunay = {}
     
-    if os.path.exists(cell_locs_filename) and QFLAGS.loader:
+    if os.path.exists(cell_locs_filename) and not QFLAGS.no_load:
         cprint('Loading cell locations pickle', 'yellow')
         with open(cell_locs_filename, 'rb') as handle:
             cell_locs = pickle.load(handle)
@@ -1241,14 +1241,13 @@ def main(subject_id = None, image_name=None, image_processor=False):
     delaunay_filename = os.path.join(FEATURE_DIR, classy + ADD_NAME + '_' + str(QFLAGS.small_d_cluster) + 'smallCluster_' + str(QFLAGS.delaunay_radius) + 'radius_delaunay.pickle')
     if QFLAGS.yale:
         delaunay_filename = os.path.join(FEATURE_DIR, 'yale_' + str(QFLAGS.small_d_cluster) + 'smallCluster_radius_delaunay.pickle')
-    if QFLAGS.load_pickles and os.path.exists(delaunay_filename) and not image_processor:
+    if not QFLAGS.no_load and os.path.exists(delaunay_filename) and not image_processor:
         print('Loading delaunay features')
         with open(delaunay_filename, 'rb') as handle:
             delaunay = pickle.load(handle)
             create_delaunay = False
     else:
         delaunay = {}
-
     if not create_delaunay:
         if QFLAGS.load_pickles and os.path.exists(data_filename) and not image_processor:
             print('Loading saved cell data')
@@ -1299,7 +1298,6 @@ def main(subject_id = None, image_name=None, image_processor=False):
             image_to_ID_dict = {}
             for line in reader:
                 image_to_ID_dict[line[0].split(".")[0]] = line[1]
-
             for (dirpath, dirnames, filenames) in os.walk(DETECTIONS):
                 count = 0
                 shuffle(filenames)

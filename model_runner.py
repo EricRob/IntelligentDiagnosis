@@ -30,6 +30,8 @@ parser.add_argument('--config', default='test', type=str, help='Run network in t
 parser.add_argument('--preprocess', default=False, action='store_true', help='Create data before testing or running network')
 parser.add_argument('--detections', default='/data/yale_qupath/measurements/', type=str, help='Location of qupath output for preprocessing')
 parser.add_argument('--pp_config', default=None, type=str, help='Configuration for preprocessing')
+parser.add_argument('--pp_min', default=10, type=int, help='min_patch parameter for preprocess_lstm')
+parser.add_argument('--pp_thresh', default=30, type=int, help='patch_thresh parameter for preprocess_lstm')
 
 parser.add_argument('--summarize', default=False, action='store_true', help='Summarize results using majority_vote.py')
 parser.add_argument('--no_script', default=False, action='store_true', help='Skip creating .sh script with network list')
@@ -80,7 +82,7 @@ def get_data_list():
 
 def get_script_file():
 	script_name = os.path.join(SCRIPT_DIR, ARGS.name + '.sh')
-	script = open(script_name, 'wt+')
+	script = open(script_name, 'at+')
 	script.write("##\n## Script created automatically on " + datetime.now().strftime('%Y-%m-%d, at %H:%M:%S') + '\n##\n\n')
 	return script, script_name
 
@@ -119,6 +121,15 @@ def test_default_data():
 		except:
 			cprint('Error while testing ' + model[0] + model[1] + ' with default data (' + ARGS.data + '), must retest!', 'red')
 			retest_list.append(model[0]+model[1])
+	if ARGS.summarize:
+		python_base = 'python3 multitest_summary.py'
+		model = ' --model=' + model[0][:-1]
+		condition = ' --condition=' + ARGS.name
+		run_line = python_base + model + condition
+		script.write(run_line + '\n')
+		if not ARGS.no_execute:
+			subprocess.check_call(run_line, shell=True)
+
 	if not ARGS.no_script:
 		save_script(script, script_name)
 	retest(retest_list)
@@ -216,11 +227,36 @@ def preprocess_train_data():
 	pp_config = ' --config=' + ARGS.pp_config
 	detections = ' --detections_path=' + ARGS.detections
 	run_line = python_base + cond_path + detections + pp_config
+	if not ARGS.no_script:
+		script, script_name = get_script_file()
 	try:
 		subprocess.check_call(run_line, shell=True)
 	except:
 		cprint('Unable to generate preprocessing data! Must exit!', 'red')
 		sys.exit(1)
+
+def preprocess_test_default_data():
+	python_base = 'python3 preprocess_lstm.py'
+	if ARGS.pp_config:
+		pp_config = ' --config=' + ARGS.pp_config
+	else:
+		pp_config = ''
+	detections = ' --detections_path=' + ARGS.detections
+	min_patch = ' --min_patch=' + str(ARGS.pp_min)
+	patch_thresh = ' --patch_thresh=' + str(ARGS.pp_thresh)
+	run_line = python_base + detections + pp_config + min_patch + patch_thresh
+	if not ARGS.no_script:
+		script, script_name = get_script_file()
+	try:
+		if not ARGS.no_script:
+			script.write(run_line + '\n')
+		if not ARGS.no_execute:
+			subprocess.check_call(run_line, shell=True)
+	except:
+		cprint('Unable to generate preprocessing data! Must exit!', 'red')
+		sys.exit(1)
+	if not ARGS.no_script:
+		save_script(script, script_name)
 
 def swap_machine():
 	if ARGS.omen:
@@ -250,6 +286,7 @@ def main():
 			if ARGS.cross_valid:
 				test_cross_valid_data()
 			else:
+				preprocess_test_default_data()
 				test_default_data()
 		else:
 			test_outside_data()
