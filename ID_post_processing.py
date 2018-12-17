@@ -12,16 +12,19 @@ from pylab import subplot, plot, subplots_adjust
 import numpy as np
 import pdb
 from termcolor import cprint
-from tensorflow import flags
+import argparse
 from shutil import move
 
 import majority_vote as voter
 
+parser = argparse.ArgumentParser(description='Summarize training data from ID project')
+
+
 # Global variables
-flags.DEFINE_string("results_folder", "/data/recurrence_seq_lstm/results/","Results folder containing all results and voting files")
-flags.DEFINE_string('vote_file', 'voting_file.csv', "voting file name")
-flags.DEFINE_bool("overwrite",False,"Overwrite existing summary plots")
-FLAGS = flags.FLAGS
+parser.add_argument('--results_folder', default="/data/recurrence_seq_lstm/results/", type=str, help="Results folder containing all results and voting files")
+parser.add_argument('--vote_file', default='voting_file.csv', type=str, help="voting file name")
+parser.add_argument('--overwrite',default=False, action='store_true', help="Overwrite existing summary plots")
+FLAGS = parser.parse_args()
 
 # Class declarations
 

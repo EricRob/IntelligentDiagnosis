@@ -23,13 +23,15 @@ parser = argparse.ArgumentParser(description='Run a set of recurrence models on 
 parser.add_argument('--model', default=None, type=str, help='Base name of models to run')
 parser.add_argument('--data', default=DATA_DEFAULT, type=str, help='[NOT WHOLE PATH] Folder of network binary files')
 parser.add_argument('--name', default=None, type=str, required=True, help='Name of results file to save')
-parser.add_argument('--cross_valid', default=False, type=str, help='Data set for cross validation testing')
+parser.add_argument('--cross_valid', default='', type=str, help='Data set for cross validation testing')
 parser.add_argument('--folds', default=6, type=int, help='Number of cross validation folds (should almost always be 6)')
 parser.add_argument('--config', default='test', type=str, help='Run network in test or train mode')
 
+parser.add_argument('--epochs', default='50', type=str, help='Number of epochs for training network')
+
 parser.add_argument('--preprocess', default=False, action='store_true', help='Create data before testing or running network')
-parser.add_argument('--detections', default='/data/yale_qupath/measurements/', type=str, help='Location of qupath output for preprocessing')
-parser.add_argument('--pp_config', default=None, type=str, help='Configuration for preprocessing')
+parser.add_argument('--detections', default='/data/recurrence_seq_lstm/qupath_output/', type=str, help='Location of qupath output for preprocessing')
+parser.add_argument('--pp_config', default='', type=str, help='Configuration for preprocessing')
 parser.add_argument('--pp_min', default=10, type=int, help='min_patch parameter for preprocess_lstm')
 parser.add_argument('--pp_thresh', default=30, type=int, help='patch_thresh parameter for preprocess_lstm')
 
@@ -86,7 +88,8 @@ def get_script_file(new=True):
 		script = open(script_name, 'wt+')
 	else:
 		script = open(script_name, 'at+')
-	script.write("##\n## Script created automatically on " + datetime.now().strftime('%Y-%m-%d, at %H:%M:%S') + '\n##\n\n')
+	if new:
+		script.write("##\n## Script created automatically on " + datetime.now().strftime('%Y-%m-%d, at %H:%M:%S') + '\n##\n\n')
 	return script, script_name
 
 def save_script(script_file, script_name):
@@ -153,11 +156,19 @@ def test_cross_valid_data():
 		model_name = ' --model=' + os.path.join(RESULTS_DIR, model[0] + model[1])
 		results = ' --results_prepend=' + ARGS.name + '_' + model[1]
 		run_line = python_base + recur + nonrecur + CONFIG + model_name + results
+		if ARGS.summarize:
+			name = ARGS.name + '_' + model[1]
+			base_path = ' --base_path=' + os.path.join(RESULTS_DIR, name)
+			majority_vote = 'python3 majority_vote.py' + base_path
 		try:
 			if not ARGS.no_execute:
 				subprocess.check_call(run_line, shell=True)
+				if ARGS.summarize:
+						subprocess.check_call(majority_vote, shell=True)
 			if not ARGS.no_script:
 				script.write(run_line + '\n')
+				if ARGS.summarize:
+					script.write(majority_vote + '\n')
 		except:
 			cprint('Error testing ' + model[0] + model[1] + ' with cross validation data ' + ARGS.cross_valid + '(condition ' + model[1] + '), must retest!', 'red')
 			retest_list.append(model[0] + model[1])
@@ -192,16 +203,17 @@ def train_cross_valid_data():
 	python_base = 'python3 recurrence_lstm_features.py'
 	if ARGS.omen:
 		python_base = python_base + ' --omen_run=True'
-	train_middle = ' --epochs=50 --save_model=True'
+	train_middle = ' --save_model=True'
+	epochs = ' --epochs=' + ARGS.epochs
 	data_list = get_data_list()
 	if not ARGS.no_script:
-		script, script_name = get_script_file()
+		script, script_name = get_script_file(new=False)
 	
 	for data in data_list:
 		recur = ' --recur_data_path=' + os.path.join(DATA_CONDITIONS, data[0], data[1], 'recurrence')
 		nonrecur = ' --nonrecur_data_path=' + os.path.join(DATA_CONDITIONS, data[0], data[1], 'nonrecurrence')
 		results = ' --results_prepend=' + ARGS.name + '_' + data[2]
-		run_line = python_base + recur + nonrecur + train_middle + results
+		run_line = python_base + recur + nonrecur + train_middle + epochs + results
 		try:
 			if not ARGS.no_execute:
 				subprocess.check_call(run_line, shell=True)
@@ -229,15 +241,22 @@ def preprocess_train_data():
 	python_base = 'python3 preprocess_lstm.py'
 	cond_path = ' --condition_path=' + os.path.join(DATA_CONDITIONS,ARGS.data)
 	pp_config = ' --config=' + ARGS.pp_config
+	min_patch = ' --min_patch=' + str(ARGS.pp_min)
+	patch_thresh = ' --patch_thresh=' + str(ARGS.pp_thresh)
 	detections = ' --detections_path=' + ARGS.detections
-	run_line = python_base + cond_path + detections + pp_config
+	run_line = python_base + cond_path + detections + pp_config + min_patch + patch_thresh
 	if not ARGS.no_script:
 		script, script_name = get_script_file()
 	try:
-		subprocess.check_call(run_line, shell=True)
+		if not ARGS.no_script:
+			script.write(run_line + '\n')
+		if not ARGS.no_execute:
+			subprocess.check_call(run_line, shell=True)
 	except:
 		cprint('Unable to generate preprocessing data! Must exit!', 'red')
 		sys.exit(1)
+	if not ARGS.no_script:
+		save_script(script, script_name)
 
 def preprocess_test_default_data():
 	python_base = 'python3 preprocess_lstm.py'
@@ -290,7 +309,9 @@ def main():
 			if ARGS.cross_valid:
 				test_cross_valid_data()
 			else:
-				preprocess_test_default_data()
+				if ARGS.preprocess:
+					print('CAUTION: ONLY VANILLA PREPROCESSING')
+					preprocess_test_default_data()
 				test_default_data()
 		else:
 			test_outside_data()

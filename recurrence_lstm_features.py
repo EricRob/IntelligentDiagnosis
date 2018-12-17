@@ -662,9 +662,9 @@ def save_sample_image(input_data, label, model, step, epoch_count, vals):
   seq_pixels = model.num_steps * model.image_size
   arr = np.reshape(arr, (model.batch_size, seq_pixels, model.image_size, model.image_depth))
   if FLAGS.omen_run:
-    samples_folder = os.path.join('home','wanglab', 'ID_net', 'samples', FLAGS.results_prepend)
+    samples_folder = os.path.join('/home','wanglab', 'ID_net', 'samples', FLAGS.results_prepend)
   else:
-    samples_folder = os.path.join('data','recurrence_seq_lstm', 'samples', FLAGS.results_prepend)
+    samples_folder = os.path.join('/data','recurrence_seq_lstm', 'samples', FLAGS.results_prepend)
   
   os.makedirs(samples_folder, exist_ok=True)
   for x in range(model.batch_size):

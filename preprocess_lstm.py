@@ -60,8 +60,11 @@ flags.DEFINE_string("masks_dir", '/data/recurrence_seq_lstm/image_data/masks', '
 flags.DEFINE_bool("preverify", False, "Check image folders for verified_list images and masks")
 
 flags.DEFINE_integer('delaunay_radius', 40, 'pixel radius of delaunay triangulation')
-flags.DEFINE_string('detections_path', '/data/QuPath/CellCounter/delaunay_px40/CUMC', 'Path to location of qupath cell detection information')
+flags.DEFINE_string('detections_path', '/data/recurrence_seq_lstm/qupath_output/', 'Path to location of qupath cell detection information')
 flags.DEFINE_bool('include_features', True, 'Whether to add features to writing image binary (features still used for restricting sampling)')
+
+flags.DEFINE_bool('overwrite', False, 'Overwrite existing binary files')
+flags.DEFINE_bool('no_write', False, 'Skip writing binary files (used for patch data creation)')
 
 FLAGS = flags.FLAGS
 FILLER = '                                            '
@@ -286,13 +289,24 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, mode, config):
 		else:
 			gauss_config = gauss.YaleConfig_train()
 		cprint('Using Yale configuration', 'blue', 'on_white')
-
+	elif FLAGS.config == 'yale_small':
+		if mode == 'test':
+			gauss_config = gauss.YaleConfig_test_small()
+		else:
+			gauss_config = gauss.YaleConfig_train_small()
+		cprint('Using Yale SMALL configuration', 'blue', 'on_red')
 	elif FLAGS.config == 'sinai':
 		if mode == 'test':
 			gauss_config = gauss.SinaiConfig_test()
 		else:
 			gauss_config = gauss.SinaiConfig_train()
 		cprint('Using Sinai configuration', 'magenta', 'on_white')
+	elif FLAGS.config == 'small':
+		if mode == 'test':
+			gauss_config = gauss.OriginalPatchConfig_test_small()
+		else:
+			gauss_config = gauss.OriginalPatchConfig_train_small()	
+		cprint('Using Original SMALL configuration', 'green', 'on_red')
 	else:
 		if mode == 'test':
 			gauss_config = gauss.OriginalPatchConfig_test()
@@ -315,11 +329,17 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, mode, config):
 	else:
 		prepend = "NoFEATURES_"
 	gauss_config.add_features = FLAGS.include_features
-	gauss_category_folder = prepend + "tile" + str(gauss_config.tile_size) + "_std_dev" + str(gauss_config.maximum_std_dev) + "_seq" + str(gauss_config.maximum_seq_per_tile)
+	gauss_category_folder = prepend + "tile" + str(gauss_config.tile_size) + "_std_dev" + str(gauss_config.maximum_std_dev) + "_seq" + str(gauss_config.maximum_seq_per_tile) + '_patch' + str(gauss_config.patch_size)
 	gauss_folder = os.path.join(config.image_data_folder_path,'feature_patches','OTHER_gaussian_patches_' + str(gauss_config.pixel_radius) + '_min' + str(gauss_config.MINIMUM_PATCH_CELLS) + '_' + str(gauss_config.large_cluster) + '_' + str(int(gauss_config.OTHER_PATCH_THRESHOLD*100)) + 'p', gauss_category_folder)
 	os.makedirs(gauss_folder, exist_ok=True)
 	# remove_characters = -8
 	for image in images_list:
+		csv_path = os.path.join(gauss_config.features_path, str(gauss_config.patch_size) + 'patch_histogram_values.csv')
+		header = ['subject','image', 'patch_size', 'x', 'y','tile','tumor_count','imm_count','other_count', 'total_count']
+		if not os.path.exists(csv_path):
+			with open(csv_path, 'w') as csvfile:
+				writer = csv.writer(csvfile)
+				writer.writerow(header)
 		if not image:
 			continue
 		if image in SKIP_LIST:
@@ -328,7 +348,7 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, mode, config):
 		image_bin_name = image[:-8] + ".bin"
 		image_bin_path = os.path.join(gauss_folder, image_bin_name)
 		#pdb.set_trace()
-		if not os.path.exists(image_bin_path):
+		if not os.path.exists(image_bin_path) or FLAGS.overwrite or FLAGS.no_write:
 			detections_filename = os.path.join(FLAGS.detections_path, image[:-8] + '_Detectionstxt.txt')
 			if not os.path.exists(detections_filename):
 				cprint('No detections exist for ' + image[:-8] + ', skipping due to lack of features', 'red')
@@ -341,7 +361,13 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, mode, config):
 			cprint('Creating image binary file for ' + image[:-8], 'white', 'on_green')
 			mask_name = 'mask_' + image[:-8] + '.tif'
 			mask_path = os.path.join(config.image_data_folder_path,'masks', mask_name)
-			seq_features = gauss.generate_sequences(mask_path, gauss_config, image[:-8], image_to_ID_dict[image], detections=FLAGS.detections_path)
+			img_info = (image_to_ID_dict[image[:-8] + "_patches"], image[:-8])
+			if FLAGS.no_write:
+				seq_features = gauss.generate_sequences(mask_path, gauss_config, image[:-8], image_to_ID_dict[image], detections=FLAGS.detections_path, image_info=img_info)
+			else:
+				seq_features = gauss.generate_sequences(mask_path, gauss_config, image[:-8], image_to_ID_dict[image], detections=FLAGS.detections_path)
+			if FLAGS.no_write:
+				continue
 			if not seq_features:
 				cprint('No detections exist, skipping due to lack of features', 'red')
 				SKIP_LIST.append(image)

@@ -32,7 +32,7 @@ flags.DEFINE_bool("from_outside", False, "Operating from another python script")
 flags.DEFINE_bool('per_subject', False, 'Provide ROC and majority votes per subject')
 flags.DEFINE_string('voting_file', 'voting_file.csv', 'Name of voting file for gathering data')
 flags.DEFINE_bool('print', False, 'Print subject or image majority voting results to command line terminal')
-flags.DEFINE_string('subject_conditions', None, 'name of csv file with cross validation conditions')
+flags.DEFINE_string('subjects', None, 'name of csv file with cross validation conditions')
 FLAGS = flags.FLAGS
 
 # Function declarations
@@ -426,11 +426,11 @@ def save_roc_curve(fpr, tpr, thresholds, roc_auc):
     plt.clf()
 
 def add_test_condition(subject_data):
-    if not FLAGS.subject_conditions:
+    if not FLAGS.subjects:
         for subject in subject_data:
             subject_data[subject]['condition'] = 1
     else:
-        with open(os.path.join(FLAGS.base_path,FLAGS.subject_conditions), 'r') as csvfile:
+        with open(os.path.join(FLAGS.base_path,FLAGS.subjects), 'r') as csvfile:
             reader = csv.reader(csvfile)
             _ = next(reader) # discard header
             for line in reader:
@@ -455,7 +455,7 @@ def save_subjects_vote_bar_graph(image_dict, subject_dict):
             nonrecur_dict[subject] = subject_data[subject]
     
     total_conditions = 1
-    if FLAGS.subject_conditions:
+    if FLAGS.subjects:
         for subject in subject_data:
             if int(subject_data[subject]["condition"]) > total_conditions:
                 total_conditions = int(subject_data[subject]["condition"])
@@ -568,7 +568,9 @@ def write_results_csv(subject_data, recur_dict, nonrecur_dict, auc_dict, total_c
     # pdb.set_trace()
     results_path = FLAGS.base_path.split("/")
     x = len(results_path)
-    summary_name = results_path[x-1] + '_test_summary.csv'
+    if not results_path[x-1]:
+        x -= 1
+    summary_name = results_path[x-1] + '_results_summary.csv'
     with open(os.path.join(FLAGS.base_path, summary_name), 'w', newline='') as csvfile:
         csvwriter = csv.writer(csvfile)
         csvwriter.writerow(['Recurrent subjects passed:', recur_pass,'','Nonrecurrence subjects passed:', nonrecur_pass])
@@ -643,12 +645,12 @@ def main():
     filename = os.path.join(base_path, FLAGS.voting_file)
     if not FLAGS.histogram_path:
         FLAGS.histogram_path = os.path.join(base_path, "histograms")
+        if not FLAGS.from_outside:
+            os.makedirs(FLAGS.histogram_path, exist_ok=True)
     if not FLAGS.map_path:
         FLAGS.map_path = os.path.join(base_path, "maps")
-    if not FLAGS.from_outside:
-        os.makedirs(FLAGS.histogram_path, exist_ok=True)
-        os.makedirs(FLAGS.map_path, exist_ok=True)
-
+        if not FLAGS.from_outside:
+            os.makedirs(FLAGS.map_path, exist_ok=True)
     image_dict={}
     subject_dict={}
     cprint(filename, 'grey', 'on_white')

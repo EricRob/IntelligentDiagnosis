@@ -145,7 +145,7 @@ def split_image_into_ninths(img, large_image_name):
 def main():
 	with open(os.path.join(FLAGS.base_path, FLAGS.image_list), newline="") as csvfile:
 		reader = csv.reader(csvfile)
-		_ = next(reader) # Discard header line
+		#_ = next(reader) # Discard header line
 		for line in reader:
 			large_image_name = line[1]
 			img_path = os.path.join(FLAGS.base_path, FLAGS.original_images_folder,large_image_name)
