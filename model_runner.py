@@ -127,15 +127,15 @@ def test_default_data():
 		except:
 			cprint('Error while testing ' + model[0] + model[1] + ' with default data (' + ARGS.data + '), must retest!', 'red')
 			retest_list.append(model[0]+model[1])
-	if ARGS.summarize:
-		python_base = 'python3 multitest_summary.py'
-		model = ' --model=' + model[0][:-1]
-		condition = ' --condition=' + ARGS.name
-		run_line = python_base + model + condition
-		if not ARGS.no_script:
-			script.write(run_line + '\n')
-		if not ARGS.no_execute:
-			subprocess.check_call(run_line, shell=True)
+		if ARGS.summarize:
+			python_base = 'python3 multitest_summary.py'
+			model = ' --model=' + model[0][:-1]
+			condition = ' --condition=' + ARGS.name
+			run_line = python_base + model + condition
+			if not ARGS.no_script:
+				script.write(run_line + '\n')
+			if not ARGS.no_execute:
+				subprocess.check_call(run_line, shell=True)
 
 	if not ARGS.no_script:
 		save_script(script, script_name)
@@ -245,6 +245,7 @@ def preprocess_train_data():
 	patch_thresh = ' --patch_thresh=' + str(ARGS.pp_thresh)
 	detections = ' --detections_path=' + ARGS.detections
 	run_line = python_base + cond_path + detections + pp_config + min_patch + patch_thresh
+	print(run_line)
 	if not ARGS.no_script:
 		script, script_name = get_script_file()
 	try:
@@ -290,9 +291,9 @@ def swap_machine():
 		if ARGS.preprocess:
 			print('*** Unable to preprocess data from OMEN, please check command line arguments. ***')
 			return 1
-		RESULTS_DIR = '/home/wanglab/ID_net/results'
-		DATA_CONDITIONS = '/home/wanglab/ID_net/data_conditions/'
-		SCRIPT_DIR = '/home/wanglab/ID_net/IntelligentDiagnosis/'
+		RESULTS_DIR = '/hdd/ID_net/results'
+		DATA_CONDITIONS = '/hdd/ID_net/data_conditions/'
+		SCRIPT_DIR = '/hdd/ID_net/IntelligentDiagnosis/'
 	return 0
 
 def main():
@@ -316,6 +317,7 @@ def main():
 		else:
 			test_outside_data()
 	else:
+		print('Ha')
 		if ARGS.preprocess:
 			print('CAUTION: ONLY VANILLA PREPROCESSING')
 			preprocess_train_data()

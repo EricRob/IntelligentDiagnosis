@@ -655,7 +655,9 @@ if __name__ == '__main__':
 
 	if not FLAGS.patches_only:
 		if FLAGS.randomized_conditions:
+			cprint("Reeeeeeeeeeeeeeeeeeeeed", 'white', 'on_red')
 			cprint("--> Generating condition binary files", 'white', 'on_green')
+			print
 			if not FLAGS.condition_path:
 				raise ValueError("If creating binary files for with randomized subjects, must specify the condition's enclosing folder with --condition_path.")
 			for condition_folder in sorted(os.listdir(FLAGS.condition_path)):

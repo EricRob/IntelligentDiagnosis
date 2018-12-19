@@ -582,7 +582,7 @@ def write_results_csv(subject_data, recur_dict, nonrecur_dict, auc_dict, total_c
         csvwriter.writerow(['Average vote:', '{0:.4f}'.format(np.mean(total_votes)),'','Average AUC:', '{0:.4f}'.format(np.mean(auc_arr))])
         csvwriter.writerow(['Vote std-dev:', '{0:.4f}'.format(np.std(total_votes)),'','AUC std-dev:', '{0:.4f}'.format(np.std(auc_arr))])
         csvwriter.writerow([''])
-        csvwriter.writerow(['condition', 'subject', 'success','label', 'avg_vote', 'accurate_votes', 'total_votes', 'image_count'])
+        csvwriter.writerow(['condition', 'subject', 'success','label', 'net_label', 'avg_vote', 'accurate_votes', 'total_votes', 'image_count'])
         for cond in np.arange(total_conditions):
             cond += 1
             for subject in sorted(subject_data):
@@ -596,6 +596,7 @@ def write_results_csv(subject_data, recur_dict, nonrecur_dict, auc_dict, total_c
                             subject,
                             success,
                             '1',
+                            round(subject_data[subject]['vote']),
                             '{0:.4f}'.format(subject_data[subject]['vote']),
                             subject_data[subject]['accurate_votes'],
                             subject_data[subject]['total_votes'],
@@ -605,6 +606,7 @@ def write_results_csv(subject_data, recur_dict, nonrecur_dict, auc_dict, total_c
                             subject,
                             success,
                             '0',
+                            round(1 - subject_data[subject]['vote']),
                             '{0:.4f}'.format(subject_data[subject]['vote']),
                             subject_data[subject]['accurate_votes'],
                             subject_data[subject]['total_votes'],
