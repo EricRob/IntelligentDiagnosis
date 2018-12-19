@@ -1,4 +1,10 @@
-## New Image Processing
-1. Update `~/Desktop/recurrence_seq_lstm/image_data/image_to_subject_ID.csv` with all new image names, subject IDs, and labels
-2. Put all new images in a single, new folder
-3. Open a terminal window, navigate to the newly created folder, and enter the command `~/Desktop/recurrence_seq_lstm/IntelligentDiagnosis/data_pipeline.sh`
+## Overall Pipeline
+
+0. Review data for adherence to quality standards, if multi-layered TIFFs run export_top_layer.py
+1. Split large images into regular TIFF format (from BigTIFF, run large_image_splitter.py)
+2. a. Process image through QuPath to obtain cell locations and clustering information
+2. b. Create image binary masks through gimp (gimp_batch_mask)
+3. Process images and features into sequences as binary files (preprocess_lstm.py)
+4. Run networks (training or testing, recurrence_seq_lstm.py)
+5. Summarize individual conditions (ID_post_processing.py)
+6. Summarize across multiple tests (multitest_summary.py)

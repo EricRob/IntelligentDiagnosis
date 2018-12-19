@@ -64,10 +64,14 @@ def get_models_list():
 	models_list = []
 	for root, dirs, _ in os.walk(os.path.join(RESULTS_DIR)):
 		for folder in sorted(dirs):
+			print(folder)
 			if ARGS.model in folder:
 				num_loc = folder.find('_00') + 1
-				model_num = folder[num_loc:num_loc+3]
-				models_list.append((folder[:num_loc], model_num))
+				if not num_loc:
+					models_list.append((folder, ''))
+				else:
+					model_num = folder[num_loc:num_loc+3]
+					models_list.append((folder[:num_loc], model_num))
 	return models_list
 
 def get_data_list():
@@ -83,7 +87,8 @@ def get_data_list():
 	return data_list
 
 def get_script_file(new=True):
-	script_name = os.path.join(SCRIPT_DIR, ARGS.name + '.sh')
+	os.makedirs(os.path.join(SCRIPT_DIR, 'scripts'), exist_ok=True)
+	script_name = os.path.join(SCRIPT_DIR, 'scripts', ARGS.name + '.sh')
 	if new:
 		script = open(script_name, 'wt+')
 	else:
@@ -99,10 +104,14 @@ def save_script(script_file, script_name):
 
 def test_default_data():
 	retest_list = []
+	models_list = []
 	models_list = get_models_list()
+	if not models_list:
+		print('No models matching ' + ARGS.model + ' found, check parameters and retry.')
+		return
 	if not ARGS.no_script:
 		script, script_name = get_script_file(new=False)
-	python_base = 'python3 recurrence_lstm_features.py'
+	python_base = 'python3 ' + os.path.join(SCRIPT_DIR,'recurrence_lstm_features.py')
 	if ARGS.omen:
 		python_base = python_base + ' --omen_run=True'
 	model_path_base = ' --model_path=' + RESULTS_DIR
@@ -110,10 +119,12 @@ def test_default_data():
 	nonrecur = ' --nonrecur_data_path=' + os.path.join(ARGS.data, 'nonrecurrence')
 	for model in sorted(models_list):
 		run_line = python_base + recur + nonrecur + CONFIG + model_path_base + model[0] + model[1] + ' --results_prepend=' + ARGS.name + '_' + model[1]
+		if not model[1]:
+			run_line = run_line[:-1]
 		if ARGS.summarize:
 			name = ARGS.name + '_' + model[1]
 			base_path = ' --base_path=' + os.path.join(RESULTS_DIR, name)
-			majority_vote = 'python3 majority_vote.py' + base_path
+			majority_vote = 'python3 ' + os.path.join(SCRIPT_DIR,'majority_vote.py') + base_path
 		try:
 			if not ARGS.no_execute:
 				subprocess.check_call(run_line, shell=True)
@@ -128,7 +139,7 @@ def test_default_data():
 			cprint('Error while testing ' + model[0] + model[1] + ' with default data (' + ARGS.data + '), must retest!', 'red')
 			retest_list.append(model[0]+model[1])
 		if ARGS.summarize:
-			python_base = 'python3 multitest_summary.py'
+			python_base = 'python3 ' + os.path.join(SCRIPT_DIR,'multitest_summary.py')
 			model = ' --model=' + model[0][:-1]
 			condition = ' --condition=' + ARGS.name
 			run_line = python_base + model + condition
@@ -143,10 +154,14 @@ def test_default_data():
 
 def test_cross_valid_data():
 	retest_list = []
-	python_base = 'python3 recurrence_lstm_features.py'
+	python_base = 'python3 ' + SCRIPT_DIR + 'recurrence_lstm_features.py'
 	if ARGS.omen:
 		python_base = python_base + ' --omen_run=True'
+	models_list = []
 	models_list = get_models_list()
+	if not models_list:
+		print('No models matching ' + ARGS.model + ' found, check parameters and retry.')
+		return
 	if not ARGS.no_script:
 		script, script_name = get_script_file()
 
@@ -156,10 +171,12 @@ def test_cross_valid_data():
 		model_name = ' --model=' + os.path.join(RESULTS_DIR, model[0] + model[1])
 		results = ' --results_prepend=' + ARGS.name + '_' + model[1]
 		run_line = python_base + recur + nonrecur + CONFIG + model_name + results
+		if not model[1]:
+			run_line = run_line[:-1]
 		if ARGS.summarize:
 			name = ARGS.name + '_' + model[1]
 			base_path = ' --base_path=' + os.path.join(RESULTS_DIR, name)
-			majority_vote = 'python3 majority_vote.py' + base_path
+			majority_vote = 'python3 ' + SCRIPT_DIR + 'majority_vote.py' + base_path
 		try:
 			if not ARGS.no_execute:
 				subprocess.check_call(run_line, shell=True)
@@ -179,10 +196,14 @@ def test_cross_valid_data():
 
 def test_outside_data():
 	retest_list = []
-	python_base = 'python3 recurrence_lstm_features.py'
+	python_base = 'python3 ' + SCRIPT_DIR + 'recurrence_lstm_features.py'
 	if ARGS.omen:
 		python_base = python_base + ' --omen_run=True'
+	models_list = []
 	models_list = get_models_list()
+	if not models_list:
+		print('No models matching ' + ARGS.model + ' found, check parameters and retry.')
+		return
 	data_list = get_data_list()
 	for model in sorted(models_list):
 		for data in data_list:
@@ -200,7 +221,7 @@ def test_outside_data():
 
 def train_cross_valid_data():
 	retest_list = []
-	python_base = 'python3 recurrence_lstm_features.py'
+	python_base = 'python3 ' + SCRIPT_DIR + 'recurrence_lstm_features.py'
 	if ARGS.omen:
 		python_base = python_base + ' --omen_run=True'
 	train_middle = ' --save_model=True'
@@ -223,8 +244,8 @@ def train_cross_valid_data():
 			cprint('Error training with ' + ARGS.data + '(condition ' + data[0] + ', ' + data[1] + '), must retest!', 'red')
 			retest_list.append(data[0] + '/' + data[2])
 	if ARGS.summarize:
-		concatenate = 'python3 concatenate_voting_csv.py --condition_name=' + ARGS.name
-		majority_vote = 'python3 majority_vote.py --base_path=' + os.path.join(RESULTS_DIR, ARGS.name)
+		concatenate = 'python3 ' + SCRIPT_DIR + 'concatenate_voting_csv.py --condition_name=' + ARGS.name
+		majority_vote = 'python3 ' + SCRIPT_DIR + 'majority_vote.py --base_path=' + os.path.join(RESULTS_DIR, ARGS.name)
 		if not ARGS.no_script:
 			script.write(concatenate + '\n')
 			script.write(majority_vote + '\n')
@@ -238,7 +259,7 @@ def train_cross_valid_data():
 	retest(retest_list)
 
 def preprocess_train_data():
-	python_base = 'python3 preprocess_lstm.py'
+	python_base = 'python3 ' + SCRIPT_DIR + 'preprocess_lstm.py'
 	cond_path = ' --condition_path=' + os.path.join(DATA_CONDITIONS,ARGS.data)
 	pp_config = ' --config=' + ARGS.pp_config
 	min_patch = ' --min_patch=' + str(ARGS.pp_min)
@@ -260,7 +281,7 @@ def preprocess_train_data():
 		save_script(script, script_name)
 
 def preprocess_test_default_data():
-	python_base = 'python3 preprocess_lstm.py'
+	python_base = 'python3 ' + SCRIPT_DIR + 'preprocess_lstm.py'
 	if ARGS.pp_config:
 		pp_config = ' --config=' + ARGS.pp_config
 	else:
