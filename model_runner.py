@@ -16,7 +16,7 @@ import subprocess
 RESULTS_DIR = '/data/recurrence_seq_lstm/results/'
 DATA_DEFAULT = '/data/recurrence_seq_lstm/image_data/'
 DATA_CONDITIONS = '/data/recurrence_seq_lstm/data_conditions/'
-SCRIPT_DIR = '/home/wanglab/Desktop/recurrence_seq_lstm/IntelligentDiagnosis'
+SCRIPT_DIR = '/home/wanglab/Desktop/recurrence_seq_lstm/IntelligentDiagnosis/'
 
 parser = argparse.ArgumentParser(description='Run a set of recurrence models on a given data set')
 
@@ -64,7 +64,6 @@ def get_models_list():
 	models_list = []
 	for root, dirs, _ in os.walk(os.path.join(RESULTS_DIR)):
 		for folder in sorted(dirs):
-			print(folder)
 			if ARGS.model in folder:
 				num_loc = folder.find('_00') + 1
 				if not num_loc:
@@ -176,7 +175,7 @@ def test_cross_valid_data():
 		if ARGS.summarize:
 			name = ARGS.name + '_' + model[1]
 			base_path = ' --base_path=' + os.path.join(RESULTS_DIR, name)
-			majority_vote = 'python3 ' + SCRIPT_DIR + 'majority_vote.py' + base_path
+			majority_vote = 'python3 ' + SCRIPT_DIR + 'majority_vote.py' + base_path[:-1]
 		try:
 			if not ARGS.no_execute:
 				subprocess.check_call(run_line, shell=True)
@@ -226,14 +225,22 @@ def train_cross_valid_data():
 		python_base = python_base + ' --omen_run=True'
 	train_middle = ' --save_model=True'
 	epochs = ' --epochs=' + ARGS.epochs
-	data_list = get_data_list()
+	if ARGS.data == DATA_DEFAULT:
+		data_list = [DATA_DEFAULT]
+	else:
+		data_list = get_data_list()
 	if not ARGS.no_script:
 		script, script_name = get_script_file(new=False)
 	
 	for data in data_list:
-		recur = ' --recur_data_path=' + os.path.join(DATA_CONDITIONS, data[0], data[1], 'recurrence')
-		nonrecur = ' --nonrecur_data_path=' + os.path.join(DATA_CONDITIONS, data[0], data[1], 'nonrecurrence')
-		results = ' --results_prepend=' + ARGS.name + '_' + data[2]
+		if data == DATA_DEFAULT:
+			recur = ' --recur_data_path=' + os.path.join(data, 'recurrence')
+			nonrecur = ' --nonrecur_data_path=' + os.path.join(data, 'nonrecurrence')
+			results = ' --results_prepend=' + ARGS.name
+		else:
+			recur = ' --recur_data_path=' + os.path.join(DATA_CONDITIONS, data[0], data[1], 'recurrence')
+			nonrecur = ' --nonrecur_data_path=' + os.path.join(DATA_CONDITIONS, data[0], data[1], 'nonrecurrence')
+			results = ' --results_prepend=' + ARGS.name + '_' + data[2]
 		run_line = python_base + recur + nonrecur + train_middle + epochs + results
 		try:
 			if not ARGS.no_execute:
@@ -241,8 +248,12 @@ def train_cross_valid_data():
 			if not ARGS.no_script:
 				script.write(run_line + '\n')
 		except:
-			cprint('Error training with ' + ARGS.data + '(condition ' + data[0] + ', ' + data[1] + '), must retest!', 'red')
-			retest_list.append(data[0] + '/' + data[2])
+			if data == DATA_DEFAULT:
+				cprint('Error training with default data, must retest!', 'red')
+				retest_list.append(data)
+			else:
+				cprint('Error training with ' + ARGS.data + '(condition ' + data[0] + ', ' + data[1] + '), must retest!', 'red')
+				retest_list.append(data[0] + '/' + data[2])
 	if ARGS.summarize:
 		concatenate = 'python3 ' + SCRIPT_DIR + 'concatenate_voting_csv.py --condition_name=' + ARGS.name
 		majority_vote = 'python3 ' + SCRIPT_DIR + 'majority_vote.py --base_path=' + os.path.join(RESULTS_DIR, ARGS.name)
@@ -338,7 +349,6 @@ def main():
 		else:
 			test_outside_data()
 	else:
-		print('Ha')
 		if ARGS.preprocess:
 			print('CAUTION: ONLY VANILLA PREPROCESSING')
 			preprocess_train_data()

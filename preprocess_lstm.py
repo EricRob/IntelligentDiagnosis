@@ -69,8 +69,6 @@ flags.DEFINE_bool('no_write', False, 'Skip writing binary files (used for patch 
 FLAGS = flags.FLAGS
 FILLER = '                                            '
 SKIP_LIST = []
-#DETECTIONS = '/data/QuPath/CellCounter/delaunay_px' + str(FLAGS.delaunay_radius) + '/CUMC/'
-# DETECTIONS = '/data/yale_qupath/measurements'
 
 
 class OriginalPatchConfig(object):

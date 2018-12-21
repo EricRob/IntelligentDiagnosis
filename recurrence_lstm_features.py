@@ -88,6 +88,7 @@ flags.DEFINE_bool("save_model", False, "Save model and checkpoints for future te
 flags.DEFINE_integer("num_steps", 20, "Steps in LSTM sequence")
 flags.DEFINE_bool("save_samples", False, "Save every sequence as a TIFF in a /samples folder")
 flags.DEFINE_bool("omen_run", False, "Running from OMEN (rather than PrecisionTower)")
+flags.DEFINE_bool("park", False, 'Running from Park GPU (rather than PrecisionTower)')
 
 FLAGS = flags.FLAGS
 BASIC = "basic"
@@ -663,6 +664,8 @@ def save_sample_image(input_data, label, model, step, epoch_count, vals):
   arr = np.reshape(arr, (model.batch_size, seq_pixels, model.image_size, model.image_depth))
   if FLAGS.omen_run:
     samples_folder = os.path.join('/hdd', 'ID_net', 'samples', FLAGS.results_prepend)
+  elif FLAGS.park:
+    samples_folder = os.path.join('/home','param', 'IntelligentDiagnosis', 'samples', FLAGS.results_prepend)
   else:
     samples_folder = os.path.join('/data','recurrence_seq_lstm', 'samples', FLAGS.results_prepend)
   
@@ -850,7 +853,9 @@ def main(_):
     config.max_max_epoch = FLAGS.epochs
 
   if FLAGS.omen_run:
-    base_directory = os.path.join('/home', 'wanglab', 'ID_net')
+    base_directory = os.path.join('/hdd', 'ID_net')
+  elif FLAGS.park:
+    base_directory = os.path.join('/home', 'param', 'IntelligentDiagnosis')
   else:
     base_directory = os.path.join('/data', 'recurrence_seq_lstm')
   results_path = os.path.join(base_directory, "results", FLAGS.results_prepend) #+ "_lr" + str(config.learning_rate) + "_kp" + str(int(config.keep_prob*100))
