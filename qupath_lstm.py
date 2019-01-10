@@ -1318,6 +1318,7 @@ def main(subject_id = None, image_name=None, image_processor=False, config=None)
 
                             
         status = {}
+
         if not image_processor:
             with open(STATUS_CSV, 'r') as csvfile:
                 cprint('\nAdding recurrence status...', 'green', 'on_white')
@@ -1344,6 +1345,8 @@ def main(subject_id = None, image_name=None, image_processor=False, config=None)
             cprint('Done!', 'green')
 
     if image_processor:
+        if not data or not delaunay:
+            return None, None
         image_dict = {}
         img_delaunay = {}
         for cell in data['subj'][image_name]:

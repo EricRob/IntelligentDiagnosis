@@ -382,6 +382,7 @@ def per_subject_roc_curves(subject_dict, image_dict):
 
 def plot_roc_curves_and_votes(roc_dict, subject_dict, image_dict):
     subject_data = analysis_per_subject(subject_dict, image_dict)
+    print(len(roc_dict))
     number_of_subplot_rows = len(roc_dict)
     figure = plt.figure()
     counter = 1
@@ -393,7 +394,9 @@ def plot_roc_curves_and_votes(roc_dict, subject_dict, image_dict):
 
         fpr = roc_dict[subject]['fpr']
         tpr = roc_dict[subject]['tpr']
-
+        print(subject)
+        print("JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ")
+        print(roc_loc)
         roc = figure.add_subplot(roc_loc)
         roc.plot(1-fpr, tpr, color='darkorange', lw=2)
         roc.plot([0, 1], [1,0], color='black', lw=1, linestyle='--')
@@ -448,6 +451,7 @@ def save_subjects_vote_bar_graph(image_dict, subject_dict):
     votes = []
     recur_dict = dict()
     nonrecur_dict = dict()
+    #print(subject_data)
     for subject in subject_data:
         if subject_data[subject]["truth_label"] == 'RECURRENT':
             recur_dict[subject] = subject_data[subject]
@@ -459,7 +463,7 @@ def save_subjects_vote_bar_graph(image_dict, subject_dict):
         for subject in subject_data:
             if int(subject_data[subject]["condition"]) > total_conditions:
                 total_conditions = int(subject_data[subject]["condition"])
-
+    #print(total_conditions)            
     for cond in np.arange(total_conditions):
         cond +=1        
         for subject in sorted(recur_dict):
@@ -474,7 +478,7 @@ def save_subjects_vote_bar_graph(image_dict, subject_dict):
                 votes.append(recur_dict[subject]["vote"])
                 subject_data[subject]["vote"] = recur_dict[subject]["vote"]
                 subject_data[subject]['accurate_votes'] = recur_dict[subject]['accurate_votes']
-        
+        #print(nonrecur_dict)
         for subject in sorted(nonrecur_dict):
             if int(nonrecur_dict[subject]['condition']) == cond:
                 if not nonrecur_dict[subject]["truth_label"] == nonrecur_dict[subject]["net_label"]:
@@ -606,8 +610,8 @@ def write_results_csv(subject_data, recur_dict, nonrecur_dict, auc_dict, total_c
                             subject,
                             success,
                             '0',
-                            round(1 - subject_data[subject]['vote']),
-                            '{0:.4f}'.format(subject_data[subject]['vote']),
+                            1-round(subject_data[subject]['vote']),
+                            '{0:.4f}'.format(1-subject_data[subject]['vote']),
                             subject_data[subject]['accurate_votes'],
                             subject_data[subject]['total_votes'],
                             subject_data[subject]['image_count']])
@@ -683,7 +687,7 @@ def main():
     
     if FLAGS.per_subject:
         roc_dict = per_subject_roc_curves(subject_dict, image_dict)
-        plot_roc_curves_and_votes(roc_dict, subject_dict, image_dict)
+        #plot_roc_curves_and_votes(roc_dict, subject_dict, image_dict)
     else:
         print("Creating ROC...")
         fpr, tpr, thresholds, roc_auc = create_overall_roc_curve(image_dict)

@@ -8,6 +8,7 @@ import sys
 import os
 import csv
 import pdb
+import warnings
 import numpy as np
 from skimage import io
 from scipy.ndimage import measurements
@@ -502,7 +503,7 @@ def corner_detection_sample_from_dist(mask, corner, config, keep_corner, all_cel
 	corner = remove_garbage_tiles(corner, config, corner=True)
 	
 	if not corner:
-		cprint("Skipping corner", 'red')
+		# cprint("Skipping corner", 'red')
 		return 1, None
 	corner['corner']['coords'] = []
 	while(len(corner['corner']['coords']) < samples) and (counter < 10000):
@@ -530,7 +531,7 @@ def corner_detection_sample_from_dist(mask, corner, config, keep_corner, all_cel
 			continue
 		corner['corner']['coords'] = corner['corner']['coords'] + [(y,x)]
 	if counter >= 10000:
-		cprint("Skipping corner", 'red')
+		# cprint("Skipping corner", 'red')
 		corner['corner']['centroid'] = []
 		skip_count = 1
 	else:
@@ -765,6 +766,8 @@ def generate_sequences(mask_filename, config, image_name=None, subject_id=None, 
 	qu_config = QuPathConfig()
 	qu_config.detections = detections
 	all_cells, all_delaunay = qupath.detections(subject_id, image_name, qu_config)
+	if not all_cells or not all_delaunay:
+		return None
 	# for cell_class in all_delaunay:
 	# 	for centroid in all_delaunay[cell_class]:
 	# 		if not isinstance(centroid, tuple):

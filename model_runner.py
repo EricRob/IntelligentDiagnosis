@@ -121,7 +121,10 @@ def test_default_data():
 		if not model[1]:
 			run_line = run_line[:-1]
 		if ARGS.summarize:
-			name = ARGS.name + '_' + model[1]
+			if model[1]:
+				name = ARGS.name + '_' + model[1]
+			else:
+				name = ARGS.name
 			base_path = ' --base_path=' + os.path.join(RESULTS_DIR, name)
 			majority_vote = 'python3 ' + os.path.join(SCRIPT_DIR,'majority_vote.py') + base_path
 		try:

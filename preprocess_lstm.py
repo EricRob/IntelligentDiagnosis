@@ -1,6 +1,7 @@
 #!/usr/bin/python3 python3
 
 import numpy as np
+import argparse
 import warnings
 import matplotlib.pyplot as plt
 import os
@@ -21,52 +22,118 @@ import subject_list_generator
 import tiff_patching
 
 warnings.simplefilter('ignore', Image.DecompressionBombWarning)
+warnings.simplefilter('ignore', FutureWarning)
+warnings.simplefilter('ignore', UserWarning)
 
-flags.DEFINE_integer("r_overlap", 75, "Percentage of overlap of recurrence samples")
-flags.DEFINE_integer("nr_overlap", 50, "Percentage of overlap of nonrecurrence samples")
-flags.DEFINE_integer("num_steps", 20, "Number of steps in RNN sequence")
+parser = argparse.ArgumentParser(description='Create binary files for feeding into recurrence_seq_lstm')
 
-flags.DEFINE_bool("recurrence_only", False, "Generate only recurrence binary file")
-flags.DEFINE_bool("nonrecurrence_only", False, "Generate nonrecurrence binary file only")
+## Overall File Creation Flags
+parser.add_argument("--recurrence_only", default=False, action='store_true',
+	help="Generate only recurrence binary file")
+parser.add_argument("--nonrecurrence_only", default=False, action='store_true',
+	help="Generate nonrecurrence binary file only")
 
-flags.DEFINE_string("seg_path", None, "Location of segmentations folder")
+parser.add_argument("--seg_path", default=None, type=str,
+	help="Segmentations are custom-made binary masks for sampling from specific areas within the image. \
+	This parameter specifies the directory containing binary segmentations")
 
-flags.DEFINE_string("mode", None, "Create binary file for a specific mode between train, validation, or test")
+parser.add_argument("--mode", default=None, type=str,
+	help="Create the condition binary file for a specific mode, either train, validation, or test")
 
-flags.DEFINE_bool("randomized_conditions", False, "Generate multiple binary files for randomized conditions with subject variability")
-flags.DEFINE_string("condition_path", None, "Path of condition folder with condition subject lists")
+parser.add_argument("--condition_path", default=None, type=str,
+	help="Path of directory with condition folders containing lists of images. This should be a \
+	complete file path.")
 
-flags.DEFINE_bool("generate_conditions", False, "Generate randomized lists of subjects for cross-validation testing")
-flags.DEFINE_string("verified_list",  "YALE_CUMC.csv", "Master list of subjects from which to create per-mode subject lists")
-flags.DEFINE_string("new_condition", 'YALE_CUMC', "Name of testing condition to create")
-flags.DEFINE_integer("cross_val_folds", 6, "Number of folds for cross-validation when creating new subject lists")
-flags.DEFINE_string("data_conditions","/data/recurrence_seq_lstm/data_conditions", "Location of data_conditions directory" )
+parser.add_argument("--generate_conditions", default=False, action='store_true',
+	help="Generate randomized lists of subjects for cross-validation testing. Succesfully using this \
+	parameter also requires specifying verified_list and new_condition.")
 
-flags.DEFINE_string("config", 'original', "Configuration for generating patches.")
-flags.DEFINE_string("sampling_method", "gauss", "Sampling pattern for generating sequences")
-flags.DEFINE_string("patches_only",False,"Generate only patches for new images, and no binary files.")
+parser.add_argument("--verified_list",  default="YALE_CUMC.csv", type=str,
+	help="List of subjects used for creating new cross-validation conditions.")
 
-flags.DEFINE_integer("gauss_seq", 6, "Number of sequences to generate per tile with gaussian sampling")
-flags.DEFINE_integer("gauss_stdev", 1500, "Standard deviation of pixel distance from center for gaussian sampling")
-flags.DEFINE_integer("gauss_tile_size", 2500, "Tile dimensions for splitting sample image for gauss distribution")
-flags.DEFINE_integer('min_patch', None, 'Minimum number of detections in patch area (if not specified, uses config default)')
-flags.DEFINE_integer('patch_thresh', None , 'Threshold for \"Other\" detection percentage in a patch area (if not specified, uses config default)')
+parser.add_argument("--new_condition", default='YALE_CUMC', type=str,
+	help="Name for the new cross-validation condition to be created.")
 
-flags.DEFINE_bool("check_new_masks", False, "Check for new masks to create")
-flags.DEFINE_string("new_image_dir", '/home/wanglab/Desktop/new_masks/', "location of new images to be masked and moved to image_data")
-flags.DEFINE_string("original_images_dir", '/data/recurrence_seq_lstm/image_data/original_images', 'location of original_images directory within image_data')
-flags.DEFINE_string("masks_dir", '/data/recurrence_seq_lstm/image_data/masks', 'location of masks directory within image_data' )
+parser.add_argument("--cross_val_folds", default=6, type=int,
+	help="Number of folds for the new cross-validation condition.")
 
-flags.DEFINE_bool("preverify", False, "Check image folders for verified_list images and masks")
+parser.add_argument("--data_conditions",default="/data/recurrence_seq_lstm/data_conditions", type=str,
+	help="Location of data_conditions directory, aka parent directory for the new cross-validation \
+	condition folder." )
 
-flags.DEFINE_integer('delaunay_radius', 40, 'pixel radius of delaunay triangulation')
-flags.DEFINE_string('detections_path', '/data/recurrence_seq_lstm/qupath_output/', 'Path to location of qupath cell detection information')
-flags.DEFINE_bool('include_features', True, 'Whether to add features to writing image binary (features still used for restricting sampling)')
+parser.add_argument("--config", default='original', type=str,
+	help="Configuration for generating patches. Configurations can be added as needed, but by default \
+	there are only two: the -original- config previously used for all testing and training and -300- \
+	used for smaller-patch testing.")
 
-flags.DEFINE_bool('overwrite', False, 'Overwrite existing binary files')
-flags.DEFINE_bool('no_write', False, 'Skip writing binary files (used for patch data creation)')
+parser.add_argument("--sampling_method", default="gauss",  type=str,
+	help="Sampling pattern for generating sequences. Three methods \
+	currently exist: gauss, column, and row")
 
-FLAGS = flags.FLAGS
+parser.add_argument("--check_new_masks", default=False, action='store_true',
+	help="Check for new masks in the new_image_dir directory that need to be created. This allows \
+	a method to run that triggers the batch-mask gimp script.")
+
+parser.add_argument("--new_image_dir", default='/home/wanglab/Desktop/new_masks/', type=str,
+	help="location of new images to be masked and moved to image_data")
+
+parser.add_argument("--original_images_dir", default='/data/recurrence_seq_lstm/image_data/original_images', type=str,
+	help='location of original_images directory within image_data')
+
+parser.add_argument("--masks_dir", default='/data/recurrence_seq_lstm/image_data/masks', type=str,
+	help='location of masks directory within image_data' )
+
+parser.add_argument("--preverify", default=False, action='store_true',
+	help="Check image folders for verified_list images and masks")
+
+parser.add_argument('--overwrite', default=False, action='store_true',
+	help='Overwrite existing binary files')
+
+parser.add_argument('--no_write', default=False, action='store_true',
+	help='Skip writing binary files (used for patch data creation)')
+
+# Gauss Configuration Flags
+parser.add_argument("--gauss_seq", default=6, type=int,
+	help="Number of sequences to generate per tile with gaussian sampling")
+
+parser.add_argument("--gauss_stdev", default=1500, type=int,
+	help="Standard deviation of pixel distance from center for gaussian sampling")
+
+parser.add_argument("--gauss_tile_size", default=2500, type=int,
+	help="Tile dimensions for splitting sample image for gauss distribution")
+
+parser.add_argument('--min_patch', default=None,
+	help='Minimum number of detections in patch area (if not specified, uses config default)')
+
+parser.add_argument('--patch_thresh', default=None ,
+	help='Threshold for \"Other\" detection percentage in a patch area (if not specified, uses config default)')
+
+parser.add_argument('--delaunay_radius', default=40, type=int,
+	help='The desired pixel radius of delaunay triangulation. This parameter is only used for naming \
+	the directory that will hold binary files for qupath output of this radius.')
+
+parser.add_argument('--detections_path', default='/data/recurrence_seq_lstm/qupath_output/', type=str,
+	help='Directory of qupath cell detection information used for creating binary files.')
+
+parser.add_argument('--remove_features', default=False, action='store_true',
+	help='Remove features from writing image binaries (features still used for restricting sampling).\
+	This parameter was created for testing the accuracy of (features vs. no features), and is mostly \
+	ignored since using features was significantly more successful.')
+
+
+
+### Column Sampling Flags (Deprecated)
+parser.add_argument("--r_overlap", default=75, type=int,
+	help="Percentage of overlap of recurrence samples")
+parser.add_argument("--nr_overlap", default=50, type=int,
+	help="Percentage of overlap of nonrecurrence samples")
+parser.add_argument("--num_steps", default=20, type=int,
+	help="Number of steps in RNN sequence")
+parser.add_argument("--patches_only",default=False, action='store_true',
+	help="Generate only binary files for new images, and not for conditions or network testing.")
+
+# FLAGS = flags.FLAGS
+FLAGS = parser.parse_args()
 FILLER = '                                            '
 SKIP_LIST = []
 
@@ -83,7 +150,7 @@ class OriginalPatchConfig(object):
 	recurrence_overlap_percentage = FLAGS.r_overlap
 	nonrecurrence_overlap_percentage = FLAGS.nr_overlap
 	num_steps = FLAGS.num_steps
-	add_features = FLAGS.include_features
+	add_features = not FLAGS.remove_features
 
 def query_yes_no(question, default="yes"):
     """Ask a yes/no question via raw_input() and return their answer.
@@ -214,10 +281,10 @@ def write_patch_binary_file(filename, label, config):
 	_ = next(reader) # discard header line
 	image_to_ID_dict = dict()
 	for line in reader:
-		image_to_ID_dict[line[0].split(".")[0]+"_patches"] = line[1]
+		image_to_ID_dict[line[0].split(".")[0]] = line[1]
 
 	patient_ID_byte_string = str.encode(image_to_ID_dict[filename])
-	padded_subject_file_name = "{:<100}".format(image[:-8])
+	padded_subject_file_name = "{:<100}".format(image)
 	image_base_name = str.encode(padded_subject_file_name)
 	img_dict = {}
 	img_dict = get_patch_coords(img_dict, patch_image_list)
@@ -322,16 +389,19 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, mode, config):
 
 	print('OTHER_PATCH_THRESHOLD: ' + str(gauss_config.OTHER_PATCH_THRESHOLD))
 	print('MINIMUM_PATCH_CELLS: ' + str(gauss_config.MINIMUM_PATCH_CELLS))
-	if FLAGS.include_features:
-		prepend = "FEATURES_"
-	else:
+	
+	if FLAGS.remove_features:
 		prepend = "NoFEATURES_"
-	gauss_config.add_features = FLAGS.include_features
+	else:
+		prepend = "FEATURES_"
+
+	gauss_config.add_features = not FLAGS.remove_features
 	gauss_category_folder = prepend + "tile" + str(gauss_config.tile_size) + "_std_dev" + str(gauss_config.maximum_std_dev) + "_seq" + str(gauss_config.maximum_seq_per_tile) + '_patch' + str(gauss_config.patch_size)
 	gauss_folder = os.path.join(config.image_data_folder_path,'feature_patches','OTHER_gaussian_patches_' + str(gauss_config.pixel_radius) + '_min' + str(gauss_config.MINIMUM_PATCH_CELLS) + '_' + str(gauss_config.large_cluster) + '_' + str(int(gauss_config.OTHER_PATCH_THRESHOLD*100)) + 'p', gauss_category_folder)
 	os.makedirs(gauss_folder, exist_ok=True)
 	# remove_characters = -8
 	for image in images_list:
+		image = os.path.splitext(image)[0]
 		csv_path = os.path.join(gauss_config.features_path, str(gauss_config.patch_size) + 'patch_histogram_values.csv')
 		header = ['subject','image', 'patch_size', 'x', 'y','tile','tumor_count','imm_count','other_count', 'total_count']
 		if not os.path.exists(csv_path):
@@ -343,90 +413,76 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, mode, config):
 		if image in SKIP_LIST:
 			cprint('Skipping ' + image + ', already skipped in current run', 'red')
 			continue
-		image_bin_name = image[:-8] + ".bin"
+		image_bin_name = image + ".bin"
 		image_bin_path = os.path.join(gauss_folder, image_bin_name)
 		#pdb.set_trace()
 		if not os.path.exists(image_bin_path) or FLAGS.overwrite or FLAGS.no_write:
-			detections_filename = os.path.join(FLAGS.detections_path, image[:-8] + '_Detectionstxt.txt')
+			detections_filename = os.path.join(FLAGS.detections_path, image + '_Detectionstxt.txt')
 			if not os.path.exists(detections_filename):
-				cprint('No detections exist for ' + image[:-8] + ', skipping due to lack of features', 'red')
+				cprint('No detections exist for ' + image + ', skipping due to lack of features', 'red')
 				SKIP_LIST.append(image)
 				continue
-			if (image[:-8] + "_patches") not in image_to_ID_dict:
-				cprint(image[:-8] + ' not in image dictionary, skipping', 'red')
+			if image not in image_to_ID_dict:
+				cprint(image + ' not in image dictionary, skipping', 'red')
 				pdb.set_trace()	
 				continue
-			cprint('Creating image binary file for ' + image[:-8], 'white', 'on_green')
-			mask_name = 'mask_' + image[:-8] + '.tif'
+			cprint('Creating image binary file for ' + image, 'white', 'on_green')
+			mask_name = 'mask_' + image + '.tif'
 			mask_path = os.path.join(config.image_data_folder_path,'masks', mask_name)
-			img_info = (image_to_ID_dict[image[:-8] + "_patches"], image[:-8])
+			img_info = (image_to_ID_dict[image], image)
 			if FLAGS.no_write:
-				seq_features = gauss.generate_sequences(mask_path, gauss_config, image[:-8], image_to_ID_dict[image], detections=FLAGS.detections_path, image_info=img_info)
+				seq_features = gauss.generate_sequences(mask_path, gauss_config, image, image_to_ID_dict[image], detections=FLAGS.detections_path, image_info=img_info)
 			else:
-				seq_features = gauss.generate_sequences(mask_path, gauss_config, image[:-8], image_to_ID_dict[image], detections=FLAGS.detections_path)
+				seq_features = gauss.generate_sequences(mask_path, gauss_config, image, image_to_ID_dict[image], detections=FLAGS.detections_path)
 			if FLAGS.no_write:
 				continue
 			if not seq_features:
 				cprint('No detections exist, skipping due to lack of features', 'red')
 				SKIP_LIST.append(image)
 				continue
-			gauss.regional_verification(seq_features, gauss_config, image[:-8], image_to_ID_dict[image])
+			gauss.regional_verification(seq_features, gauss_config, image, image_to_ID_dict[image])
 			image_bin = open(image_bin_path, 'wb+')
-			image_tiff_name = image[:-8] + '.tif'
-			image_patch_name = image[:-8] + '_patches'
+			image_tiff_name = image + '.tif'
 			# cprint("Writing binary file...", 'green', 'on_white')
-			gauss.write_image_bin(image_bin, image_tiff_name, image_to_ID_dict[image_patch_name], seq_features, gauss_config)
+			gauss.write_image_bin(image_bin, image_tiff_name, image_to_ID_dict[image], seq_features, gauss_config)
 			image_bin.close()
 
-		cprint("Appending " + image[:-8] + FILLER, 'green', end="\r")
+		cprint("Appending " + image + FILLER, 'green', end="\r")
 		image_bin = open(image_bin_path, 'rb+')
 		image_bytes = image_bin.read(os.path.getsize(image_bin_path))
 		bin_file.write(image_bytes)
 		image_bin.close()
+	with open('/data/recurrence_seq_lstm/need_qupath.csv', 'a') as csvfile:
+				writer = csv.writer(csvfile)
+				for image in SKIP_LIST:
+					writer.writerow([os.path.join(config.image_data_folder_path,'original_images',image +'.tif')])
 
 def create_binary_file(label, mode, config, cond_path=None):
 	bin_name = label + "_" + mode + ".bin"
 	
-	if FLAGS.randomized_conditions:
+	if cond_path:
 		bin_path = os.path.join(FLAGS.condition_path, cond_path, label, bin_name)
 	else:
 		bin_path = os.path.join(os.path.abspath(config.image_data_folder_path), label, bin_name)
 
-	if label == "recurrence" :
-		sequence_overlap_percentage = FLAGS.r_overlap / 100
-	else:
-		sequence_overlap_percentage = FLAGS.nr_overlap / 100
-
-	num_steps = config.num_steps
 	cprint("*********" + label + " " + mode + "*************", 'magenta', 'on_white')
 	bin_file = remove_exisiting_binary_file_then_create_new(bin_path)
-	# bin_file = open(label + "_" + mode + ".bin", "ab+")
-
-	IMAGE_HEIGHT = config.image_height
-	IMAGE_WIDTH = config.image_width
-	IMAGE_DEPTH = config.image_depth
 	
-	image_bytes = IMAGE_HEIGHT * IMAGE_WIDTH * IMAGE_DEPTH
-
-	write_array = np.zeros([num_steps, image_bytes], dtype=np.uint8)
-	patch_coord_array = np.zeros([num_steps, 2], dtype=np.uint32)
-	write_stride = int(math.floor(num_steps * (1-sequence_overlap_percentage)))
-
-	dir_counter = 0
 	images_filename = label + "_" + mode + "_subjects.txt"
 	
 	# walk over all files in starting directory and sub-directories
-	if FLAGS.randomized_conditions:
+	if cond_path:
 		images_file = open(os.path.join(FLAGS.condition_path, cond_path, images_filename))
 	else:
 		images_file = open(os.path.join(config.image_data_folder_path, "per_mode_subjects", images_filename), "r")
 	images_list = images_file.read().splitlines()
-	image_to_ID_csv_file = open(os.path.join(config.image_data_folder_path,"image_to_subject_ID.csv"),"r")
-	reader = csv.reader(image_to_ID_csv_file, delimiter=",")
-	_ = next(reader) # discard header line
-	image_to_ID_dict = dict()
-	for line in reader:
-		image_to_ID_dict[line[0].split(".")[0]+"_patches"] = line[1]
+	images_file.close()
+	with open(os.path.join(config.image_data_folder_path,"image_to_subject_ID.csv"),"r") as image_to_ID_csv_file:
+		reader = csv.reader(image_to_ID_csv_file, delimiter=",")
+		_ = next(reader) # discard header line
+		image_to_ID_dict = dict()
+		for line in reader:
+			image_to_ID_dict[line[0].split(".")[0]] = line[1]
 
 	#                                                          #
 	# ********** Default behavior is gauss sampling ********** #
@@ -439,6 +495,22 @@ def create_binary_file(label, mode, config, cond_path=None):
 	# ********** Set sampling method to 'column' or 'row' for the following sampling ********** #
 	#                                                                                           #
 	else:
+
+		if label == "recurrence" :
+			sequence_overlap_percentage = FLAGS.r_overlap / 100
+		else:
+			sequence_overlap_percentage = FLAGS.nr_overlap / 100
+		dir_counter = 0
+		num_steps = config.num_steps
+
+		IMAGE_HEIGHT = config.image_height
+		IMAGE_WIDTH = config.image_width
+		IMAGE_DEPTH = config.image_depth
+		image_bytes = IMAGE_HEIGHT * IMAGE_WIDTH * IMAGE_DEPTH
+
+		write_array = np.zeros([num_steps, image_bytes], dtype=np.uint8)
+		patch_coord_array = np.zeros([num_steps, 2], dtype=np.uint32)
+		write_stride = int(math.floor(num_steps * (1-sequence_overlap_percentage)))
 		for image in images_list:
 			counter = 0
 			if image == "":
@@ -456,7 +528,7 @@ def create_binary_file(label, mode, config, cond_path=None):
 			patch_image_list = os.listdir(patch_folder_path)
 			padded_ID_string = "{:<5}".format(image_to_ID_dict[image])
 			patient_ID_byte_string = str.encode(padded_ID_string)
-			padded_subject_file_name = "{:<100}".format(image[:-8])
+			padded_subject_file_name = "{:<100}".format(image)
 			image_base_name = str.encode(padded_subject_file_name)
 			img_dict = {}
 			img_dict = get_patch_coords(img_dict, patch_image_list)
@@ -526,10 +598,11 @@ def create_binary_file(label, mode, config, cond_path=None):
 							bin_file.write(image_base_name)
 							bin_file.write(str.encode(coord_str))
 							bin_file.write(writing)
+	# Wrap it up!
 	bin_file.close()
 
 def create_binary_mode_files(label, config, cond_path=None):
-	if FLAGS.randomized_conditions:
+	if cond_path:
 		os.makedirs(os.path.join(FLAGS.condition_path, cond_path, label), exist_ok=True)
 		create_binary_file(label, "train", config, cond_path=cond_path)
 		create_binary_file(label, "valid", config, cond_path=cond_path)
@@ -560,6 +633,9 @@ def create_string_from_coord_array(coord_array, num_steps):
 	return coord_string
 
 def generate_new_masks():
+	# This is a hacky method that sort of works. There must be a new_image_dir containing images to be masked.
+	# Binary masks are created, then moved to the mask directory, and the original images are moved to their
+	# proper place. In general, it's safer to create masks separately using batch-mask before running preprocess_lstm
 	wd = os.getcwd()
 	os.chdir(FLAGS.new_image_dir)
 	subprocess.check_call("gimp -i -b '(batch-mask \"*.tif\" 217)' -b '(gimp-quit 0)'", shell=True)
@@ -568,6 +644,7 @@ def generate_new_masks():
 	os.chdir(wd)
 
 def generate_new_conditions():
+	# You really do not want to overwrite an existing set of conditions, so this check is in place.
 	if not query_yes_no("Do you want to generate new testing conditions?", default="no"):
 		return False
 	new_condition_name = FLAGS.new_condition
@@ -589,7 +666,7 @@ def pre_verify_subjects():
 	exit_bool = False
 	reader = csv.DictReader(verified_file, delimiter = ",")
 	for row in reader:
-		image_base = row['image'][:-8] # Change this when transitioning away from "_patches" bug
+		image_base = row['image']
 		row_mask = "mask_" + image_base + ".tif"
 		row_image = image_base + ".tif"
 		if not os.path.exists(os.path.join(FLAGS.original_images_dir, row_image)):
@@ -599,14 +676,14 @@ def pre_verify_subjects():
 	if missing_image_list:
 		exit_bool = True
 		cprint("\nUnable to create binary files due to missing images:", 'white', 'on_red')
-		for image in missing_image_list:
+		for image in sorted(missing_image_list):
 			cprint(image)
 	print("")
 	if missing_mask_list:
 		if not missing_image_list and not FLAGS.check_new_masks:
 			exit_bool = True
 		cprint("Missing masks:", 'white', 'on_red')
-		for mask in missing_mask_list:
+		for mask in sorted(missing_mask_list):
 			cprint(mask)
 	return exit_bool
 
@@ -637,27 +714,25 @@ if __name__ == '__main__':
 			sys.exit(1)
 		FLAGS.condition_path = os.path.join(FLAGS.data_conditions, FLAGS.new_condition)
 
-	if FLAGS.condition_path:
-		FLAGS.randomized_conditions = True
 	config = get_config()
-	og_images_directory = os.path.join(config.image_data_folder_path, "original_images")
 
-	image_to_ID_csv_file = open(os.path.join(config.image_data_folder_path,"image_to_subject_ID.csv"),"r")
-	reader = csv.DictReader(image_to_ID_csv_file, delimiter=",")
-	if not FLAGS.sampling_method == 'gauss':
+
+	## Preparation for deprecated sampling method, only used if going back to row or column sampling.
+	#
+	if FLAGS.sampling_method == 'row' or FLAGS.sampling_method == 'column':
+		image_to_ID_csv_file = open(os.path.join(config.image_data_folder_path,"image_to_subject_ID.csv"),"r")
+		reader = csv.DictReader(image_to_ID_csv_file, delimiter=",")
 		for row in reader:
 			if int(row["label"]) == 1:
 				create_patch_folder(row["image_name"], "recurrence", config)
 			elif int(row["label"]) == 0:
 				create_patch_folder(row["image_name"], "nonrecurrence", config)
+	#
+	#
 
 	if not FLAGS.patches_only:
-		if FLAGS.randomized_conditions:
-			cprint("Reeeeeeeeeeeeeeeeeeeeed", 'white', 'on_red')
+		if FLAGS.condition_path:
 			cprint("--> Generating condition binary files", 'white', 'on_green')
-			print
-			if not FLAGS.condition_path:
-				raise ValueError("If creating binary files for with randomized subjects, must specify the condition's enclosing folder with --condition_path.")
 			for condition_folder in sorted(os.listdir(FLAGS.condition_path)):
 				if "condition" not in condition_folder:
 					continue
@@ -666,9 +741,9 @@ if __name__ == '__main__':
 					create_binary_mode_files("recurrence", config, cond_path=condition_folder)
 					create_binary_mode_files("nonrecurrence", config, cond_path=condition_folder)
 		else:
-			if not FLAGS.nonrecurrence_only:
+			if FLAGS.recurrence_only:
 				create_binary_mode_files("recurrence", config)
-			if not FLAGS.recurrence_only:
+			if FLAGS.nonrecurrence_only:
 				create_binary_mode_files("nonrecurrence", config)
 
 sys.exit(0)
