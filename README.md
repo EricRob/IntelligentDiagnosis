@@ -1,4 +1,4 @@
-## Overall Pipeline
+# Overall Pipeline
 
 0. Review data for adherence to quality standards, if multi-layered TIFFs run export_top_layer.py
 1. Split large images into regular TIFF format (from BigTIFF, run large_image_splitter.py and gimp convert-tiff script)
@@ -11,23 +11,25 @@
 
 
 
-## preprocess_lstm.py
+# preprocess_lstm.py
 
 Append together image binary files for feeding into recurrence_seq_lstm. If an image's binary files does not exist, then one will first be created and then appended to the condition binary file.
 
 If a binary file does not exist, and some of the necessary data for its creation is unavailable, then it will be skipped and omitted from the condition binary file.
 
-This script inherently depends on centroid_lstm.py and qupath_lstm.py. With certain parameters, it can additionally interact with a subject_list_generator.py and gimp_threshold_mask (a custom gimp batch script).
+This script inherently depends on **centroid_lstm.py** and **qupath_lstm.py**. With certain parameters, it can additionally interact with **subject_list_generator.py** and **gimp_threshold_mask** (a custom gimp batch script).
+
+## Overall File Creation Flags
 
 ### --condition_path
 
 Path of directory with condition folders containing lists of images. *This should be a complete file path.*
 
 The directory specified by this parameter should contain subdirectories of cross-validation conditions named of the convention:
-001_condition
-002_condition
-...
-00n_condition
+001_condition \
+002_condition \
+... \
+00n_condition \
 
 Where *n* is the total number of cross-validation conditions.
 
@@ -87,9 +89,14 @@ python3 preprocess_lstm.py --generate_conditions --data_conditions=/data/recuren
 
 ### --config
 
-Configuration for generating patches. Configurations can be added as needed, but only through changing the code. By default there are only two configurations:
-* "original" used for all testing and training
-* "300" used for smaller-patch testing.
+Configuration for generating patches. Configurations can be added as needed, but only through changing the code. The following configurations exist:
+* "original" used for CUMC, and Geisinger 40x testing and training
+* "small" used for smaller-patch testing of 40x samples
+* "yale" used for 20x images from Yale
+* "yale_small" used for smaller-patch testing of 20x samples
+* "sinai" used for 40x images from Sinai (different sampling parameters than "original)
+
+If an invalid configuration is specified then the "original" config is used.
 
 Default: *original*
 
@@ -232,6 +239,55 @@ Default: *None*
 ```
 python3 preprocess_lstm.py --mode=valid
 ```
+
+## Gauss Configuration Flags
+
+### --gauss_seq
+
+Number of sequences to generate per tile with gaussian samples.
+
+**Only works with the "original" configuration.** This should normally be specified in the configuration rather than with this flag.
+
+Default: *6*
+
+```
+python3 preprocess_lstm.py --gauss_seq=6
+```
+
+### --gauss_stdev
+
+Size of standard deviation from tile centers for 2D gaussian sampling of patch locations.
+
+**Only works with the "original" configuration.** This should normally be specified in the configuration rather than with this flag.
+
+Default: *1500*
+
+```
+python3 preprocess_lstm.py --gauss_stdev=1500
+```
+
+### --gauss_tile_size
+
+Tile dimensions for splitting sample image for gauss distribution.
+
+**Only works with the "original" configuration.** This should normally be specified in the configuration rather than with this flag.
+
+Default: *1500*
+
+```
+python3 preprocess_lstm.py --gauss_tile_size=1500
+```
+### --gauss_tile_size
+
+Tile dimensions for splitting sample image for gauss distribution.
+
+
+Default: *1500*
+
+```
+python3 preprocess_lstm.py --gauss_tile_size=1500
+```
+
 
 
 ### And coding style tests
