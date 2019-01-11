@@ -35,49 +35,6 @@ import matplotlib.image as mpimg
 
 warnings.simplefilter('ignore', Image.DecompressionBombWarning)
 
-# parser = argparse.ArgumentParser(description='Process QuPath detections and results for feature creation')
-
-# flags.DEFINE_integer("test", 0, "Test mode")
-# flags.DEFINE_integer('clusters', 8, 'Number of clusters for KMeans Clustering')
-# flags.DEFINE_bool('all_cells', False, 'Create histogram showing features of all cells')
-# flags.DEFINE_bool('all_features', False, 'Use all QuPath features')
-# flags.DEFINE_string('closest_centers', 5, 'Number of closest cluster centers to find when computing regional immune density')
-# flags.DEFINE_float('dense_thresh', 3, 'percentage of clusters used to calculate the cluster density feature')
-# flags.DEFINE_string('classifier', 'v2', 'Classifier version to use')
-# flags.DEFINE_bool('load', True, 'load >data< array from saved pickle')
-# flags.DEFINE_bool('display_clusters', False, 'Display immune clusters in a scatter plot')
-# flags.DEFINE_string('show_delaunay', False, 'Show histograms of delaunay triangulation')
-# flags.DEFINE_string('detections_dir', '/data/QuPath/CellCounter/detections_v2', "Directory of QuPath detections files that should be used.")
-# flags.DEFINE_bool('overwrite_saved', False, 'overwrite existing data (not implemented everywhere!)')
-# flags.DEFINE_integer('small_d_cluster', 1, 'size of small cluster for class comparison')
-# flags.DEFINE_integer('delaunay_radius', 50, 'pixel radius of delaunay triangulation')
-
-# parser.add_argument('--test', default=0, type=int, help='test mode')
-# parser.add_argument('--clusters', default=8, type=int, help='Number of clusters for KMeans Clustering')
-# parser.add_argument('--all_cells', default=False, type=bool, help='Create histogram showing features of all cells')
-# parser.add_argument('--all_features', default=False, type=bool, help='Use all QuPath features')
-# parser.add_argument('--closest_centers', default=5, type=str, help='Number of closest cluster centers to find when computing regional immune density')
-# parser.add_argument('--dense_thresh', default=3, type=float, help='percentage of clusters used to calculate the cluster density feature')
-# parser.add_argument('--classifier', default='v2', type=str, help='Classifier version to use')
-# parser.add_argument('--load', default=True, type=bool, help='load >data< array from saved pickle')
-# parser.add_argument('--display_clusters', default=False, type=bool, help='Display immune clusters in a scatter plot')
-# parser.add_argument('--show_delaunay', default=False, type=str, help='Show histograms of delaunay triangulation')
-# parser.add_argument('--detections_dir', default='/data/QuPath/CellCounter/detections_v2', type=str, help="Directory of QuPath detections files that should be used.")
-# parser.add_argument('--overwrite_saved', default=False, type=bool, help='overwrite existing data (not implemented everywhere!)')
-# parser.add_argument('--small_d_cluster', default=3, type=int, help='size of small cluster for class comparison')
-# parser.add_argument('--delaunay_radius', default=40, type=int, help='pixel radius of delaunay triangulation')
-# parser.add_argument('--yale', default=False, type=bool, help='Processing yale data (as opposed to CUMC)')
-
-# QFLAGS = parser.parse_args()
-
-# Global variables
-# DETECTIONS = '/data/QuPath/CellCounter/delaunay_px' + str(QFLAGS.delaunay_radius) + '/CUMC/'
-# if QFLAGS.yale:
-#     DETECTIONS = '/data/yale_qupath/measurements/'
-# else:
-#     DETECTIONS = '/data/QuPath/CellCounter/delaunay_px' + str(QFLAGS.delaunay_radius) + '/CUMC/'
-# DETECTIONS = '/data/yale_qupath/measurements'
-
 STATUS_CSV = '/data/recurrence_seq_lstm/IntelligentDiagnosis/recurrence_status.csv'
 OMIT_KEY = ['Name', 'ROI', 'Centroid X px', 'Centroid Y px']
 # OMIT_CLASS = [ 'red_cell', 'ulceration']
@@ -94,16 +51,20 @@ DATA_STORAGE = '/data/recurrence_seq_lstm/feature_testing/delaunay_grid_search.c
 
 # Function declarations
 def convert_nan_to_zero(arr):
+    # For all nan values in a numpy array, convert them to zero (rather than removing them).
     nan_locs = np.isnan(arr)
     arr[nan_locs] = 0
     return arr
 
 def remove_nan_values(arr):
+    # For all nan values in a numpy array, remove them (rather than converting to zero).
     nan_locs = np.isnan(arr)
     no_nans = arr[np.invert(nan_locs)]
     return no_nans
 
 def get_bins(rec, non):
+    # Creates a numpy array of bin locations for a histogram given the 
+    # range of recurrent and nonrecurrent values
     maximum = np.amax(rec)
     if np.amax(non) > maximum:
         maximum = np.amax(non)
@@ -113,6 +74,11 @@ def get_bins(rec, non):
     return np.linspace(minimum, maximum, num=100)
 
 def show_base_features_histogram(RE, NR):
+
+    #
+    # Create a histogram for each of the 33 features output
+    # from qupath's standard watershed algorithm.
+    #
 
     for cell_class in RE:
         n = 0
@@ -137,6 +103,12 @@ def show_base_features_histogram(RE, NR):
         plt.show()
 
 def add_to_cell_dict(cell_dict, subject):
+    
+    #
+    # For an individual cell, this method places it into a new dictionary for
+    # its appropriate recurrence class.
+    #
+
     for image in subject:
         if image == 'status':
             continue
@@ -168,6 +140,11 @@ def add_to_cell_dict(cell_dict, subject):
     return
 
 def get_cell_counts(image):
+
+    #
+    # Counts cells and adds together their area for immune and tumor classes.
+    #
+
     tumor_count = 1
     immune_count = 1
     tumor_area = 1
@@ -183,6 +160,9 @@ def get_cell_counts(image):
     return immune_count, tumor_count, immune_area, tumor_area
 
 def create_roc_curve(fpr, tpr, thresholds, roc_auc):
+    #
+    # Displays ROC curve (no calculations involved)
+    #
     plt.plot(1-fpr, tpr, color='darkorange', lw=2)
     plt.plot([0, 1], [1,0], color='black', lw=1, linestyle='--')
     legend = 'ROC curve (area = %0.2f)' % roc_auc
@@ -192,6 +172,12 @@ def create_roc_curve(fpr, tpr, thresholds, roc_auc):
     # plt.clf()
 
 def run_thresholds(start, stop, samples, labels, values):
+    
+    #
+    # From (start) to (stop), calcualte (samples) number of thresholds for a given feature.
+    # Prints the maximum accuracy calculate from within the linear space.
+    #
+
     holds = []
     accuracies = []
     sensitivities = []
@@ -232,102 +218,12 @@ def run_thresholds(start, stop, samples, labels, values):
     print('Max Acc: ' + "{0:03f}".format(max_acc) + '  AUC: ' + "{0:03f}".format(area) )
     return holds, accuracies, sensitivities, specificities
 
-def load_image_masks(data):
-    re_immune = []
-    re_tumor = []
-    nr_immune = []
-    nr_tumor = []
-    re_portion = []
-    nr_portion = []
-    for subject in data:
-        if subject == 'status':
-            continue
-        if 'status' not in data[subject]:
-            continue
-        for image in data[subject]:
-            mask_filename = os.path.join(MASK_LOCATION, 'mask_' + image + '.tif')
-            if image == 'status':
-                continue
-            elif not os.path.exists(mask_filename):
-                continue
-            else:
-                cprint('reading ' + image + FILLER, 'cyan', end='\r')
-                immune_count, tumor_count, immune_area, tumor_area = get_cell_counts(data[subject][image])
-                if (immune_count + tumor_count):
-                    imm_portion = immune_count / (immune_count + tumor_count)
-                else:
-                    continue
-                # mask = io.imread(mask_filename)
-                # mask = mask[:,:,0]
-                # pos = mask > 0
-                # mask[pos] = 1
-                # mask_total = np.sum(mask)
-                # mask_size = mask.shape[0] * mask.shape[1]
-                # immune_ratio = immune_area / mask_total
-                # tumor_ratio = tumor_area / mask_total
-
-                total_area = immune_area + tumor_area
-                immune_ratio = immune_area / total_area
-                tumor_ratio = tumor_area / total_area
-                if data[subject]['status']:
-                    re_immune.append(immune_ratio)
-                    re_tumor.append(tumor_ratio)
-                    re_portion.append(imm_portion)
-                else:
-                    nr_immune.append(immune_ratio)
-                    nr_tumor.append(tumor_ratio)
-                    nr_portion.append(imm_portion)
-                # del mask
-                # del pos
-    re_portion_labels = np.ones(len(re_portion))
-    nr_portion_labels = np.zeros(len(nr_portion))
-    re_portion_np = np.array(re_portion)
-    nr_portion_np = np.array(nr_portion)
-
-    labels = np.concatenate((re_portion_labels, nr_portion_labels))
-    values = np.concatenate((re_portion_np, nr_portion_np))
-
-    # thresholds = [0.1, 0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.19, 0.2]
-    thresh, acc, sens, spec = run_thresholds(0, .5, 501, labels, values)
-    plt.plot(thresh, acc, lw=2)
-    plt.ylim(0,1)
-    plt.title('Immune cell proportions')
-    plt.axhline(max(acc), c='red')
-    plt.xlabel('Immune cell count / Total cell count')
-    plt.ylabel('Accuracy')
-    plt.text(.1, .8, 'Threshold: 0.204 Accuracy: ' "{0:03f}".format(max(acc)))
-    plt.show()
-    
-
-
-    # fpr, tpr, thresholds = roc_curve(labels, values, pos_label=1)
-    # roc_auc = auc(fpr, tpr)
-    # create_roc_curve(fpr, tpr, thresholds, roc_auc)
-
-    # pdb.set_trace()
-    # plt.subplot(3,1,1)
-    # plt.hist(re_immune, bins=25, alpha=0.5, label='Rec immune')
-    # plt.hist(nr_immune, bins=25, alpha=0.5, label="nr immune")
-    # plt.title('immune')
-    # plt.subplot(3,1,2)
-    # plt.hist(re_tumor, bins=25, alpha=0.5,label='Rec tumor')
-    # plt.hist(nr_tumor, bins=25, alpha=0.5, label="nr tumor")
-    # plt.legend(loc='upper right')
-    # plt.title('tumor')
-
-    # plt.subplot(3,1,3)
-    # plt.hist(re_portion, stacked=True, bins=50, alpha=0.5, label='Recurrent', density=True)
-    # plt.hist(nr_portion, stacked=True, bins=50, alpha=0.5, label="Nonrecurrent", density=True)
-    # plt.title('Portion')
-
-
-
-
-    # plt.subplot(4,1,4)
-
-    return
-
 def detections(subject_id, image_name, config):
+    #
+    # This is the method that can be called externally
+    # from the image_processor (which is now called preprocess_lstm)
+    #
+
     return main(subject_id, image_name, image_processor=True, config=config)
 
 def add_all_cell_features(detection, row):
@@ -341,6 +237,10 @@ def add_all_cell_features(detection, row):
     return 1
 
 def add_cell_features(detection, row):
+
+    #
+    # Extract the useful information from the large QuPath detection file.
+    #
 
     detection['cell_area'] = int(row['Cell: Area'])
     detection['nuc_area'] = int(row['Nucleus: Area'])
@@ -536,23 +436,6 @@ def k_means_clustering_and_features(data, delaunay):
                 cell_locs[subject][image] = {}
                 cell_locs[subject][image]['cell_locations'] = cell_locations
                 cell_locs[subject][image]['region_counts'] = region_cell_counts
-    # plt.subplot(3,1,1)
-    # plt.hist(rec_center_ratio, stacked=True, bins=25, alpha=0.5, label='Rec immune', density=True)
-    # plt.hist(nr_center_ratio, stacked=True, bins=25, alpha=0.5, label="nr immune", density=True)
-    # plt.title('min/max ratio')
-    # plt.legend(loc='upper right')
-
-    # plt.subplot(3,1,2)
-    # plt.hist(rec_center_mean, stacked=True, bins=25, alpha=0.5,label='Rec tumor', density=True)
-    # plt.hist(nr_center_mean, stacked=True, bins=25, alpha=0.5, label="nr tumor", density=True)
-    # plt.legend(loc='upper right')
-    # plt.title('center_distances')
-
-    # plt.subplot(3,1,3)
-    # plt.hist(rec_density, stacked=True, bins=25, alpha=0.5,label='Rec tumor', density=True)
-    # plt.hist(nr_density, stacked=True, bins=25, alpha=0.5, label="nr tumor", density=True)
-    # plt.legend(loc='upper right')
-    # plt.title('densities')
 
 
     threshold_accuracies(rec_density, nr_density, str(QFLAGS.clusters) + ' Cluster Densities, ' + str(QFLAGS.dense_thresh / 10) + ' threshold')
@@ -957,22 +840,6 @@ def show_delaunay_histogram(delaunay):
             add_delaunay_histogram_features(RE, delaunay[subject])
         else:
             add_delaunay_histogram_features(NR, delaunay[subject])
-    # for cell_class in RE:
-    #     cprint('Plotting ' + cell_class, 'green')
-    #     for feature in RE[cell_class]:
-    #         if 'Centroid' in feature:
-    #             continue
-    #         else:
-    #             n += 1
-    #             plt.subplot(4,5,n)
-    #             rec = convert_nan_to_zero(np.array(RE[cell_class][feature]))
-    #             non = convert_nan_to_zero(np.array(NR[cell_class][feature]))
-    #             bins = get_bins(rec / len(rec), non / len(non))
-    #             # plt.hist(non, stacked=True, alpha=0.5, label='Nonrecurrent', density=True)
-    #             # plt.hist(rec, stacked=True, alpha=0.5, label="Recurrent", density=True)
-    #             plt.hist(non, alpha=0.5, label='Nonrecurrent')
-    #             plt.hist(rec, alpha=0.5, label="Recurrent")
-    #             plt.xlabel(feature + ' -- ' + cell_class)
 
     re_imm_large_count = np.array(RE['Immune cells']['large_cluster_cells'])
     nr_imm_large_count = np.array(NR['Immune cells']['large_cluster_cells'])
@@ -1032,65 +899,6 @@ def show_delaunay_histogram(delaunay):
     with open(DATA_STORAGE, 'a') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(plot_row)
-
-
-
-    # plt.subplot(2,1,1)
-    # plt.hist(nr_portion_six, alpha=0.5, label='Nonrecurrent')
-    # plt.hist(re_portion_six, alpha=0.5, label="Recurrent")
-
-    # re_labels = np.ones(len(re_portion_six))
-    # nr_labels = np.zeros(len(nr_portion_six))
-
-    # labels = np.concatenate((re_labels, nr_labels))
-    # values = np.concatenate((re_portion_six, nr_portion_six))
-    # plt.legend(loc='upper right')
-
-    # plt.subplot(2,1,2)
-    # thresh, acc = run_thresholds(0, 10, 10001, labels, values)
-    # max_acc = max(acc)
-    # plt.plot(thresh, acc, lw=2)
-    # plt.ylim(0,1)
-    # plt.title('small cluster <= ' + str(QFLAGS.small_d_cluster) + ' accuracy: ' + "{:02f}".format(max_acc))
-    # plt.axhline(max_acc, c='red')
-    # plt.xlabel('Imm cells in large cluster / total immune')
-    # plt.ylabel('Accuracy')
-    # plt.show()
-    # pdb.set_trace()
-    # plt.subplot(2,3,2)
-    # values = np.concatenate((re_portion_two, nr_portion_two))
-
-    
-    # plt.legend(loc='upper right')
-
-    # plt.subplot(2,3,5)
-    # thresh, acc = run_thresholds(0, 1, 1001, labels, values)
-    # max_acc = max(acc)
-    # plt.plot(thresh, acc, lw=2)
-    # plt.ylim(0,1)
-    # plt.title('small cluster <= ' + str(QFLAGS.small_d_cluster) + ' accuracy: ' + "{:02f}".format(max_acc))
-    # plt.axhline(max_acc, c='red')
-    # plt.xlabel('(large imm) / (all imm + all tumor)')
-    # plt.ylabel('Accuracy')
-
-    # plt.subplot(2,3,3)
-    # plt.hist(nr_portion_three, alpha=0.5, label='Nonrecurrent')
-    # plt.hist(re_portion_three, alpha=0.5, label="Recurrent")
-
-    # values = np.concatenate((re_portion_three, nr_portion_three))
-
-    
-    # plt.legend(loc='upper right')
-
-    # plt.subplot(2,3,6)
-    # thresh, acc = run_thresholds(0, 1, 1001, labels, values)
-    # max_acc = max(acc)
-    # plt.plot(thresh, acc, lw=2)
-    # plt.ylim(0,1)
-    # plt.title('small cluster <= ' + str(QFLAGS.small_d_cluster) + ' accuracy: ' + "{:02f}".format(max_acc))
-    # plt.axhline(max_acc, c='red')
-    # plt.xlabel('(small imm) / (all imm + all tumor)')
-    # plt.ylabel('Accuracy')
 
     return 1
 
@@ -1370,6 +1178,10 @@ def main(subject_id = None, image_name=None, image_processor=False, config=None)
     # load_image_masks(data)
 
 
+    #
+    # ::::::::   DICTIONARY STRUCTURES   ::::::::
+    #
+    #
     # delaunay:
     #   --[subject]
     #       --[image]
@@ -1377,7 +1189,7 @@ def main(subject_id = None, image_name=None, image_processor=False, config=None)
     #               --[delaunay centroid]
     #                   --[cluster info]
     # e.g. delaunay['00-05']['00_05_D_3_1']['Tumor'][(682, 5699)]['size']
-
+    #
     # d_delaunay:
     #   --[subject]
     #       --[image]
@@ -1385,7 +1197,7 @@ def main(subject_id = None, image_name=None, image_processor=False, config=None)
     #               --[cell classification]
     #                   --[delaunay centroid]
     #                       --[cluster info]
-
+    #
     # cell_locations:
     #   --[subject]
     #       --[image]
