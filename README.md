@@ -339,19 +339,6 @@ python3 preprocess_lstm.py --remove_features
 
 ## Summarizing Parameters
 
-### --info
-
-Indicate whether majority voting information should be saved on a per-subject, per-image, or both per-subject and per-image basis. 
-
-Working values are **subject** and **info**. Any other value will print both per-subject and per-image summary statistics if the **--print** parameter is set.
-
-A summary csv is saved for the **subject** value.
-
-Default: *subject*
-
-```
-python3 majority_vote.py --info=subject
-```
 
 ### --base_path
 
@@ -364,18 +351,66 @@ Default: *None*
 python3 majority_vote.py --base_path=/data/recurrence_seq_lstm/results/new_testing_condition
 ```
 
+### --subjects
 
-### --create_maps
+For summarizing and voting in cross-validation conditions, this parameter specifices the csv indicating each the cross validation fold for each subject's testing. This file **must** be contained within the **base_path** directory.
 
-Create heat maps. This doesn't work right now, but it is being fixed.
+If this parameter is not specified, it is assumed the subjects are all within a single testing condition and no cross-validation was performed.
+
+Default: *None*
+
+```
+python3 majority_vote.py --subjects=New_condition_tests.csv --base_path=/data/recurrence_seq_lstm/results/new_testing_condition
+```
+
+### --info
+
+Indicate whether majority voting information should be saved on a per-subject, per-image, or both per-subject and per-image basis. 
+
+Working values are **subject** and **info**. Any other value will print both per-subject and per-image summary statistics if the **--print** parameter is set.
+
+A summary csv is saved for the **subject** value.
+
+Default: *subject*
+
+```
+python3 majority_vote.py --info=subject --base_path=/data/recurrence_seq_lstm/results/new_testing_condition
+
+```
+
+### --voting_file
+
+Name of the file containing all votes to be summarized. This file **must** be contained within the **base_path** directory.
+
+*voting_file.csv* is the output file name of both  **recurrence_seq_lstm_features.py**, and **concatenate_voting_csv.py**
+
+Default: *voting_file.csv*
+
+```
+python3 majority_vote.py --voting_file=voting_file.csv --base_path=/data/recurrence_seq_lstm/results/new_testing_condition
+```
+
+## Visualization parameters
+
+### --print
+
+Indicates to print results as terminal output. This is useful for per-image results, but for per-subject results the csv output has better information and formatting.
 
 Default: *False*
 
 ```
-python3 majority_vote.py --create_maps
+python3 majority_vote.py --print
 ```
 
-## Visualization parameters
+### --per_subject
+
+Save ROC curves based on votes per-subject, rather than for an entire condition. In general, this hasn't shown to be a very useful visualization. 
+
+Default: *False*
+
+```
+python3 majority_vote.py --per_subject
+```
 
 ### --histogram_path
 
