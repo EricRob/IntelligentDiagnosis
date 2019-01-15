@@ -9,7 +9,7 @@
 5. Summarize training conditions (ID_post_processing.py), or summarize a single testing condition (majority_vote.py)
 6. Summarize across multiple tests (multitest_summary.py)
 
-
+---
 
 # preprocess_lstm.py
 
@@ -334,6 +334,8 @@ Default: *False*
 ```
 python3 preprocess_lstm.py --remove_features
 ```
+
+---
 
 # majority_vote.py
 
