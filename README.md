@@ -198,7 +198,7 @@ python3 preprocess_lstm.py --no_write
 
 If the **--condition_path** is specified, this flag is ignored.
 
-Generate only recurrence binary file from lists in the config.image_data_folder_path/per_mode_subjects directory.
+Generate only recurrence binary file from lists in the *config.image_data_folder_path/per_mode_subjects* directory.
 
 Default: *False*
 
@@ -210,7 +210,7 @@ python3 preprocess_lstm.py --recurrence_only
 
 If the **--condition_path** is specified, this flag is ignored.
 
-Generate only nonrecurrence binary file from lists in the config.image_data_folder_path/per_mode_subjects directory.
+Generate only nonrecurrence binary file from lists in the *config.image_data_folder_path/per_mode_subjects* directory.
 
 Default: *False*
 
@@ -277,23 +277,164 @@ Default: *1500*
 ```
 python3 preprocess_lstm.py --gauss_tile_size=1500
 ```
-### --gauss_tile_size
+### --min_patch
 
-Tile dimensions for splitting sample image for gauss distribution.
+Sampling threshold: Minimum number of cell detections in patch area.
 
+If not specified, uses config default.
 
-Default: *1500*
-
-```
-python3 preprocess_lstm.py --gauss_tile_size=1500
-```
-
-
-
-### And coding style tests
-
-Explain what these tests test and why
+Default: *config default*
 
 ```
-Give an example
+python3 preprocess_lstm.py --min_patch=10
+```
+
+### --patch_thresh
+
+Sampling threshold: Threshold for 'Other' detection percentage in cell patch area.
+
+Parameter value is an integer percentage, e.g. 30 would mean a maximum of 30% of cell detections can be classified as "Other" to pass the threshold.
+
+If not specified, uses config default.
+
+Default: *config default*
+
+```
+python3 preprocess_lstm.py --patch_thresh=30
+```
+
+### --delaunay_radius
+
+The desired pixel radius of delaunay triangulation. This parameter is only used for naming the directory that will hold the binary files for qupath output of this radius.
+
+This is specified in the config as *pixel_radius*. If this parameter is not specified, the config default is used.
+
+Default: *config default*
+
+```
+python3 preprocess_lstm.py --delaunay_radius=40
+```
+
+### --detections_path
+
+Directory of qupath cell detection information used for creating binary files.
+
+Default: */data/recurrence_seq_lstm/qupath_output/*
+
+```
+python3 preprocess_lstm.py --detections_path=/data/recurrence_seq_lstm/qupath_output/
+```
+
+### --remove_features
+
+Remove features from writing image binaries (features still used for restricting sampling). This parameter was created for testing the accuracy of (features vs. no features), and is mostly ignored since using features was significantly more successful.
+
+Default: *False*
+
+```
+python3 preprocess_lstm.py --remove_features
+```
+
+# majority_vote.py
+
+## Summarizing Parameters
+
+### --info
+
+Indicate whether majority voting information should be saved on a per-subject, per-image, or both per-subject and per-image basis. 
+
+Working values are **subject** and **info**. Any other value will print both per-subject and per-image summary statistics if the **--print** parameter is set.
+
+A summary csv is saved for the **subject** value.
+
+Default: *subject*
+
+```
+python3 majority_vote.py --info=subject
+```
+
+### --base_path
+
+**REQUIRED**
+Path of folder containing the voting_file.csv to be summarized. This must be a complete file path.
+
+Default: *None*
+
+```
+python3 majority_vote.py --base_path=/data/recurrence_seq_lstm/results/new_testing_condition
+```
+
+
+### --create_maps
+
+Create heat maps. This doesn't work right now, but it is being fixed.
+
+Default: *False*
+
+```
+python3 majority_vote.py --create_maps
+```
+
+## Visualization parameters
+
+### --histogram_path
+
+Directory for saving histograms of voting information. These histograms did not end up being very informative or useful, so generally don't worry about this parameter.
+
+If this parameter is not specified, then a "histograms" directory will be created within the base_path directory.
+
+Default: *None*
+
+```
+python3 majority_vote.py --histogram_path=/data/recurrence_seq_lstm/results/new_testing_condition/histograms
+```
+
+### --og_image_path
+
+The directory path of the original_images used for generating heat maps.
+
+Default: */data/recurrence_seq_lstm/image_data/original_images/*
+
+```
+python3 majority_vote.py --og_image_path=/data/recurrence_seq_lstm/image_data/original_images
+```
+
+### --patch_size
+
+The patch size used for adjust temperature values in the heat map.
+
+Default: *500*
+
+```
+python3 majority_vote.py --patch_size=500
+```
+
+### --map_path
+
+Directory for saving heat maps
+
+Default: *None*
+
+```
+python3 majority_vote.py --map_path=/data/recurrence_seq_lstm/results/new_testing_condition/maps
+```
+
+### --create_maps
+
+Create heat maps. This doesn't work right now, but it is being fixed.
+
+Default: *False*
+
+```
+python3 majority_vote.py --create_maps
+```
+
+### --from_outside
+
+This is a flag created for an internal hack. Do not use this flag.
+
+Default: No.
+
+```
+Don't use this flag.
 ```
