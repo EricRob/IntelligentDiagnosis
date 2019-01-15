@@ -339,6 +339,10 @@ python3 preprocess_lstm.py --remove_features
 
 # majority_vote.py
 
+This script produces the results and recurrence prediction for the neural network output. Votes are taken from the **--voting_file** csv within the **--base_path**, and after loading are de-duplicated based on sequence coordinates and assembled within a subject for the overall recurrence prediction. 
+
+Results can be summarized by subject, by image, and over cross-validation folds. By default, the voting threshold is set at 50%. Running the script produces a majority vote bar graph split up by recurrence status and a summary csv to a folder specified by the **--base_path** parameter.
+
 ## Summarizing Parameters
 
 
