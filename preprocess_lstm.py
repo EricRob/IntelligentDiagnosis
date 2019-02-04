@@ -29,9 +29,12 @@ parser = argparse.ArgumentParser(description='Create binary files for feeding in
 
 ## Overall File Creation Flags
 parser.add_argument("--recurrence_only", default=False, action='store_true',
-	help="Generate only recurrence binary file")
+	help="Generate only recurrence binary file from lists in the config.image_data_folder_path/per_mode_subjects directory")
 parser.add_argument("--nonrecurrence_only", default=False, action='store_true',
-	help="Generate nonrecurrence binary file only")
+	help="Generate only nonrecurrence binary file from lists in the config.image_data_folder_path/per_mode_subjects directory")
+# Example: Create only nonrecurrence data
+# python3 preprocess_lstm.py --nonrecurrence_only
+# This does not work with the condition_path parameter. If condition_path is specified, this flag is ignored.
 
 parser.add_argument("--seg_path", default=None, type=str,
 	help="Segmentations are custom-made binary masks for sampling from specific areas within the image. \
@@ -93,13 +96,13 @@ parser.add_argument('--no_write', default=False, action='store_true',
 	help='Skip writing binary files (used for patch data creation)')
 
 # Gauss Configuration Flags
-parser.add_argument("--gauss_seq", default=6, type=int,
+parser.add_argument("--gauss_seq", default=None, type=int,
 	help="Number of sequences to generate per tile with gaussian sampling")
 
-parser.add_argument("--gauss_stdev", default=1500, type=int,
+parser.add_argument("--gauss_stdev", default=None, type=int,
 	help="Standard deviation of pixel distance from center for gaussian sampling")
 
-parser.add_argument("--gauss_tile_size", default=2500, type=int,
+parser.add_argument("--gauss_tile_size", default=None, type=int,
 	help="Tile dimensions for splitting sample image for gauss distribution")
 
 parser.add_argument('--min_patch', default=None,
@@ -377,11 +380,14 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, mode, config):
 			gauss_config = gauss.OriginalPatchConfig_test()
 		else:
 			gauss_config = gauss.OriginalPatchConfig_train()
-		gauss_config.tile_size = FLAGS.gauss_tile_size
-		gauss_config.maximum_seq_per_tile = FLAGS.gauss_seq
-		gauss_config.maximum_std_dev = FLAGS.gauss_stdev
 		cprint('Using Original configuration', 'green', 'on_grey')
 	
+	if FLAGS.gauss_seq:
+		gauss_config.maximum_seq_per_tile = FLAGS.gauss_seq
+	if FLAGS.gauss_tile_size:
+		gauss_config.tile_size = FLAGS.gauss_tile_size
+	if FLAGS.gauss_stdev:
+		gauss_config.maximum_std_dev = FLAGS.gauss_stdev
 	if FLAGS.min_patch:
 		gauss_config.MINIMUM_PATCH_CELLS = FLAGS.min_patch
 	if FLAGS.patch_thresh:
@@ -633,9 +639,12 @@ def create_string_from_coord_array(coord_array, num_steps):
 	return coord_string
 
 def generate_new_masks():
+	#
 	# This is a hacky method that sort of works. There must be a new_image_dir containing images to be masked.
 	# Binary masks are created, then moved to the mask directory, and the original images are moved to their
 	# proper place. In general, it's safer to create masks separately using batch-mask before running preprocess_lstm
+	#
+
 	wd = os.getcwd()
 	os.chdir(FLAGS.new_image_dir)
 	subprocess.check_call("gimp -i -b '(batch-mask \"*.tif\" 217)' -b '(gimp-quit 0)'", shell=True)
@@ -644,7 +653,10 @@ def generate_new_masks():
 	os.chdir(wd)
 
 def generate_new_conditions():
+	#
 	# You really do not want to overwrite an existing set of conditions, so this check is in place.
+	#
+
 	if not query_yes_no("Do you want to generate new testing conditions?", default="no"):
 		return False
 	new_condition_name = FLAGS.new_condition
@@ -659,6 +671,11 @@ def generate_new_conditions():
 	return True
 
 def pre_verify_subjects():
+	
+	#
+	# This is a time saving method that needs to be updated for usage with FLAGS.condition_path
+	#
+	
 	verified_path = os.path.join(FLAGS.data_conditions, FLAGS.verified_list)
 	verified_file = open(verified_path, "r")
 	missing_mask_list = []
@@ -717,7 +734,9 @@ if __name__ == '__main__':
 	config = get_config()
 
 
-	## Preparation for deprecated sampling method, only used if going back to row or column sampling.
+	#
+	# Individual image binary preparation for deprecated sampling method, only used if reverting
+	# back to row or column sampling.
 	#
 	if FLAGS.sampling_method == 'row' or FLAGS.sampling_method == 'column':
 		image_to_ID_csv_file = open(os.path.join(config.image_data_folder_path,"image_to_subject_ID.csv"),"r")
@@ -743,7 +762,10 @@ if __name__ == '__main__':
 		else:
 			if FLAGS.recurrence_only:
 				create_binary_mode_files("recurrence", config)
-			if FLAGS.nonrecurrence_only:
+			elif FLAGS.nonrecurrence_only:
+				create_binary_mode_files("nonrecurrence", config)
+			else:
+				create_binary_mode_files("recurrence", config)
 				create_binary_mode_files("nonrecurrence", config)
 
 sys.exit(0)

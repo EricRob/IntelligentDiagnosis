@@ -198,9 +198,9 @@ class YaleConfig_train(object):
 	num_steps = 20
 	large_cluster = 1
 	pixel_radius = 40
-	MINIMUM_PATCH_CELLS = 20
+	MINIMUM_PATCH_CELLS = 10
 	add_features = True
-	OTHER_PATCH_THRESHOLD = 0.5
+	OTHER_PATCH_THRESHOLD = 0.3
 	OTHER_TILE_THRESHOLD = 0.8
 
 class YaleConfig_test(object):
@@ -222,9 +222,9 @@ class YaleConfig_test(object):
 	num_steps = 20
 	large_cluster = 1
 	pixel_radius = 40
-	MINIMUM_PATCH_CELLS = 20
+	MINIMUM_PATCH_CELLS = 10
 	add_features = True
-	OTHER_PATCH_THRESHOLD = 0.5
+	OTHER_PATCH_THRESHOLD = 0.3
 	OTHER_TILE_THRESHOLD = 0.8
 
 class YaleConfig_train_small(object):
@@ -283,7 +283,7 @@ class QuPathConfig(object):
 	closest_centers = 5
 	classifier = 'v2'
 	feature_directory = '/data/recurrence_seq_lstm/feature_testing'
-	detections = '/data/yale_qupath/measurements/'
+	detections = '/data/recurrence_seq_lstm/qupath_output/'
 	small_d_cluster = 3
 	delaunay_radius = 40
 	load = False
@@ -342,7 +342,7 @@ def adjust_tile_grid_edges(tiles, shape, tile_size, edge_overlap):
 
 def bottom_edge_tiles(image, tile_size, edge_overlap):
 	#
-	# The edge is of varying size. If it is less than (config.edge_overlap) percent size
+	# The edge row is of varying size. If it is less than (config.edge_overlap) percent size
 	# of a normal tile, then it is merged with the last row of tiles and a thick edge is created.
 	# If it is greater than config.edge_overlap, then it is treated as its own row and
 	# a thin edge is created.
@@ -372,10 +372,10 @@ def bottom_edge_tiles(image, tile_size, edge_overlap):
 
 def right_edge_tiles(image, tile_size, edge_overlap):
 	#
-	# The edge is of varying size. If it is less than (config.edge_overlap) percent size
+	# The edge column is of varying size. If it is less than (config.edge_overlap) percent size
 	# of a normal tile, then it is merged with the last column of tiles and a thick edge is created.
-	# If it is greater than config.edge_overlap, then it is treated as its own column and
-	# a thin edge is created.
+	# If it is greater than config.edge_overlap, then it is treated as its own column and a thin
+	# edge is created.
 	#
 
 	right_overlap = image.shape[1] / tile_size % 1 < (edge_overlap / 100)
@@ -997,6 +997,8 @@ def remove_empty_delaunay_tiles(dels, all_tiles):
 
 	remove_list = []
 	for tile in dels:
+		# Is this a bug? Should it be both Tumor and Immune Cells?
+		# Just 'Tumor' has shown to have better results.
 		if not dels[tile]['Tumor'] and not dels[tile]['Immune cells']:
 			remove_list.append(tile)
 	for tile in remove_list:
@@ -1009,7 +1011,7 @@ def sort_delaunay_into_tiles(cells, dels, tiles, config):
 	# ATTN:
 	# Tiles are (y, x), delaunay is (x, y), whoops!!
 	#
-	# Determines the clusters that fall within each tile's coordinates.
+	# Determines the clusters that fall within each tile's coordinate area.
 	#
 
 	tile_infos = {}
@@ -1325,12 +1327,12 @@ def verify_images(all_centroids, image_name, subject_ID, config):
 			patch = image[y:(y+config.patch_size),x:(x+config.patch_size),:]
 			pyr = transform.pyramid_gaussian(patch, downscale=config.scaling_factor, multichannel=True)
 			_scaled = False
-				for p in pyr: 	
-					if _scaled:
-						continue
-					if p.shape[0] == config.sample_size:
-						patch_scaled = (p*255).astype('uint8')
-						_scaled = True
+			for p in pyr: 	
+				if _scaled:
+					continue
+				if p.shape[0] == config.sample_size:
+					patch_scaled = (p*255).astype('uint8')
+					_scaled = True
 			patch_name = os.path.join(folder_path,'' + str(x) + "_" + str(y) + ".tif")
 			cprint(str((y,x)),'cyan')
 			io.imsave(patch_name, patch_scaled)

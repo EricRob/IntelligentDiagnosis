@@ -109,7 +109,7 @@ def test_default_data():
 		print('No models matching ' + ARGS.model + ' found, check parameters and retry.')
 		return
 	if not ARGS.no_script:
-		script, script_name = get_script_file(new=False)
+		script, script_name = get_script_file(new=True)
 	python_base = 'python3 ' + os.path.join(SCRIPT_DIR,'recurrence_lstm_features.py')
 	if ARGS.omen:
 		python_base = python_base + ' --omen_run=True'
@@ -140,15 +140,15 @@ def test_default_data():
 		except:
 			cprint('Error while testing ' + model[0] + model[1] + ' with default data (' + ARGS.data + '), must retest!', 'red')
 			retest_list.append(model[0]+model[1])
-		if ARGS.summarize:
-			python_base = 'python3 ' + os.path.join(SCRIPT_DIR,'multitest_summary.py')
-			model = ' --model=' + model[0][:-1]
-			condition = ' --condition=' + ARGS.name
-			run_line = python_base + model + condition
-			if not ARGS.no_script:
-				script.write(run_line + '\n')
-			if not ARGS.no_execute:
-				subprocess.check_call(run_line, shell=True)
+	if ARGS.summarize:
+		python_base = 'python3 ' + os.path.join(SCRIPT_DIR,'multitest_summary.py')
+		model = ' --model=' + model[0][:-1]
+		condition = ' --condition=' + ARGS.name
+		run_line = python_base + model + condition
+		if not ARGS.no_script:
+			script.write(run_line + '\n')
+		if not ARGS.no_execute:
+			subprocess.check_call(run_line, shell=True)
 
 	if not ARGS.no_script:
 		save_script(script, script_name)

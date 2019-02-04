@@ -26,6 +26,7 @@ from sklearn.metrics import roc_curve, auc
 from sklearn.cluster import KMeans
 from scipy.cluster.vq import vq
 from scipy.spatial import Voronoi, voronoi_plot_2d
+from scipy.spatial import ConvexHull, distance
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 from tempfile import TemporaryFile
@@ -62,14 +63,15 @@ parser.add_argument('--classifier', default='v2', type=str, help='Classifier ver
 parser.add_argument('--load_pickles',  default=False, action='store_true',  help='load >data< array from saved pickle')
 parser.add_argument('--display_clusters', default=False, action='store_true', help='Display immune clusters in a scatter plot')
 parser.add_argument('--show_delaunay', default=False, action='store_true', help='Show histograms of delaunay triangulation')
-parser.add_argument('--detections_dir', default='/data/QuPath/CellCounter/delaunay_px40/CUMC/', type=str, help="Directory of QuPath detections files that should be used.")
+parser.add_argument('--detections_dir', default='/data/recurrence_seq_lstm/qupath_output/', type=str, help="Directory of QuPath detections files that should be used.")
 parser.add_argument('--overwrite_saved', default=False, action='store_true', help='overwrite existing data (not implemented everywhere!)')
 parser.add_argument('--small_d_cluster', default=1, type=int, help='size of small cluster for class comparison')
 parser.add_argument('--delaunay_radius', default=40, type=int, help='pixel radius of delaunay triangulation')
 parser.add_argument('--yale',  default=False, action='store_true',  help='Processing yale data (as opposed to CUMC or Sinai)')
-parser.add_argument('--sinai',  default=False, action='store_true',  help='Processing sinai data (as opposed to CUMC or Yale')
+parser.add_argument('--sinai',  default=False, action='store_true',  help='Processing sinai data (as opposed to CUMC or Yale)')
 parser.add_argument('--subject_list', default=None, type=str, help='List of subjects for feature analysis')
 parser.add_argument('--no_load', default=False, action='store_true', help='load and load_pickles don\'t seem to work, so maybe this will.')
+parser.add_argument('--no_save', default=False, action='store_true', help='Skip saving [data] and [delaunay] arrays during pre-processing')
 
 QFLAGS = parser.parse_args()
 
@@ -368,6 +370,17 @@ def add_cell_features(detection, row):
     return 1
 
 def k_means_clustering_and_features(data, delaunay):
+
+    ####################################################################
+    #                                                                  #
+    # Region Cell Counts:                                              #
+    # [center_x, center_y, immune count, tumor count, imm + tumor]     #
+    #                                                                  #
+    # Cell Locations:                                                  #
+    # [center_x, center_x, 1/0:immune/tumor, cluster number]           #
+    #                                                                  #
+    ####################################################################
+
     print()
     plt.clf()
     rec_center_ratio = []
@@ -377,7 +390,9 @@ def k_means_clustering_and_features(data, delaunay):
     rec_density = []
     nr_density = []
     classy = QFLAGS.classifier
-
+    KMEANS_CSV = open('/data/recurrence_seq_lstm/kmeans.csv', 'a+')
+    writer = csv.writer(KMEANS_CSV)
+    writer.writerow(['subject', 'image', 'label', 'cluster', 'area', 'imm_count', 'tumor_count'])
 
     cell_locs_filename = os.path.join(FEATURE_DIR, classy + '_' + str(QFLAGS.clusters) + ADD_NAME + '_cluster_cell_locations.pickle')
     dense_delaunay_filename = os.path.join(FEATURE_DIR, classy + '_' + str(QFLAGS.clusters) + ADD_NAME + '_cluster_dense_delaunay.pickle')
@@ -463,6 +478,11 @@ def k_means_clustering_and_features(data, delaunay):
             centers_filename = os.path.join(FEATURE_DIR, image,classy + image + '_KNNcenters_' + str(QFLAGS.clusters) + '_clusters.npy')
             labels_filename = os.path.join(FEATURE_DIR, image,classy + image + '_KNNcenters_' + str(QFLAGS.clusters) + '_labels.npy')
             # if os.path.exists(centers_filename):
+
+            #
+            # General note: coord_space = locations of immune cells, tumor_space = locations of tumor cells
+            #
+
             if 0:
                 cprint(image)
                 cprint('Loading clusters...', 'grey', 'on_white')
@@ -484,7 +504,8 @@ def k_means_clustering_and_features(data, delaunay):
             vertices_filename = os.path.join(FEATURE_DIR, image, classy + image + '_cluster_vertices_' + str(QFLAGS.clusters) + '_clusters.npy')
             regions_filename = os.path.join(FEATURE_DIR, image, classy + image + '_cluster_regions_' + str(QFLAGS.clusters) + '_clusters.pickle')
             
-            # regions was the last file added, so if it exists then all must exist,
+            # regions was the last file added, so if it exists then all must exist.
+            # but i think this is broken, so it always skips
             if os.path.exists(regions_filename) and False:
                 cprint('Loading cell locations and KMeans regions...', 'grey', 'on_white')
                 cell_locations = np.load(locations_filename)
@@ -503,15 +524,61 @@ def k_means_clustering_and_features(data, delaunay):
                 cprint('Placing cells in regions...', 'yellow')
                 cell_locations = place_cells_in_regions(regions, vertices, coord_space, tumor_space)
                 region_cell_counts = fill_region_cell_counts(centers, cell_locations)
+
+                # Get coordinates of all immune cells and their cluster numbers
+                imm_locations = cell_locations[cell_locations[:,2]==1]
+
+                # Make a huge empty array that will never fill up. Is this necessary? I don't think so.
+                imm_clusters = np.zeros((QFLAGS.clusters, imm_locations.shape[0], 2), dtype=int)
+
+                # Take the immune cells for each cluster and place them in the 3D array
+
+                for i in np.arange(QFLAGS.clusters):
+
+                    k = 10 # Number of minimum distances
+                    if imm_locations.shape[0] > k:
+                        clust_locs, hull = compute_hull(imm_locations, cluster=i+1, remove=k, threshold=0.8)
+                        region_cell_counts[i, 4] = hull.area
+                    else:
+                        region_cell_counts[i, 4] = 0
+                    # clust_distances, clust_locs = find_immune_distances(imm_locations, i+1, k)
+                    # ranks = np.argsort(clust_distances)
+                    # quick_hist(clust_distances)
+                    # max_ind = clust_distances.shape[0]*.95
+                    # remove_rank = []
+                    # for n in np.arange(clust_distances.shape[0]):
+                    #     if ranks[n] >= max_ind:
+                    #         remove_rank.append(n)
+                    # points = np.delete(clust_locs, (remove_rank), axis=0)
+                    # plt.clf()
+                    # plot_hull(points)
+                    # plt.show()
+                    # plot_hull(clust_locs)
+                    # plt.show()
+                    writerow = [subject, image, data[subject]['status'], i+1, region_cell_counts[i,4], region_cell_counts[i,2], region_cell_counts[i, 3]]
+                    writer.writerow(writerow)
+
+                    # pdb.set_trace()
+
+
+                
                 cprint('Saving KMeans cluster data...', 'green')
                 np.save(locations_filename, cell_locations)
                 np.save(regions_filename, region_cell_counts)
                 np.save(vertices_filename, vertices)
                 with open(regions_filename, 'wb') as handle:
                     pickle.dump(regions, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            # pdb.set_trace()
 
-            # Region Cell Counts:
-            # [center_x, center_y, immune count, tumor count, imm + tumor]
+            ####################################################################
+            #                                                                  #
+            # Region Cell Counts:                                              #
+            # [center_x, center_y, immune count, tumor count, imm + tumor]     #
+            #                                                                  #
+            # Cell Locations:                                                  #
+            # [center_x, center_x, 1/0:immune/tumor, cluster number]           #
+            #                                                                  #
+            ####################################################################
 
             if os.path.exists(densities_filename) and not QFLAGS.overwrite_saved:
                 largest_densities = np.load(densities_filename)
@@ -552,13 +619,14 @@ def k_means_clustering_and_features(data, delaunay):
                 plt.subplot(1,2,2)
                 img = mpimg.imread(os.path.join(ORIGINAL_IMAGE_DIR, image + '.tif'))
                 plt.imshow(img)
-                # plt.scatter(coord_space[:,0],coord_space[:,1], s=2, c=labels, cmap='plasma', alpha = 0.5)
+                plt.scatter(coord_space[:,0],coord_space[:,1], s=2, c=labels, cmap='plasma', alpha = 0.5)
                 plt.scatter(centers[:, 0],centers[:, 1], c='black', s=100, alpha=0.8)
                 plt.show()
             if not os.path.exists(cell_locs_filename):
                 cell_locs[subject][image] = {}
                 cell_locs[subject][image]['cell_locations'] = cell_locations
                 cell_locs[subject][image]['region_counts'] = region_cell_counts
+            # pdb.set_trace()
     # plt.subplot(3,1,1)
     # plt.hist(rec_center_ratio, stacked=True, bins=25, alpha=0.5, label='Rec immune', density=True)
     # plt.hist(nr_center_ratio, stacked=True, bins=25, alpha=0.5, label="nr immune", density=True)
@@ -577,7 +645,6 @@ def k_means_clustering_and_features(data, delaunay):
     # plt.legend(loc='upper right')
     # plt.title('densities')
 
-
     threshold_accuracies(rec_density, nr_density, str(QFLAGS.clusters) + ' Cluster Densities, ' + str(QFLAGS.dense_thresh / 10) + ' threshold')
     # plt.show()
 
@@ -587,7 +654,47 @@ def k_means_clustering_and_features(data, delaunay):
     if create_dense_delaunay:
         with open(dense_delaunay_filename, 'wb') as handle:
             pickle.dump(dense_delaunay, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    KMEANS_CSV.close()
     return cell_locs, dense_delaunay
+def compute_hull(imm_locations, cluster=1, remove=100, threshold=0.95):
+    clust_distances, clust_locs = find_immune_distances(imm_locations, cluster, remove)
+    ranks = np.argsort(clust_distances)
+    # quick_hist(clust_distances)
+    max_ind = clust_distances.shape[0]*threshold
+    remove_rank = []
+    for n in np.arange(clust_distances.shape[0]):
+        if ranks[n] >= max_ind:
+            remove_rank.append(n)
+    points = np.delete(clust_locs, (remove_rank), axis=0)
+    # plt.clf()
+    hull = plot_hull(points)
+    # plt.show()
+    return clust_locs, hull
+
+
+def find_immune_distances(imm_locations, cluster_id, num_neighbors):
+    # All immune cells in cluster (i)
+    cluster_locs = imm_locations[imm_locations[:,3]==cluster_id][:,:2]
+    # Distance between all immune cells in a given cluster
+    imm_dist = distance.cdist(cluster_locs, cluster_locs, 'euclidean')
+    imm_dist.sort()
+    min_dist = imm_dist[:,1:num_neighbors+1] #first column is always zero (the distance from a point to itself)
+    return np.sum(min_dist, axis=1) / np.std(min_dist, axis=1), cluster_locs
+
+def quick_hist(arr):
+    plt.clf()
+    plt.hist(arr)
+    plt.show()
+
+def plot_hull(points):
+    hull = ConvexHull(points)
+    print('Hull area: ' + str(hull.area))
+    return hull
+    # plt.plot(points[:,0], points[:,1], 'o')
+    # for simplex in hull.simplices:
+    #     plt.plot(points[simplex, 0], points[simplex, 1], 'k-')
+    # plt.plot(points[hull.vertices,0], points[hull.vertices,1], 'r--', lw=2)
+    # plt.plot(points[hull.vertices[0],0], points[hull.vertices[0],1], 'ro')
 
 def find_delaunay_clusters_in_densest_regions(regions, vertices, densest_regions, delaunay):
     delaunay_in_regions = {}
@@ -1317,7 +1424,7 @@ def main(subject_id = None, image_name=None, image_processor=False):
                     
                     if image_name not in image_to_ID_dict:
                         cprint(image_name + ' not in image_to_ID_dict!!!!', 'white', 'on_red')
-                        pdb.set_trace()
+                        continue
                     subject = image_to_ID_dict[image_name]
                     if QFLAGS.subject_list:
                         if subject not in subject_load_list:
@@ -1333,8 +1440,8 @@ def main(subject_id = None, image_name=None, image_processor=False):
                     if image_name not in data[subject]:
                         data[subject][image_name] = {}
                     if file.endswith('.txt') and 'bleached' not in file:
-                        # count += 1
-                        # cprint('scanning ' + file + ' (' + str(count) + '/' + str(len(filenames)) + ')' + FILLER, 'yellow', end="\r")
+                        count += 1
+                        cprint('scanning ' + file + ' (' + str(count) + '/' + str(len(filenames)) + ')' + FILLER, 'yellow', end="\r")
                         with open(os.path.join(dirpath, file), 'r') as f:
                             reader = csv.DictReader(f, delimiter='\t')
                             # print(reader.fieldnames)
@@ -1371,7 +1478,7 @@ def main(subject_id = None, image_name=None, image_processor=False):
                     if row[0] in delaunay:
                         delaunay[row[0]]['status'] = int(row[1])
 
-        if not QFLAGS.test and not image_processor:
+        if not QFLAGS.test and not image_processor and not QFLAGS.no_save:
             cprint('\nSaving [data] array', 'yellow')
             with open(data_filename, 'wb') as handle:
                 pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
