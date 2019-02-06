@@ -756,13 +756,6 @@ def add_dense_histogram_features(cluster_dict, subject):
     return 1
 
 def create_delaunay_features(delaunay, subject, image, row, config):
- 
-####################################################
-##                                                ##
-##  Part of Delaunay data structure, pickle must  ##
-##  be overwritten if this section changes        ##
-##                                                ##
-####################################################
 
     # Organizing
     row_class = row['Class']
@@ -1011,174 +1004,7 @@ def main(subject_id = None, image_name=None, image_processor=False, config=None)
     # cprint('radius: ' + str(QFLAGS.delaunay_radius) + 'px, small cluster: ' + str(QFLAGS.small_d_cluster), 'white', 'on_green')
     #pdb.set_trace()
 
-    QFLAGS = config # (In case there are any unexpected variables, because this is a sloppy fix)
-    
-    classy = config.classifier
-    FEATURE_DIR = config.feature_directory
-    DETECTIONS = config.detections
-    OMIT_CLASS = config.omit_class
-    if config.all_features:
-        data_filename = os.path.join(FEATURE_DIR, classy + 'all_features_all_data.pickle')
-    else:
-        data_filename = os.path.join(FEATURE_DIR, classy + 'all_data.pickle')
-
-    if image_processor:
-        detections_file = image_name + '_Detectionstxt.txt'
-        if not os.path.exists(os.path.join(DETECTIONS, detections_file)):
-            return None
-
-    create_delaunay = True
-    delaunay_filename = os.path.join(FEATURE_DIR, classy + '_' + str(config.small_d_cluster) + 'smallCluster_' + str(config.delaunay_radius) + 'radius_delaunay.pickle')
-    if QFLAGS.yale:
-        delaunay_filename = os.path.join(FEATURE_DIR, 'yale_' + str(config.small_d_cluster) + 'smallCluster_radius_delaunay.pickle')
-
-    if config.load and os.path.exists(delaunay_filename) and not image_processor:
-        print('Loading delaunay features')
-        with open(delaunay_filename, 'rb') as handle:
-            delaunay = pickle.load(handle)
-            create_delaunay = False
-    else:
-        delaunay = {}
-
-    if not create_delaunay:
-        if config.load and os.path.exists(data_filename) and not image_processor:
-            print('Loading saved cell data')
-            with open(data_filename, 'rb') as handle:
-                data = pickle.load(handle)
-    else:
-        data = {}
-        if image_processor:
-            # Current run called from image_processor.py
-            detections_file = image_name + '_Detectionstxt.txt'
-            with open(os.path.join(DETECTIONS, detections_file), 'r') as f:
-
-                subject = 'subj'
-                data[subject] = {}
-                data[subject][image_name] = {}
-                reader = csv.DictReader(f, delimiter='\t')
-                n = 0
-                for row in reader:
-                    if row['Class'] not in OMIT_CLASS:
-                        if row_has_nan(row):
-                            continue
-                        n += 1
-                        cell_name = '{0:06}'.format(n)
-                        data[subject][image_name][cell_name] = {}
-                        add_cell_features(data[subject][image_name][cell_name], row)
-                        create_delaunay_features(delaunay, subject, image_name, row, config)
-        else:
-            # Current run called directly
-            
-            # Read image_to_subject_ID csv file to get subject dictionary
-            image_to_ID_csv_file = open(os.path.join('/data/recurrence_seq_lstm/image_data',"image_to_subject_ID.csv"),"r")
-            reader = csv.reader(image_to_ID_csv_file, delimiter=",")
-            _ = next(reader) # discard header line
-            image_to_ID_dict = {}
-            for line in reader:
-                image_to_ID_dict[line[0].split(".")[0]] = line[1]
-
-            for (dirpath, dirnames, filenames) in os.walk(DETECTIONS):
-                count = 0
-                shuffle(filenames)
-                for file in filenames:
-                    if not file.endswith('.txt'):
-                        cprint('skipping ' + file + ', not a text file (' + str(count) + '/' + str(len(filenames)) + ')' + FILLER, 'yellow', end="\r")
-                        continue
-                    count +=1
-                    if QFLAGS.test:
-                        if count > QFLAGS.test:
-                            break
-                    if 'bleached' in file:
-                        cprint('skipping ' + file + ' (' + str(count) + '/' + str(len(filenames)) + ')' + FILLER, 'yellow', end="\r")
-                        continue
-                    n = 0
-                    image_name = file[:-18]
-                    if image_name not in image_to_ID_dict:
-                        pdb.set_trace()
-                    subject = image_to_ID_dict[image_name]
-                    if subject not in data:
-                        data[subject] = {}
-                    if image_name not in data[subject]:
-                        data[subject][image_name] = {}
-                    if file.endswith('.txt') and 'bleached' not in file:
-                        # count += 1
-                        cprint('scanning ' + file + ' (' + str(count) + '/' + str(len(filenames)) + ')' + FILLER, 'yellow', end="\r")
-                        with open(os.path.join(dirpath, file), 'r') as f:
-                            reader = csv.DictReader(f, delimiter='\t')
-                            # print(reader.fieldnames)
-                            for row in reader:
-                                if row_has_nan(row):
-                                    continue
-                                n += 1
-                                cell_name = '{0:06}'.format(n)
-                                skip_row = verify_row_contents(row)
-                                if skip_row:
-                                    cprint('skipping ' + image_name + FILLER, 'red')
-                                    break
-                                data[subject][image_name][cell_name] = {}
-                                if QFLAGS.all_features:
-                                    add_all_cell_features(data[subject][image_name][cell_name], row)
-                                else:
-                                    add_cell_features(data[subject][image_name][cell_name], row)
-
-                                if create_delaunay:
-                                    create_delaunay_features(delaunay, subject, image_name, row)
-
-                            
-        status = {}
-
-        if not image_processor:
-            with open(STATUS_CSV, 'r') as csvfile:
-                cprint('\nAdding recurrence status...', 'green', 'on_white')
-                reader = csv.reader(csvfile)
-                for row in reader:
-                    if row[0] in data:
-                        data[row[0]]['status'] = int(row[1])
-                        for image in data[row[0]]:
-                            if not 'status':
-                                data[row[0]][image]['status'] = int(row[1])
-                    if row[0] in delaunay:
-                        delaunay[row[0]]['status'] = int(row[1])
-
-        if not config.test and not image_processor:
-            cprint('\nSaving [data] array', 'yellow')
-            with open(data_filename, 'wb') as handle:
-                pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
-            if create_delaunay:
-                cprint('Saving [delaunay] array', 'yellow')
-                with open(delaunay_filename, 'wb') as handle:
-                    pickle.dump(delaunay, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        
-
-            cprint('Done!', 'green')
-
-    if image_processor:
-        if not data or not delaunay:
-            return None, None
-        image_dict = {}
-        img_delaunay = {}
-        for cell in data['subj'][image_name]:
-            image_dict[cell] = data['subj'][image_name][cell]
-            img_delaunay = delaunay['subj'][image_name]
-        return image_dict, img_delaunay
-
-    # Visualization
-    if QFLAGS.all_cells:
-        RE = {}
-        NR = {}
-        for subject in data:
-            if 'status' in data[subject]:
-                if data[subject]['status']:
-                    add_to_cell_dict(RE, data[subject])
-                else:
-                    add_to_cell_dict(NR, data[subject])
-        show_base_features_histogram(RE, NR)
-
-
-    # load_image_masks(data)
-
-
-    #
+        #
     # ::::::::   DICTIONARY STRUCTURES   ::::::::
     #
     #
@@ -1205,10 +1031,47 @@ def main(subject_id = None, image_name=None, image_processor=False, config=None)
     #           --[cell_locations] -> [x, y, label, cluster number]
 
 
-    cell_locations, d_delaunay = k_means_clustering_and_features(data, delaunay)
-    if QFLAGS.show_delaunay:
-        show_delaunay_histogram(delaunay)
-        # dense_delaunay_histogram(d_delaunay)
+    QFLAGS = config # (In case there are any unexpected variables, because this is a sloppy fix)
+    
+    classy = config.classifier
+    FEATURE_DIR = config.feature_directory
+    DETECTIONS = config.detections
+    OMIT_CLASS = config.omit_class
+
+    detections_file = image_name + '_Detectionstxt.txt'
+    if not os.path.exists(os.path.join(DETECTIONS, detections_file)):
+        print('No detections file in qupath_lstm')
+        return None
+
+    delaunay = {}
+    data = {}
+
+    detections_file = image_name + '_Detectionstxt.txt'
+    
+    with open(os.path.join(DETECTIONS, detections_file), 'r') as f:
+        subject = 'subj'
+        data[subject] = {}
+        data[subject][image_name] = {}
+        reader = csv.DictReader(f, delimiter='\t')
+        n = 0
+        for row in reader:
+            if row['Class'] not in OMIT_CLASS:
+                if row_has_nan(row):
+                    continue
+                n += 1
+                cell_name = '{0:06}'.format(n)
+                data[subject][image_name][cell_name] = {}
+                add_cell_features(data[subject][image_name][cell_name], row)
+                create_delaunay_features(delaunay, subject, image_name, row, config)
+
+    if not data or not delaunay:
+        return None, None
+    image_dict = {}
+    img_delaunay = {}
+    for cell in data['subj'][image_name]:
+        image_dict[cell] = data['subj'][image_name][cell]
+        img_delaunay = delaunay['subj'][image_name]
+    return image_dict, img_delaunay
 
 
 # Main body

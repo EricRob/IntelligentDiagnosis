@@ -140,11 +140,13 @@ def data_type():
   return tf.float16 if FLAGS.use_fp16 else tf.float32
 
 def epoch_size(mode, batch_size, num_steps, image_size):
-  total_recur_sequences = os.path.getsize(os.path.join(FLAGS.recur_data_path, 'recurrence_' + mode + '.bin')) // (image_size * image_size * 3 * num_steps + 345)
-  total_nonrecur_sequences = os.path.getsize(os.path.join(FLAGS.nonrecur_data_path, 'nonrecurrence_' + mode + '.bin')) // (image_size * image_size * 3 * num_steps + 345)
+  meta_data_bytes = 345 # (subject ID bytes + image name bytes + features bytes)
+  total_recur_sequences = os.path.getsize(os.path.join(FLAGS.recur_data_path, 'recurrence_' + mode + '.bin')) // (image_size * image_size * 3 * num_steps + meta_data_bytes)
+  total_nonrecur_sequences = os.path.getsize(os.path.join(FLAGS.nonrecur_data_path, 'nonrecurrence_' + mode + '.bin')) // (image_size * image_size * 3 * num_steps + meta_data_bytes)
   max_sequences_per_label = max(total_recur_sequences, total_nonrecur_sequences)
   
-  # Need to be certain all sequences are run in the test condition, deduplicated in majority_vote.py
+  # Need to be certain all sequences are run in the test condition, so we go over them 1.5 times.
+  # The repeate sequence votes are deduplicated in majority_vote.py.
   if mode == 'test':
     epoch_size = int(1.5*((max_sequences_per_label * 2) //  batch_size))
   else:

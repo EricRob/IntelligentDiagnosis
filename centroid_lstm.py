@@ -878,7 +878,7 @@ def generate_sequences(mask_filename, config, image_name=None, subject_id=None, 
 	
 	# If either of these dictionaries is empty then later methods will error.
 	# Rather than shutting down the entire operation, just skip over the given image.
-	# Methods earlier in the stack will print a warning error.
+	# Functions earlier in the stack will print a warning error.
 
 	if not all_cells or not all_delaunay:
 		return None
@@ -1098,6 +1098,7 @@ def process_detections(sequences, delaunay_in_neighbors, all_tiles, mask, config
 	cprint("Processing detections of " + str(len(sequences)) + ' sequences', 'green', 'on_white')
 	seq_detections = {}
 	tile_skip_list = []
+
 	for item in sequences:
 		# timing_estimate(start, time.time(), count, len(sequences))
 		tile = item[0]

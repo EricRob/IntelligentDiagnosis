@@ -425,7 +425,7 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, mode, config):
 		if not os.path.exists(image_bin_path) or FLAGS.overwrite or FLAGS.no_write:
 			detections_filename = os.path.join(FLAGS.detections_path, image + '_Detectionstxt.txt')
 			if not os.path.exists(detections_filename):
-				cprint('No detections exist for ' + image + ', skipping due to lack of features', 'red')
+				cprint('No detections exist for ' + image + ', skipping due to lack of detections file', 'red')
 				SKIP_LIST.append(image)
 				continue
 			if image not in image_to_ID_dict:
@@ -443,7 +443,7 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, mode, config):
 			if FLAGS.no_write:
 				continue
 			if not seq_features:
-				cprint('No detections exist, skipping due to lack of features', 'red')
+				cprint('No sequences processed, skipping due to lack of features', 'red')
 				SKIP_LIST.append(image)
 				continue
 			gauss.regional_verification(seq_features, gauss_config, image, image_to_ID_dict[image])
