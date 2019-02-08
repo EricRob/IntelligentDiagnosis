@@ -395,7 +395,6 @@ def plot_roc_curves_and_votes(roc_dict, subject_dict, image_dict):
         fpr = roc_dict[subject]['fpr']
         tpr = roc_dict[subject]['tpr']
         print(subject)
-        print("JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ")
         print(roc_loc)
         roc = figure.add_subplot(roc_loc)
         roc.plot(1-fpr, tpr, color='darkorange', lw=2)
@@ -532,9 +531,11 @@ def per_condition_roc(subject_data, total_conditions):
         roc_auc = auc(fpr, tpr)
         auc_dict[cond] = roc_auc
         plt.plot(1-fpr, tpr, color='darkorange', lw=2)
+        plt.xlabel('1 - False Positive Rate')
+        plt.ylabel('True Positive Rate')
         plt.plot([0, 1], [1,0], color='black', lw=1, linestyle='--')
         path_list = FLAGS.base_path.split("/")
-        plt.title(path_list[len(path_list)-2] + " -- Condition " + str(cond))
+        plt.title(path_list[len(path_list)-1] + " -- Condition " + str(cond))
         legend = 'ROC curve (area = %0.2f)' % roc_auc
         plt.legend([legend])
         plt.savefig(os.path.join(FLAGS.base_path,str(cond) + "_ROC.jpg"))
