@@ -5,6 +5,7 @@ Module documentation.
 
 # Imports
 import sys
+import argparse
 import os
 import csv
 import pdb
@@ -12,17 +13,26 @@ import numpy as np
 from termcolor import cprint
 # from skimage import io
 import skimage.external.tifffile as tiff
-from tensorflow import flags
 import subprocess
 
-flags.DEFINE_string('image_list', 'large_images.csv', 'File containing list of large images to be split' )
-flags.DEFINE_string('base_path', "/data/recurrence_seq_lstm/image_data/original_images", "")
-flags.DEFINE_string('dst', None, 'Destination folder for split images [FULL FILE PATH]')
-flags.DEFINE_bool('destructive', False, "Delete images after splitting to free disk space")
-flags.DEFINE_bool('force_split', False, "Force images to be split (only into halves)")
+parser = argparse.ArgumentParser(description='Split images larger than 4GB into smaller tiles for QuPath processing and GIMP masking.')
+
+parser.add_argument("--base_path", default="/data/recurrence_seq_lstm/image_data/original_images", type=str,
+	help="[FULL FILE PATH] Path of images to be split. Also the path for the --image_list.")
+parser.add_argument("--image_list", default='large_images.csv', type=str,
+	help="File containing list of large images to be split")
+parser.add_argument("--dst", default=None, type=str,
+	help="[FULL FILE PATH] Destination folder for split images")
+parser.add_argument('--destructive', default=False, action='store_true',
+	help='Delete images after splitting to free disk space')
+parser.add_argument('--force_split', default=False, action='store_true',
+	help="Force images to be split (only into halves)")
 
 # Global variables
-FLAGS = flags.FLAGS
+FLAGS = parser.parse_args()
+if not FLAGS.dst:
+	print("No destination specified, using --base_path directory")
+	FLAGS.dst = FLAGS.base_path
 
 # Class declarations
 
