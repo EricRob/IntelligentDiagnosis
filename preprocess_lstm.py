@@ -422,7 +422,17 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, mode, config):
 		image_bin_name = image + ".bin"
 		image_bin_path = os.path.join(gauss_folder, image_bin_name)
 		#pdb.set_trace()
-		if not os.path.exists(image_bin_path) or FLAGS.overwrite or FLAGS.no_write:
+
+		if os.path.exists(image_bin_path):
+			if os.path.getsize(image_bin_path) > 1000: #One data block is 600kb, so it should be at least that big. 1000 basically means some image data has been written.
+				valid_binary_exists = True
+			else:
+				valid_binary_exists = False
+		else:
+			valid_binary_exists = False
+
+
+		if not valid_binary_exists or FLAGS.overwrite or FLAGS.no_write:
 			detections_filename = os.path.join(FLAGS.detections_path, image + '_Detectionstxt.txt')
 			if not os.path.exists(detections_filename):
 				cprint('No detections exist for ' + image + ', skipping due to lack of detections file', 'red')
