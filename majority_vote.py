@@ -65,7 +65,7 @@ def initialize_image(data, row):
         data["coords"][coord]["rec"]=[float(row[5])]
 
 def initialize_subject(subj_dict, row):
-    subj_dict[row[0].lower()]=[row[1]]
+    subj_dict[row[0].upper()]=[row[1]]
 
 def add_data_to_existing_image(data, row):
     if row[8] in data["coord_array"]:
@@ -674,10 +674,10 @@ def main():
                 initialize_image(image_dict[row[1]], row)
             else:
                 add_data_to_existing_image(image_dict[row[1]], row)
-            if row[0].lower() not in subject_dict:
+            if row[0].upper() not in subject_dict:
                 initialize_subject(subject_dict, row)
             else:
-                add_data_to_existing_subject(subject_dict[row[0].lower()], row)
+                add_data_to_existing_subject(subject_dict[row[0].upper()], row)
     print("Creating image dictionary...")
     for image_name in image_dict:    
         image_patch_data = ops_within_patches(image_dict[image_name]["coords"])
