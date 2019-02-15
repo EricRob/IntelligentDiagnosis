@@ -972,13 +972,36 @@ def main(_):
         total_parameters += variable_parameters
     cprint(total_parameters, 'green')  
 
-    with sv.managed_session(config=config_proto) as session:
+   with sv.managed_session(config=config_proto) as session:
       if config.test_mode == 0:
         training_loss=[]
+        training_start = time.time()
+        epoch_start = time.time()
         for i in range(config.max_max_epoch):
+          if i:
+            last_epoch_time = epoch_start
+            epoch_start = time.time()
+            epoch_min_elapsed = int((epoch_start - last_epoch_time) // 60)
+            epoch_sec_elapsed = int((epoch_start - last_epoch_time) % 60)
+            cprint('Epoch length: ' + "{:02d}".format(epoch_min_elapsed) + ':' + "{:02d}".format(epoch_sec_elapsed), 'grey', 'on_white')
+
+            total_hour_elapsed = int((epoch_start - training_start) // 3600)
+            total_min_elapsed = int(((epoch_start - training_start) % 3600) // 60)
+            total_sec_elapsed = int((epoch_start - training_start) % 60)
+            
+            avg_time = (epoch_start - training_start) / i
+            avg_min = int(avg_time // 60)
+            avg_sec = int(avg_time % 60)
+
+            cprint('Total training time: ' + "{:02d}".format(total_hour_elapsed) + ':'+ "{:02d}".format(total_min_elapsed) + ':' + "{:02d}".format(total_sec_elapsed) + ', Avg Epoch: ' + "{:02d}".format(avg_min) + ':' + "{:02d}".format(avg_sec) , 'grey', 'on_white')
+            remaining_time = avg_time * (config.max_max_epoch - i)
+            rem_hour = int(remaining_time // 3600)
+            rem_min = int((remaining_time % 3600) // 60)
+            rem_sec = int(remaining_time % 60)
+            cprint('Estimated remaining time: '  + "{:02d}".format(rem_hour) + ':' + "{:02d}".format(rem_min) + ':' + "{:02d}".format(rem_sec), 'green', 'on_white')
+          
           lr_decay = config.lr_decay ** max(i + 1 - config.max_epoch, 0.0)
           m.assign_lr(session, config.learning_rate * lr_decay)
-
           print("Epoch: %d Learning rate: %.6f" % (i + 1, session.run(m.lr)))
           
           avg_train_cost = run_epoch(session, m, train_file, i + 1, eval_op=m.train_op, verbose=True)
