@@ -984,9 +984,7 @@ def main(_):
             epoch_min_elapsed = int((epoch_start - last_epoch_time) // 60)
             epoch_sec_elapsed = int((epoch_start - last_epoch_time) % 60)
             cprint('Epoch length: ' + "{:02d}".format(epoch_min_elapsed) + ':' + "{:02d}".format(epoch_sec_elapsed), 'grey', 'on_white')
-            lr_decay = config.lr_decay ** max(i + 1 - config.max_epoch, 0.0)
-            m.assign_lr(session, config.learning_rate * lr_decay)
-            
+
             total_hour_elapsed = int((epoch_start - training_start) // 3600)
             total_min_elapsed = int(((epoch_start - training_start) % 3600) // 60)
             total_sec_elapsed = int((epoch_start - training_start) % 60)
@@ -1001,6 +999,9 @@ def main(_):
             rem_min = int((remaining_time % 3600) // 60)
             rem_sec = int(remaining_time % 60)
             cprint('Estimated remaining time: '  + "{:02d}".format(rem_hour) + ':' + "{:02d}".format(rem_min) + ':' + "{:02d}".format(rem_sec), 'green', 'on_white')
+          
+          lr_decay = config.lr_decay ** max(i + 1 - config.max_epoch, 0.0)
+          m.assign_lr(session, config.learning_rate * lr_decay)
           print("Epoch: %d Learning rate: %.6f" % (i + 1, session.run(m.lr)))
           
           avg_train_cost = run_epoch(session, m, train_file, i + 1, eval_op=m.train_op, verbose=True)
