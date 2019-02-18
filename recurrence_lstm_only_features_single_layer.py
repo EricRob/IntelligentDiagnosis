@@ -970,9 +970,9 @@ def main(_):
             variable_parameters *= dim.value
         #print(variable_parameters)
         total_parameters += variable_parameters
-    cprint(total_parameters, 'green')  
+    cprint(total_parameters, 'green')
 
-   with sv.managed_session(config=config_proto) as session:
+    with sv.managed_session(config=config_proto) as session:
       if config.test_mode == 0:
         training_loss=[]
         training_start = time.time()
