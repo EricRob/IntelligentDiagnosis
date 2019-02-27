@@ -18,7 +18,6 @@ from PIL import Image
 from termcolor import cprint
 from tensorflow import flags
 from IPython import embed
-import ipdb
 from sklearn.metrics import roc_curve, auc
 
 # Global variables
@@ -185,10 +184,14 @@ def save_heat_images(ensemble, rec, nonrec, name):
 
 def generate_heat_map_single_image(image_info):
     # raw_patch_info = sum_neighboring_patches(image_info)
+    name = image_info["name"].strip()
+    map_name = os.path.join(FLAGS.map_path, name +"_map.tif")
+    if os.path.exists(map_name):
+        cprint('Skipping map of ' + name, 'yellow')
+        return
 
     # Dictionary with patch coordinates as keys and dict of ['nr', 'rec', 'softmax', 'avg_softmax'] as values
     raw_patch_info = image_info["coords"]
-    name = image_info["name"].strip()
     print("Heat mapping %s" % (name))
     original_img = io.imread(os.path.join(FLAGS.og_image_path,name + ".tif"))
     
@@ -202,39 +205,29 @@ def generate_heat_map_single_image(image_info):
     red_channel = 0
     green_channel = 1
     blue_channel = 2
-    ensemble_img = np.zeros((y_length, x_length, 3), dtype=np.uint8)
-    # rec_img = np.zeros((y_length, x_length, 3), dtype=np.uint8)
-    # nonrec_img = np.zeros((y_length, x_length, 3), dtype=np.uint8)
 
     for patch in raw_patch_info:
-        x_1 = patch[0]
-        x_2 = patch[0] + FLAGS.patch_size
-        y_1 = patch[1]
-        y_2 = patch[1] + FLAGS.patch_size
-        # patch_label = int(round(raw_patch_info[patch]['softmax'][1]))
+        x1 = patch[0]
+        x2 = patch[0] + FLAGS.patch_size
+        y1 = patch[1]
+        y2 = patch[1] + FLAGS.patch_size
+
         soft_max = raw_patch_info[patch]['softmax']
         patch_label = int(round(soft_max[1]))
         if patch_label:
             original_img[x1:x2, y1:y2, red_channel] = greyscale_array[x1:x2, y1:y2]
-            if not np.sum(original_img[x1:x2, y1:y2, green_channel]) == 0:
-                original_img[x1:x2, y1:y2, blue_channel] = zero_channel[x1:x2, y1:y2]
-            original_img[x1:x2, y1:y2, green_channel] = zero_channel[x1:x2, y1:y2]
+            if not np.sum(original_img[x1:x2, y1:y2, blue_channel]) == 0:
+                original_img[x1:x2, y1:y2, green_channel] = zero_channel[x1:x2, y1:y2]
+            original_img[x1:x2, y1:y2, blue_channel] = zero_channel[x1:x2, y1:y2]
         else:
-            original_img[x1:x2, y1:y2, blue_channel] = greyscale_array[x1:x2, y1:y2]
-            if not np.sum(original_img[x1:x2, y1:y2, green_channel]) == 0:
+            original_img[x1:x2, y1:y2, green_channel] = greyscale_array[x1:x2, y1:y2]
+            if not np.sum(original_img[x1:x2, y1:y2, blue_channel]) == 0:
                 original_img[x1:x2, y1:y2, red_channel] = zero_channel[x1:x2, y1:y2]
-            original_img[x1:x2, y1:y2, green_channel] = zero_channel[x1:x2, y1:y2]
-            
-    pdb.set_trace()
-    
-    save_heat_images(ensemble_img, rec_img, nonrec_img, name)
-    #plt.imshow(heat_arr, cmap='hot', interpolation='nearest')
-    #plt.savefig(os.path.join(FLAGS.map_path,"pretty_" + image_info["name"]+".jpg"))
-    pdb.set_trace()
+            original_img[x1:x2, y1:y2, blue_channel] = zero_channel[x1:x2, y1:y2]
+    io.imsave(map_name, original_img)
 
-    del rec_img
-    del nonrec_img
-    del ensemble_img
+    del original_img
+    del greyscale_array
 
 def include_neighbor_patches(coords, coords_dict, stride):
     neighbors_added  = {}
@@ -756,7 +749,7 @@ def main():
             else:
                 add_data_to_existing_subject(subject_dict[row[0].upper()], row)
     print("Creating image dictionary...")
-    for image_name in image_dict:    
+    for image_name in sorted(image_dict):    
         image_patch_data = ops_within_patches(image_dict[image_name]["coords"])
         if FLAGS.map_path:
             generate_heat_map_single_image(image_dict[image_name])
