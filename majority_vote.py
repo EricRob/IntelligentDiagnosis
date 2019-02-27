@@ -9,6 +9,7 @@ import os
 import csv
 import pdb
 import collections
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 from pylab import subplot, plot, subplots_adjust
@@ -17,23 +18,47 @@ from PIL import Image
 from termcolor import cprint
 from tensorflow import flags
 from IPython import embed
+import ipdb
 from sklearn.metrics import roc_curve, auc
 
 # Global variables
-flags.DEFINE_string("info","subject","Display per subject or per image info")
-flags.DEFINE_string("base_path", None, "Path of folder containing voting file")
-flags.DEFINE_string("histogram_path", None, "Path for saving folder of histogram images")
-flags.DEFINE_string("og_image_path","/data/recurrence_seq_lstm/image_data/original_images/","Location of original images for generating heat map")
-flags.DEFINE_integer("patch_size", 500, "Dimensions of square patches taken from original image to generate the sequences given to the network")
-flags.DEFINE_float("patch_overlap", 0.3, "Overlap portion of patches taken from the original images")
-flags.DEFINE_string("map_path", None, "Path for saving heat maps")
-flags.DEFINE_bool("create_maps", False, "Choose to create heat maps of images")
-flags.DEFINE_bool("from_outside", False, "Operating from another python script")
-flags.DEFINE_bool('per_subject', False, 'Provide ROC and majority votes per subject')
-flags.DEFINE_string('voting_file', 'voting_file.csv', 'Name of voting file for gathering data')
-flags.DEFINE_bool('print', False, 'Print subject or image majority voting results to command line terminal')
-flags.DEFINE_string('subjects', None, 'name of csv file with cross validation conditions')
-FLAGS = flags.FLAGS
+
+parser = argparse.ArgumentParser(description='Summarize sequence votes from Recurrence NN output')
+
+# flags.DEFINE_string("info","subject","Display per subject or per image info")
+# flags.DEFINE_string("base_path", None, "Path of folder containing voting file")
+# flags.DEFINE_string("histogram_path", None, "Path for saving folder of histogram images")
+# flags.DEFINE_string("og_image_path","/data/recurrence_seq_lstm/image_data/original_images/","Location of original images for generating heat map")
+# flags.DEFINE_integer("patch_size", 500, "Dimensions of square patches taken from original image to generate the sequences given to the network")
+# flags.DEFINE_float("patch_overlap", 0.3, "Overlap portion of patches taken from the original images")
+# flags.DEFINE_string("map_path", None, "Path for saving heat maps")
+# flags.DEFINE_bool("create_maps", False, "Choose to create heat maps of images")
+# flags.DEFINE_bool("from_outside", False, "Operating from another python script")
+# flags.DEFINE_bool('per_subject', False, 'Provide ROC and majority votes per subject')
+# flags.DEFINE_string('voting_file', 'voting_file.csv', 'Name of voting file for gathering data')
+# flags.DEFINE_bool('print', False, 'Print subject or image majority voting results to command line terminal')
+# flags.DEFINE_string('subjects', None, 'name of csv file with cross validation conditions')
+# FLAGS = flags.FLAGS
+
+parser.add_argument("--info",default="subject", type=str, help="Display per subject or per image info")
+parser.add_argument("--base_path", default=None, type=str, help="Path of folder containing voting file")
+parser.add_argument("--histogram_path", default=None, type=str, help="Path for saving folder of histogram images")
+parser.add_argument("--og_image_path", default="/data/recurrence_seq_lstm/image_data/original_images/", type=str,
+    help="Location of original images for generating heat map")
+parser.add_argument("--patch_size", default=500, type=int,
+    help="Dimensions of square patches taken from original image to generate the sequences given to the network")
+parser.add_argument("--patch_overlap", default=0.3, type=float,
+    help="Overlap portion of patches taken from the original images")
+parser.add_argument("--map_path", default=None, type=str, help="Path for saving heat maps")
+parser.add_argument("--create_maps", default=False, action='store_true',
+    help="Choose to create heat maps of images")
+parser.add_argument("--from_outside", default=False, action='store_true', help="Operating from another python script")
+parser.add_argument('--per_subject', default=False, action='store_true', help='Provide ROC and majority votes per subject')
+parser.add_argument('--voting_file', default='voting_file.csv', type=str, help='Name of voting file for gathering data')
+parser.add_argument('--print', default=False, action='store_true',
+    help='Print subject or image majority voting results to command line terminal')
+parser.add_argument('--subjects', default=None, type=str,help='name of csv file with cross validation conditions')
+FLAGS = parser.parse_args()
 
 # Function declarations
 
@@ -128,35 +153,88 @@ def create_histogram_data_per_subject(subject_image_list, image_dict, truth_labe
     plt.savefig(os.path.join(FLAGS.histogram_path, image_dict[image]["id"] + ".jpg"))
     plt.clf()
 
+def fill_map_img_arrays(original_img, raw_patch_info, mult, add):
+    x_length = original_img.shape[1]
+    y_length = original_img.shape[0]
+    greyscale_array = np.dot(original_img[...,:3], [0.299, 0.587, 0.114]).astype(int)
+    zero_channel = np.zeros((greyscale_array.shape[0], greyscale_array.shape[1]), dtype=np.uint8)
+    red_channel = 0
+    blue_channel = 2
+
+    ensemble_img = np.zeros((y_length, x_length, 3), dtype=np.uint8)
+    rec_img = np.zeros((y_length, x_length, 3), dtype=np.uint8)
+    nonrec_img = np.zeros((y_length, x_length, 3), dtype=np.uint8)
+
+    for patch in raw_patch_info:
+        # patch_label = int(round(raw_patch_info[patch]['softmax'][1]))
+        soft_max = raw_patch_info[patch]['softmax']
+        patch_label = int(round(soft_max[1]))
+        if patch_label:
+            # rec_img[patch[0]:patch[0] + FLAGS.patch_size, patch[1]:patch[1] + FLAGS.patch_size,red_channel] = soft_max[patch_label]*mult + add
+            ensemble_img[patch[0]:patch[0] + FLAGS.patch_size, patch[1]:patch[1] + FLAGS.patch_size,red_channel] = greyscale_array[patch[0]:patch[0] + FLAGS.patch_size, patch[1]:patch[1] + FLAGS.patch_size]
+        else:
+            # nonrec_img[patch[0]:patch[0] + FLAGS.patch_size, patch[1]:patch[1] + FLAGS.patch_size,green_channel] = soft_max[patch_label]*mult + add
+            ensemble_img[patch[0]:patch[0] + FLAGS.patch_size, patch[1]:patch[1] + FLAGS.patch_size,blue_channel] = greyscale_array[patch[0]:patch[0] + FLAGS.patch_size, patch[1]:patch[1] + FLAGS.patch_size]
+
+    return ensemble_img, rec_img, nonrec_img
+
+def save_heat_images(ensemble, rec, nonrec, name):
+    # io.imsave(os.path.join(FLAGS.map_path, name +"rec.tif"), rec)
+    # io.imsave(os.path.join(FLAGS.map_path, name +"nonrec.tif"), nonrec)
+    io.imsave(os.path.join(FLAGS.map_path, name +"_map.tif"), ensemble)
+
 def generate_heat_map_single_image(image_info):
     # raw_patch_info = sum_neighboring_patches(image_info)
 
     # Dictionary with patch coordinates as keys and dict of ['nr', 'rec', 'softmax', 'avg_softmax'] as values
     raw_patch_info = image_info["coords"]
-    pdb.set_trace()
-    original_img_shape = io.imread(os.path.join(FLAGS.og_image_path,image_info["name"] + ".tif")).shape
-    x_length = original_img_shape[1]
-    y_length = original_img_shape[0]
-    label = int(image_info["labels"][0])
-    pdb.set_trace()
-    tiff_arr = np.zeros((y_length, x_length), dtype=np.uint8)
-    #heat_arr = np.zeros((y_length, x_length), dtype=np.float32)
-    stride = 500
-    for patch in raw_patch_info:
-        rec_avg = average_value(raw_patch_info[patch], "rec")
-        nr_avg = average_value(raw_patch_info[patch], "nr")
-        soft_max = softmax([nr_avg, rec_avg])
-        x_patch_edge = patch[0] + stride
-        y_patch_edge = patch[1] + stride
-        tiff_arr[patch[1]:y_patch_edge, patch[0]:x_patch_edge] = soft_max[label]*200 + 55
-        #heat_arr[patch[1]:y_patch_edge, patch[0]:x_patch_edge] = soft_max[label] + 0.01
+    name = image_info["name"].strip()
+    print("Heat mapping %s" % (name))
+    original_img = io.imread(os.path.join(FLAGS.og_image_path,name + ".tif"))
+    
 
-    print("Heat mapping %s" % (image_info["name"]))
+    img_label = int(image_info["labels"][0])
+    x_length = original_img.shape[1]
+    y_length = original_img.shape[0]
+    greyscale_array = np.dot(original_img[...,:3], [0.299, 0.587, 0.114]).astype(int)
+    zero_channel = np.zeros((greyscale_array.shape[0], greyscale_array.shape[1]), dtype=np.uint8)
+
+    red_channel = 0
+    green_channel = 1
+    blue_channel = 2
+    ensemble_img = np.zeros((y_length, x_length, 3), dtype=np.uint8)
+    # rec_img = np.zeros((y_length, x_length, 3), dtype=np.uint8)
+    # nonrec_img = np.zeros((y_length, x_length, 3), dtype=np.uint8)
+
+    for patch in raw_patch_info:
+        x_1 = patch[0]
+        x_2 = patch[0] + FLAGS.patch_size
+        y_1 = patch[1]
+        y_2 = patch[1] + FLAGS.patch_size
+        # patch_label = int(round(raw_patch_info[patch]['softmax'][1]))
+        soft_max = raw_patch_info[patch]['softmax']
+        patch_label = int(round(soft_max[1]))
+        if patch_label:
+            original_img[x1:x2, y1:y2, red_channel] = greyscale_array[x1:x2, y1:y2]
+            if not np.sum(original_img[x1:x2, y1:y2, green_channel]) == 0:
+                original_img[x1:x2, y1:y2, blue_channel] = zero_channel[x1:x2, y1:y2]
+            original_img[x1:x2, y1:y2, green_channel] = zero_channel[x1:x2, y1:y2]
+        else:
+            original_img[x1:x2, y1:y2, blue_channel] = greyscale_array[x1:x2, y1:y2]
+            if not np.sum(original_img[x1:x2, y1:y2, green_channel]) == 0:
+                original_img[x1:x2, y1:y2, red_channel] = zero_channel[x1:x2, y1:y2]
+            original_img[x1:x2, y1:y2, green_channel] = zero_channel[x1:x2, y1:y2]
+            
+    pdb.set_trace()
+    
+    save_heat_images(ensemble_img, rec_img, nonrec_img, name)
     #plt.imshow(heat_arr, cmap='hot', interpolation='nearest')
     #plt.savefig(os.path.join(FLAGS.map_path,"pretty_" + image_info["name"]+".jpg"))
-    io.imsave(os.path.join(FLAGS.map_path,image_info["name"]+".tif"), tiff_arr)
+    pdb.set_trace()
 
-    del tiff_arr
+    del rec_img
+    del nonrec_img
+    del ensemble_img
 
 def include_neighbor_patches(coords, coords_dict, stride):
     neighbors_added  = {}
@@ -261,7 +339,7 @@ def print_info_per_subject(subject_dict, image_dict):
             subject_truth_label = give_string_label(image_dict[image]["labels"][0])
             subject_network_label = give_string_label(c2[0][0])
             
-            create_histogram_data_per_subject(subject_dict[subject], image_dict, subject_truth_label)
+            # create_histogram_data_per_subject(subject_dict[subject], image_dict, subject_truth_label)
             smax_subject = softmax([avg_unscaled_nr, avg_unscaled_rec])
             if subject_truth_label == subject_network_label:
                 color = 'on_green'
@@ -650,14 +728,13 @@ def main():
         raise ValueError("Must set --base_path to the directory containing the voting_file.csv")
     base_path = FLAGS.base_path
     filename = os.path.join(base_path, FLAGS.voting_file)
-    if not FLAGS.histogram_path:
-        FLAGS.histogram_path = os.path.join(base_path, "histograms")
-        if not FLAGS.from_outside:
-            os.makedirs(FLAGS.histogram_path, exist_ok=True)
-    if not FLAGS.map_path:
-        FLAGS.map_path = os.path.join(base_path, "maps")
-        if not FLAGS.from_outside:
-            os.makedirs(FLAGS.map_path, exist_ok=True)
+    if FLAGS.histogram_path:
+        os.makedirs(FLAGS.histogram_path, exist_ok=True)
+
+    if FLAGS.create_maps:
+        if not FLAGS.map_path:
+            FLAGS.map_path = os.path.join(FLAGS.base_path, 'maps')
+        os.makedirs(FLAGS.map_path, exist_ok=True)
     image_dict={}
     subject_dict={}
     cprint(filename, 'grey', 'on_white')
@@ -681,7 +758,7 @@ def main():
     print("Creating image dictionary...")
     for image_name in image_dict:    
         image_patch_data = ops_within_patches(image_dict[image_name]["coords"])
-        if FLAGS.create_maps:
+        if FLAGS.map_path:
             generate_heat_map_single_image(image_dict[image_name])
     if FLAGS.from_outside:
         return image_dict, subject_dict
