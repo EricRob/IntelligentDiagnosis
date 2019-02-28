@@ -37,6 +37,7 @@ from __future__ import division
 from __future__ import print_function
 
 import time
+from datetime import datetime
 
 import numpy as np
 import tensorflow as tf
@@ -140,11 +141,13 @@ def data_type():
   return tf.float16 if FLAGS.use_fp16 else tf.float32
 
 def epoch_size(mode, batch_size, num_steps, image_size):
-  total_recur_sequences = os.path.getsize(os.path.join(FLAGS.recur_data_path, 'recurrence_' + mode + '.bin')) // (image_size * image_size * 3 * num_steps + 345)
-  total_nonrecur_sequences = os.path.getsize(os.path.join(FLAGS.nonrecur_data_path, 'nonrecurrence_' + mode + '.bin')) // (image_size * image_size * 3 * num_steps + 345)
+  meta_data_bytes = 345 # (subject ID bytes + image name bytes + features bytes)
+  total_recur_sequences = os.path.getsize(os.path.join(FLAGS.recur_data_path, 'recurrence_' + mode + '.bin')) // (image_size * image_size * 3 * num_steps + meta_data_bytes)
+  total_nonrecur_sequences = os.path.getsize(os.path.join(FLAGS.nonrecur_data_path, 'nonrecurrence_' + mode + '.bin')) // (image_size * image_size * 3 * num_steps + meta_data_bytes)
   max_sequences_per_label = max(total_recur_sequences, total_nonrecur_sequences)
   
-  # Need to be certain all sequences are run in the test condition, deduplicated in majority_vote.py
+  # Need to be certain all sequences are run in the test condition, so we go over them 1.5 times.
+  # The repeate sequence votes are deduplicated in majority_vote.py.
   if mode == 'test':
     epoch_size = int(1.5*((max_sequences_per_label * 2) //  batch_size))
   else:
@@ -210,8 +213,6 @@ class SeqModel(object):
     # pasted = tf.concat([fc1, self.features], 1)
 
 
-    # fc2 = tf.layers.dense(pasted, 10, tf.nn.elu)
-
     fc2 = tf.layers.dense(self.features, 25, tf.nn.elu)
 
 
@@ -244,7 +245,7 @@ class SeqModel(object):
     self._output = indice
     # Update the cost
     self._cost = tf.reduce_sum(loss)
-    self._final_state = None
+    self._final_state = state
 
     if not is_training:
       return
@@ -433,8 +434,8 @@ class SeqModel(object):
       tf.add_to_collection(name, op)
     self._initial_state_name = util.with_prefix(self._name, "initial")
     self._final_state_name = util.with_prefix(self._name, "final")
-    # util.export_state_tuples(self._initial_state, self._initial_state_name)
-    # util.export_state_tuples(self._final_state, self._final_state_name)
+    util.export_state_tuples(self._initial_state, self._initial_state_name)
+    util.export_state_tuples(self._final_state, self._final_state_name)
 
   def import_ops(self):
     """Imports ops from collections."""
@@ -463,10 +464,10 @@ class SeqModel(object):
     self.coords = tf.get_collection_ref(util.with_prefix(self._name, "coords"))
     self.features = tf.get_collection_ref(util.with_prefix(self._name, "features"))
     num_replicas = FLAGS.num_gpus if self._name == "Train" else 1
-    # self._initial_state = util.import_state_tuples(
-    #     self._initial_state, self._initial_state_name, num_replicas)
-    # self._final_state = util.import_state_tuples(
-    #     self._final_state, self._final_state_name, num_replicas)
+    self._initial_state = util.import_state_tuples(
+        self._initial_state, self._initial_state_name, num_replicas)
+    self._final_state = util.import_state_tuples(
+        self._final_state, self._final_state_name, num_replicas)
 
   @property
   def input(self):
@@ -476,9 +477,9 @@ class SeqModel(object):
   # def features(self):
   #   return self._features
   
-  # @property
-  # def initial_state(self):
-  #   return self._initial_state
+  @property
+  def initial_state(self):
+    return self._initial_state
 
   @property
   def cost(self):
@@ -500,9 +501,9 @@ class SeqModel(object):
   def image_depth(self):
     return self._image_depth
 
-  # @property
-  # def final_state(self):
-  #   return self._final_state
+  @property
+  def final_state(self):
+    return self._final_state
 
   @property
   def output(self):
@@ -689,10 +690,10 @@ def run_epoch(session, model, results_file, epoch_count, csv_file=None, eval_op=
   start_time = time.time()
   costs = 0.0
   iters = 0
-  # state = session.run(model.initial_state)
+  state = session.run(model.initial_state)
   fetches = {
       "cost": model.cost,
-      # "final_state": model.final_state,
+      "final_state": model.final_state,
       "output": model.output,
       "labels": model.labels,
       "input_data": model.input_data,
@@ -711,7 +712,7 @@ def run_epoch(session, model, results_file, epoch_count, csv_file=None, eval_op=
     # vals = session.run(fetches, feed_dict)
     vals = session.run(fetches)
     cost = vals["cost"]
-    # state = vals["final_state"]
+    state = vals["final_state"]
     output = vals["output"]
     labels = vals["labels"]
     input_data = vals["input_data"]
@@ -819,9 +820,24 @@ def create_log_directory(eval_dir):
     tf.gfile.DeleteRecursively(eval_dir)
   tf.gfile.MakeDirs(eval_dir)
 
-
+def data_exists():
+  conditions = ['train', 'valid', 'test']
+  for c in conditions:
+    r_path = os.path.join(FLAGS.recur_data_path, 'recurrence_' + c + '.bin')
+    nr_path = os.path.join(FLAGS.recur_data_path, 'nonrecurrence_' + c + '.bin')
+    if not os.path.exists(r_path) or not os.path.exists(nr_path):
+      return False
+  return True
 def main(_):
-  
+
+  while (not data_exists()):
+    waiting = True
+    cprint(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ' -- Waiting another minute for data...', 'yellow')
+    time.sleep(60)
+  cprint('Data exists!', 'green')
+  if waiting:
+    cprint('waited for data, now waiting five more minutes to make sure it is all there ... ', 'yellow')
+    time.sleep(300)
   stdout_backup = sys.stdout
 
   config = get_config()
@@ -975,10 +991,33 @@ def main(_):
     with sv.managed_session(config=config_proto) as session:
       if config.test_mode == 0:
         training_loss=[]
+        training_start = time.time()
+        epoch_start = time.time()
         for i in range(config.max_max_epoch):
+          if i:
+            last_epoch_time = epoch_start
+            epoch_start = time.time()
+            epoch_min_elapsed = int((epoch_start - last_epoch_time) // 60)
+            epoch_sec_elapsed = int((epoch_start - last_epoch_time) % 60)
+            cprint('Epoch length: ' + "{:02d}".format(epoch_min_elapsed) + ':' + "{:02d}".format(epoch_sec_elapsed), 'grey', 'on_white')
+
+            total_hour_elapsed = int((epoch_start - training_start) // 3600)
+            total_min_elapsed = int(((epoch_start - training_start) % 3600) // 60)
+            total_sec_elapsed = int((epoch_start - training_start) % 60)
+            
+            avg_time = (epoch_start - training_start) / i
+            avg_min = int(avg_time // 60)
+            avg_sec = int(avg_time % 60)
+
+            cprint('Total training time: ' + "{:02d}".format(total_hour_elapsed) + ':'+ "{:02d}".format(total_min_elapsed) + ':' + "{:02d}".format(total_sec_elapsed) + ', Avg Epoch: ' + "{:02d}".format(avg_min) + ':' + "{:02d}".format(avg_sec) , 'grey', 'on_white')
+            remaining_time = avg_time * (config.max_max_epoch - i)
+            rem_hour = int(remaining_time // 3600)
+            rem_min = int((remaining_time % 3600) // 60)
+            rem_sec = int(remaining_time % 60)
+            cprint('Estimated remaining time: '  + "{:02d}".format(rem_hour) + ':' + "{:02d}".format(rem_min) + ':' + "{:02d}".format(rem_sec), 'green', 'on_white')
+          
           lr_decay = config.lr_decay ** max(i + 1 - config.max_epoch, 0.0)
           m.assign_lr(session, config.learning_rate * lr_decay)
-
           print("Epoch: %d Learning rate: %.6f" % (i + 1, session.run(m.lr)))
           
           avg_train_cost = run_epoch(session, m, train_file, i + 1, eval_op=m.train_op, verbose=True)
