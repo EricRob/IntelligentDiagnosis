@@ -245,7 +245,7 @@ class SeqModel(object):
     self._output = indice
     # Update the cost
     self._cost = tf.reduce_sum(loss)
-    self._final_state = state
+    self._final_state = None
 
     if not is_training:
       return
@@ -434,8 +434,8 @@ class SeqModel(object):
       tf.add_to_collection(name, op)
     self._initial_state_name = util.with_prefix(self._name, "initial")
     self._final_state_name = util.with_prefix(self._name, "final")
-    util.export_state_tuples(self._initial_state, self._initial_state_name)
-    util.export_state_tuples(self._final_state, self._final_state_name)
+    # util.export_state_tuples(self._initial_state, self._initial_state_name)
+    # util.export_state_tuples(self._final_state, self._final_state_name)
 
   def import_ops(self):
     """Imports ops from collections."""
@@ -464,10 +464,10 @@ class SeqModel(object):
     self.coords = tf.get_collection_ref(util.with_prefix(self._name, "coords"))
     self.features = tf.get_collection_ref(util.with_prefix(self._name, "features"))
     num_replicas = FLAGS.num_gpus if self._name == "Train" else 1
-    self._initial_state = util.import_state_tuples(
-        self._initial_state, self._initial_state_name, num_replicas)
-    self._final_state = util.import_state_tuples(
-        self._final_state, self._final_state_name, num_replicas)
+    # self._initial_state = util.import_state_tuples(
+    #     self._initial_state, self._initial_state_name, num_replicas)
+    # self._final_state = util.import_state_tuples(
+    #     self._final_state, self._final_state_name, num_replicas)
 
   @property
   def input(self):
@@ -477,9 +477,9 @@ class SeqModel(object):
   # def features(self):
   #   return self._features
   
-  @property
-  def initial_state(self):
-    return self._initial_state
+  # @property
+  # def initial_state(self):
+  #   return self._initial_state
 
   @property
   def cost(self):
@@ -501,9 +501,9 @@ class SeqModel(object):
   def image_depth(self):
     return self._image_depth
 
-  @property
-  def final_state(self):
-    return self._final_state
+  # @property
+  # def final_state(self):
+  #   return self._final_state
 
   @property
   def output(self):
@@ -690,10 +690,10 @@ def run_epoch(session, model, results_file, epoch_count, csv_file=None, eval_op=
   start_time = time.time()
   costs = 0.0
   iters = 0
-  state = session.run(model.initial_state)
+  # state = session.run(model.initial_state)
   fetches = {
       "cost": model.cost,
-      "final_state": model.final_state,
+      # "final_state": model.final_state,
       "output": model.output,
       "labels": model.labels,
       "input_data": model.input_data,
@@ -712,7 +712,7 @@ def run_epoch(session, model, results_file, epoch_count, csv_file=None, eval_op=
     # vals = session.run(fetches, feed_dict)
     vals = session.run(fetches)
     cost = vals["cost"]
-    state = vals["final_state"]
+    # state = vals["final_state"]
     output = vals["output"]
     labels = vals["labels"]
     input_data = vals["input_data"]
@@ -829,7 +829,7 @@ def data_exists():
       return False
   return True
 def main(_):
-
+  waiting = False
   while (not data_exists()):
     waiting = True
     cprint(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ' -- Waiting another minute for data...', 'yellow')
