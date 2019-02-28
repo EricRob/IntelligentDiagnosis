@@ -37,6 +37,7 @@ from __future__ import division
 from __future__ import print_function
 
 import time
+from datetime import datetime
 
 import numpy as np
 import tensorflow as tf
@@ -819,9 +820,24 @@ def create_log_directory(eval_dir):
     tf.gfile.DeleteRecursively(eval_dir)
   tf.gfile.MakeDirs(eval_dir)
 
-
+def data_exists():
+  conditions = ['train', 'valid', 'test']
+  for c in conditions:
+    r_path = os.path.join(FLAGS.recur_data_path, 'recurrence_' + c + '.bin')
+    nr_path = os.path.join(FLAGS.recur_data_path, 'nonrecurrence_' + c + '.bin')
+    if not os.path.exists(r_path) or not os.path.exists(nr_path):
+      return False
+  return True
 def main(_):
-  
+
+  while (not data_exists()):
+    waiting = True
+    cprint(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ' -- Waiting another minute for data...', 'yellow')
+    time.sleep(60)
+  cprint('Data exists!', 'green')
+  if waiting:
+    cprint('waited for data, now waiting five more minutes to make sure it is all there ... ', 'yellow')
+    time.sleep(300)
   stdout_backup = sys.stdout
 
   config = get_config()
