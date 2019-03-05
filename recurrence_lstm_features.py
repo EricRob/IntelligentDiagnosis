@@ -829,6 +829,7 @@ def data_exists():
       return False
   return True
 def main(_):
+  waiting = False
 
   while (not data_exists()):
     waiting = True
