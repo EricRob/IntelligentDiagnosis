@@ -435,9 +435,13 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, mode, config):
 		if not valid_binary_exists or FLAGS.overwrite or FLAGS.no_write:
 			detections_filename = os.path.join(FLAGS.detections_path, image + '_Detectionstxt.txt')
 			if not os.path.exists(detections_filename):
-				cprint('No detections exist for ' + image + ', skipping due to lack of detections file', 'red')
-				SKIP_LIST.append(image)
-				continue
+				raw_name = os.path.join(FLAGS.detections_path, image + ' Detectionstxt')
+				if os.path.exists(raw_name):
+					os.rename(raw_name, detections_filename)
+				else:
+					cprint('No detections exist for ' + image + ', skipping due to lack of detections file', 'red')
+					SKIP_LIST.append(image)
+					continue
 			if image not in image_to_ID_dict:
 				cprint(image + ' not in image dictionary, skipping', 'red')
 				pdb.set_trace()	
