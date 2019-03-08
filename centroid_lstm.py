@@ -47,7 +47,7 @@ class OriginalPatchConfig_train(object):
 	tile_keep_percentage = 35 # Percentage of tile that must contain cell data (i.e. non-background)
 	maximum_std_dev = 3 * patch_size # Std dev size for a tile with 100% density
 	maximum_seq_per_tile = 6 # Round number of sequences to the nearest integer
-	maximum_sample_count = 10000
+	maximum_sample_count = 20000
 	image_height = sample_size
 	image_width = sample_size
 	image_depth = 3
@@ -71,7 +71,7 @@ class OriginalPatchConfig_test(object):
 	tile_keep_percentage = 35 # Percentage of tile that must contain cell data (i.e. non-background)
 	maximum_std_dev = 3 * patch_size # Std dev size for a tile with 100% density
 	maximum_seq_per_tile = 6 # Round number of sequences to the nearest integer
-	maximum_sample_count = 10000
+	maximum_sample_count = 20000
 	image_height = sample_size
 	image_width = sample_size
 	image_depth = 3
@@ -509,7 +509,7 @@ def sample_from_distribution(mask, tile_info, config):
 		samples = sequence_count * config.num_steps
 		tile_info[tile]["coords"] = []
 		counter = 0
-		while (len(tile_info[tile]["coords"]) < samples) and (counter < 10000):
+		while (len(tile_info[tile]["coords"]) < samples) and (counter < config.maximum_sample_count):
 			counter += 1
 			x = int(round(np.random.normal(tile_info[tile]["centroid"][1], std_dev)))
 			x = x - config.patch_size // 2 # centroid should be in the center of the patch, x should be left edge. Shift over from center to left edge.
@@ -524,7 +524,9 @@ def sample_from_distribution(mask, tile_info, config):
 			remove_tiles = remove_tiles + [tile]
 			# cprint("Skipping " + str(tile), 'red')
 			skip_count += 1
-
+		else:
+			while(not len(tile_info[tile]["coords"]) % 20 == 0):
+				tile_info[tile]["coords"].pop()
 
 	for tile in remove_tiles:
 		del tile_info[tile]
@@ -556,7 +558,7 @@ def corner_detection_sample_from_dist(mask, corner, config, keep_corner, all_cel
 		# cprint("Skipping corner", 'red')
 		return 1, None
 	corner['corner']['coords'] = []
-	while(len(corner['corner']['coords']) < samples) and (counter < 10000):
+	while(len(corner['corner']['coords']) < samples) and (counter < config.maximum_sample_count):
 		counter += 1
 		x = int(round(np.random.normal(corner['corner']["centroid"][1], std_dev)))
 		x = x - config.patch_size // 2 # centroid should be in the center of the patch, x should be left edge. Shift over from center to left edge.
@@ -617,7 +619,7 @@ def detection_sample_from_dist(mask, tile_info, config, all_cells, image_info=No
 		samples = sequence_count * config.num_steps
 		tile_info[tile]["coords"] = []
 		counter = 0
-		while (len(tile_info[tile]["coords"]) < samples) and (counter < 20000):
+		while (len(tile_info[tile]["coords"]) < samples) and (counter < config.maximum_sample_count):
 			counter += 1
 			x = int(round(np.random.normal(tile_info[tile]["centroid"][1], std_dev)))
 			x = x - config.patch_size // 2 # centroid should be in the center of the patch, x should be left edge. Shift over from center to left edge.
@@ -764,7 +766,7 @@ def corner_sample_from_distribution(mask, corner, config, keep_corner):
 	corner['coords'] = []
 	counter = 0
 	skip_count = 0
-	while(len(corner['coords']) < samples) and (counter < 10000):
+	while(len(corner['coords']) < samples) and (counter < config.maximum_sample_count):
 		counter += 1
 		x = int(round(np.random.normal(corner["centroid"][1], std_dev)))
 		x = x - config.patch_size // 2 # centroid should be in the center of the patch, x should be left edge. Shift over from center to left edge.
@@ -775,12 +777,14 @@ def corner_sample_from_distribution(mask, corner, config, keep_corner):
 			continue
 		if np.sum(patch) <= keep_threshold:
 			corner['coords'] = corner['coords'] + [(y,x)]
-	if counter >= 10000:
+	if counter >= config.maximum_sample_count:
 		# cprint("Skipping corner", 'red')
 		corner['centroid'] = []
 		skip_count = 1
 	else:
 		cprint("Keep corner!", 'green', 'on_white')
+		while(not len(corner['coords']) % 20 == 0):
+			corner['coords'].pop()
 
 	return skip_count
 
