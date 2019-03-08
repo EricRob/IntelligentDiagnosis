@@ -520,10 +520,11 @@ def sample_from_distribution(mask, tile_info, config):
 			patch = mask[y:(y+config.patch_size), x:(x+config.patch_size)]
 			if np.sum(patch) <= keep_threshold:	
 				tile_info[tile]["coords"] = tile_info[tile]["coords"] + [(y,x)]
-		if counter >= config.maximum_sample_count:
+		if counter >= config.maximum_sample_count and len(tile_info[tile]["coords"]) < config.num_steps:
 			remove_tiles = remove_tiles + [tile]
 			# cprint("Skipping " + str(tile), 'red')
 			skip_count += 1
+
 
 	for tile in remove_tiles:
 		del tile_info[tile]
@@ -579,12 +580,14 @@ def corner_detection_sample_from_dist(mask, corner, config, keep_corner, all_cel
 		if cells_in_patch[2] >= config.OTHER_PATCH_THRESHOLD or total < config.MINIMUM_PATCH_CELLS:
 			continue
 		corner['corner']['coords'] = corner['corner']['coords'] + [(y,x)]
-	if counter >= 10000:
+	if counter >= 10000 and len(corner['corner']['coords']) < config.num_steps:
 		# cprint("Skipping corner", 'red')
 		corner['corner']['centroid'] = []
 		skip_count = 1
 	else:
 		cprint("Keep corner!", 'green', 'on_white')
+		while(not len(corner['corner']['coords']) % config.num_steps == 0):
+				corner['corner']['coords'].pop()
 	if image_info:
 		csvfile.close()
 	return skip_count, corner
@@ -638,10 +641,15 @@ def detection_sample_from_dist(mask, tile_info, config, all_cells, image_info=No
 			if cells_in_patch[2] >= config.OTHER_PATCH_THRESHOLD or total < config.MINIMUM_PATCH_CELLS:
 				continue
 			tile_info[tile]["coords"] = tile_info[tile]["coords"] + [(y,x)]
-		if counter >= config.maximum_sample_count:
+		if counter >= config.maximum_sample_count and len(tile_info[tile]["coords"]) < config.num_steps:
 			remove_tiles = remove_tiles + [tile]
 			# cprint("Skipping " + str(tile), 'red')
 			skip_count += 1
+		else:
+			# If the number of patches is not a multiple of config.num_steps, pop off the last patches generated
+			while(not len(tile_info[tile]["coords"]) % config.num_steps == 0):
+				tile_info[tile]["coords"].pop()
+
 	if image_info:
 		csvfile.close()
 	for tile in remove_tiles:
