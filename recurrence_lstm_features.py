@@ -824,7 +824,7 @@ def data_exists():
   conditions = ['train', 'valid', 'test']
   for c in conditions:
     r_path = os.path.join(FLAGS.recur_data_path, 'recurrence_' + c + '.bin')
-    nr_path = os.path.join(FLAGS.recur_data_path, 'nonrecurrence_' + c + '.bin')
+    nr_path = os.path.join(FLAGS.nonrecur_data_path, 'nonrecurrence_' + c + '.bin')
     if not os.path.exists(r_path) or not os.path.exists(nr_path):
       return False
   return True
