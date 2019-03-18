@@ -72,10 +72,9 @@ def test_model(base, model, test_dir, name, config):
 		results_t = ' --results_prepend=' + results_name
 
 	run_call = base + data_t + model_t + results_t
-	pdb.set_trace()
 	subprocess.check_call(run_call, shell=True)
 
-	maj_call = 'python3 ' + os.path.join(config.SCRIPT_DIR + 'majority_vote.py') + ' --base_path=' + results
+	maj_call = 'python3 ' + os.path.join(config.SCRIPT_DIR + 'majority_vote.py') + ' --base_path=' + os.path.join(config.RESULTS_DIR, results_name)
 
 	subprocess.check_call(maj_call, shell=True)
 
