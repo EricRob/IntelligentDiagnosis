@@ -41,6 +41,7 @@ class PrecisionConfig(object):
 	CU_TEST_DIR = os.path.join('/data', 'recurrence_seq_lstm', 'data_conditions', 'cu_testing_data')
 	SINAI_TEST_DIR = os.path.join('/data', 'recurrence_seq_lstm', 'data_conditions', 'sinai_testing_data')
 	RESULTS_DIR = os.path.join('/data', 'recurrence_seq_lstm', 'results')
+	OMEN = ''
 
 class OmenConfig(object):
 	RESULTS_DIR = os.path.join('/hdd', 'ID_net', 'results')
@@ -51,6 +52,7 @@ class OmenConfig(object):
 	CU_TEST_DIR = os.path.join('/hdd', 'ID_net', 'data_conditions', 'cu_testing_data')
 	SINAI_TEST_DIR = os.path.join('/hdd', 'ID_net', 'data_conditions', 'sinai_testing_data')
 	RESULTS_DIR = os.path.join('/hdd', 'ID_net', 'results')
+	OMEN = '--omen_run=True '
 
 def test_model(base, model, test_dir, name, config):
 	if name in model:
@@ -86,7 +88,7 @@ def main():
 	else:
 		config = PrecisionConfig()
 
-	base = 'python3 ' + os.path.join(config.SCRIPT_DIR, 'recurrence_lstm_features.py') + ' --config=test ' 
+	base = 'python3 ' + os.path.join(config.SCRIPT_DIR, 'recurrence_lstm_features.py') + ' --config=test ' + config.OMEN
 	models = []
 	if ARGS.cumc:
 		models = models + CU_MODELS
