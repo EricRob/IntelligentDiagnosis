@@ -16,7 +16,6 @@ from pylab import subplot, plot, subplots_adjust
 from skimage import io
 from PIL import Image
 from termcolor import cprint
-from tensorflow import flags
 from IPython import embed
 from sklearn.metrics import roc_curve, auc
 from skimage.transform import rescale
