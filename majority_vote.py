@@ -19,6 +19,7 @@ from termcolor import cprint
 from tensorflow import flags
 from IPython import embed
 from sklearn.metrics import roc_curve, auc
+from skimage.transform import rescale
 
 # Global variables
 
@@ -185,7 +186,7 @@ def save_heat_images(ensemble, rec, nonrec, name):
 def generate_heat_map_single_image(image_info):
     # raw_patch_info = sum_neighboring_patches(image_info)
     name = image_info["name"].strip()
-    map_name = os.path.join(FLAGS.map_path, name +"_map.tif")
+    map_name = os.path.join(FLAGS.map_path, name +"_map.jpg")
     if os.path.exists(map_name):
         cprint('Skipping map of ' + name, 'yellow')
         return
@@ -224,9 +225,11 @@ def generate_heat_map_single_image(image_info):
             if not np.sum(original_img[x1:x2, y1:y2, blue_channel]) == 0:
                 original_img[x1:x2, y1:y2, red_channel] = zero_channel[x1:x2, y1:y2]
             original_img[x1:x2, y1:y2, blue_channel] = zero_channel[x1:x2, y1:y2]
-    io.imsave(map_name, original_img)
+    rescaled_img = rescale(original_img, 1.0 / 4.0, anti_aliasing=False, multichannel=True, mode='reflect')
+    io.imsave(map_name, rescaled_img)
 
     del original_img
+    del rescaled_img
     del greyscale_array
 
 def include_neighbor_patches(coords, coords_dict, stride):
