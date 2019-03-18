@@ -28,12 +28,6 @@ parser.add_argument('--omen', default=False, action='store_true', help='Run on O
 CU_MODELS = ['CU_Sinai_Feb_23_200']
 YALE_MODELS = ['Yale_Feb_15_200']
 
-YALE_TEST_DIR = os.path.join('/data', 'recurrence_seq_lstm', 'data_conditions', 'yale_testing_data')
-GEIS_TEST_DIR = os.path.join('/data', 'recurrence_seq_lstm', 'data_conditions', 'geis_testing_data')
-CU_TEST_DIR = os.path.join('/data', 'recurrence_seq_lstm', 'data_conditions', 'cu_testing_data')
-SINAI_TEST_DIR = os.path.join('/data', 'recurrence_seq_lstm', 'data_conditions', 'sinai_testing_data')
-RESULTS_DIR = os.path.join('/data', 'recurrence_seq_lstm', 'results')
-
 
 ARGS = parser.parse_args()
 
