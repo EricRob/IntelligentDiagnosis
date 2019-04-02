@@ -19,7 +19,6 @@ import pdb
 from termcolor import cprint
 import matplotlib.pyplot as plt
 from random import shuffle
-from tensorflow import flags
 import argparse
 from skimage import io
 from sklearn.metrics import roc_curve, auc

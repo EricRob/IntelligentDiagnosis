@@ -8,7 +8,6 @@ import os
 import sys
 import math
 from PIL import Image
-from tensorflow import flags
 from skimage import io
 from random import shuffle
 import pdb

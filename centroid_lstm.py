@@ -17,7 +17,6 @@ from math import floor
 from numpy.lib.stride_tricks import as_strided
 from termcolor import cprint
 import numbers
-# from tensorflow import flags
 import qupath_lstm as qupath
 import time
 import struct

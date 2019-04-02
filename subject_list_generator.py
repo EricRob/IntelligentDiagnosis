@@ -11,17 +11,19 @@ import pdb
 import random
 import numpy as np
 from termcolor import cprint
-from tensorflow import flags
+import argparse
 
+parser = argparse.ArgumentParser(description='Create semi-randomized, balanced subject lists for cross validation')
 
 # Global variables
-flags.DEFINE_string("subject_list", "verified_images.csv", "Master list of subjects from which to create per-mode subject lists")
-flags.DEFINE_string("base_path", "/data/recurrence_seq_lstm/data_conditions/", "Location of subject list and where the current testing condition files will be created")
-flags.DEFINE_integer("conditions", 6, "Number of patient sets to create")
-flags.DEFINE_string("condition_name", None, "Name of current testing condition")
-flags.DEFINE_bool("image_processor", False, "List generator is being called rom image_processor.py")
+parser.add_argument("--subject_list", default="verified_images.csv", type=str, help="Master list of subjects from which to create per-mode subject lists")
+parser.add_argument("--base_path", default="/data/recurrence_seq_lstm/data_conditions/", type=str, help="Location of subject list and where the current testing condition files will be created")
+parser.add_argument("--conditions", default=6, type=int, help="Number of patient sets to create")
+parser.add_argument("--condition_name", default=None, type=str, help="Name of current testing condition")
+parser.add_argument("--image_processor", default=False, action='store_true', help="List generator is being called from image_processor.py")
 
-FLAGS = flags.FLAGS
+
+FLAGS = parser.parse_args()
 # Class declarations
 
 # Function declarations
