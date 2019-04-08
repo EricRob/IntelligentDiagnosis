@@ -23,9 +23,10 @@ parser.add_argument('--yale_test', default=False, action='store_true', help='Tes
 parser.add_argument('--geis_test', default=False, action='store_true', help='Test models on Geisinger data')
 parser.add_argument('--cu_test', default=False, action='store_true', help='Test models on CUMC data')
 parser.add_argument('--omen', default=False, action='store_true', help='Run on OMEN tower')
+parser.add_argument('--fullyc', default=False, action='store_true', help='Run fully connected models only')
 
 
-CU_MODELS = ['CU_Sinai_Feb_23_200']
+CU_MODELS = ['FC_CU_Apr_05','CU_Feb_11_200', 'CU_Sinai_Feb_23_200']
 YALE_MODELS = ['Yale_Feb_15_200']
 
 
@@ -80,29 +81,44 @@ def test_model(base, model, test_dir, name, config):
 
 	return
 
+def fix_checkpoints():
+	# TBD - Loop over all available models and change checkpoint path to config's path.
+	return
 
 def main():
+
+	fix_checkpoints()
+
 	if ARGS.omen:
 		config = OmenConfig()
 	else:
 		config = PrecisionConfig()
-
-	base = 'python3 ' + os.path.join(config.SCRIPT_DIR, 'recurrence_lstm_features.py') + ' --config=test ' + config.OMEN
+	fc_base = 'python3 ' + os.path.join(config.SCRIPT_DIR, 'recurrence_lstm_FC_features.py') + ' --config=test ' + config.OMEN
+	dnn_base = 'python3 ' + os.path.join(config.SCRIPT_DIR, 'recurrence_lstm_features.py') + ' --config=test ' + config.OMEN
 	models = []
 	if ARGS.cumc:
 		models = models + CU_MODELS
 
-	if 	ARGS.yale_test:
+	if ARGS.fullyc:
+		fc_models = []
 		for model in models:
+			if 'FC' in model:
+				fc_models.append(model)
+		models = fc_models
+
+	for model in models:
+		if 'FC' in model:
+			base = fc_base
+		else:
+			base = dnn_base
+
+		if 	ARGS.yale_test:
 			test_model(base, model, config.YALE_TEST_DIR, 'Yale', config)
-	if ARGS.sinai_test:
-		for model in models:
+		if ARGS.sinai_test:
 			test_model(base, model, config.SINAI_TEST_DIR, 'Sinai', config)
-	if ARGS.geis_test:
-		for model in models:
+		if ARGS.geis_test:
 			test_model(base, model, config.GEIS_TEST_DIR, 'Geis', config)
-	if ARGS.cu_test:
-		for model in models:
+		if ARGS.cu_test:
 			test_model(base, model, config.CU_TEST_DIR, 'CU', config)
 
 
