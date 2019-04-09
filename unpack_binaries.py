@@ -32,6 +32,9 @@ FLAGS = parser.parse_args()
 # Class declaration
 
 def main():
+    tower_name = os.uname().nodename
+    if 'OMEN' in tower_name:
+        DATA_CONDITIONS = os.path.join('/hdd', 'ID_net', 'data_conditions')
 
     BINARIES = ['recurrence_train.bin', 'recurrence_test.bin', 'recurrence_valid.bin',
     'nonrecurrence_train.bin', 'nonrecurrence_test.bin', 'nonrecurrence_valid.bin']
