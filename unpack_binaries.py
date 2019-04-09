@@ -28,7 +28,7 @@ IMG_BYTES = SEQ_LENGTH*100*100*3
 DATA_CONDITIONS = os.path.join('/data', 'recurrence_seq_lstm', 'data_conditions')
 
 
-FLAGS = parser.parse_args()
+ARGS = parser.parse_args()
 # Class declaration
 
 def main():
