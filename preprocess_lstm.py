@@ -11,12 +11,12 @@ from PIL import Image
 from skimage import io
 from random import shuffle
 import pdb
-from termcolor import cprint
 import csv
 import subprocess
 from shutil import copyfile
 import centroid_lstm as gauss
-import subject_list_generator
+# import subject_list_generator
+from termcolor import cprint
 
 import tiff_patching
 
@@ -34,7 +34,8 @@ parser.add_argument("--nonrecurrence_only", default=False, action='store_true',
 # Example: Create only nonrecurrence data
 # python3 preprocess_lstm.py --nonrecurrence_only
 # This does not work with the condition_path parameter. If condition_path is specified, this flag is ignored.
-
+parser.add_argument('--skip', default=False, action='store_true', help='If an image binary file does not exist, do not attempt to write it.')
+parser.add_argument('--qptwo', default=False, action='store_true', help='Run qp2 detections concurrently with another process')
 parser.add_argument("--seg_path", default=None, type=str,
 	help="Segmentations are custom-made binary masks for sampling from specific areas within the image. \
 	This parameter specifies the directory containing binary segmentations")
@@ -400,6 +401,9 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, mode, config):
 	else:
 		prepend = "FEATURES_"
 
+	if FLAGS.qptwo:
+		prepend = 'qp2_' + prepend
+
 	gauss_config.add_features = not FLAGS.remove_features
 	gauss_category_folder = prepend + "tile" + str(gauss_config.tile_size) + "_std_dev" + str(gauss_config.maximum_std_dev) + "_seq" + str(gauss_config.maximum_seq_per_tile) + '_patch' + str(gauss_config.patch_size)
 	gauss_folder = os.path.join(config.image_data_folder_path,'feature_patches','OTHER_gaussian_patches_' + str(gauss_config.pixel_radius) + '_min' + str(gauss_config.MINIMUM_PATCH_CELLS) + '_' + str(gauss_config.large_cluster) + '_' + str(int(gauss_config.OTHER_PATCH_THRESHOLD*100)) + 'p', gauss_category_folder)
@@ -421,17 +425,15 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, mode, config):
 		image_bin_name = image + ".bin"
 		image_bin_path = os.path.join(gauss_folder, image_bin_name)
 		#pdb.set_trace()
-
+		valid_binary_exists = False
 		if os.path.exists(image_bin_path):
 			if os.path.getsize(image_bin_path) > 1000: #One data block is 600kb, so it should be at least that big. 1000 basically means some image data has been written.
 				valid_binary_exists = True
-			else:
-				valid_binary_exists = False
-		else:
-			valid_binary_exists = False
 
 
 		if not valid_binary_exists or FLAGS.overwrite or FLAGS.no_write:
+			if FLAGS.skip:
+				cprint('Skipping ' + image + ' due to SKIP flag')
 			detections_filename = os.path.join(FLAGS.detections_path, image + '_Detectionstxt.txt')
 			if not os.path.exists(detections_filename):
 				raw_name = os.path.join(FLAGS.detections_path, image + ' Detectionstxt')
@@ -471,8 +473,9 @@ def gauss_sampling(image_to_ID_dict, images_list, bin_file, mode, config):
 		image_bytes = image_bin.read(os.path.getsize(image_bin_path))
 		bin_file.write(image_bytes)
 		image_bin.close()
-	with open('/data/recurrence_seq_lstm/need_qupath.csv', 'a') as csvfile:
+	with open(os.path.join(FLAGS.data_conditions,'skip_list.csv'), 'w') as csvfile:
 				writer = csv.writer(csvfile)
+				cprint('Writing skip list to ' + os.path.join(FLAGS.data_conditions,'skip_list.csv'), 'yellow')
 				for image in SKIP_LIST:
 					writer.writerow([os.path.join(config.image_data_folder_path,'original_images',image +'.tif')])
 
