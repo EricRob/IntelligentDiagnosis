@@ -896,7 +896,7 @@ def main(_):
     csv_file.write("ID,names,output,label,unscaled_nr,unscaled_rec,scaled_nr,scaled_rec,coords\n")
 
   if FLAGS.save_samples:
-    os.makedirs(os.path.join(base_directory,"samples"), exist_ok=True)
+    os.makedirs(os.path.join(FLAGS.base_path,"samples"), exist_ok=True)
 
 
   eval_config = get_config()
