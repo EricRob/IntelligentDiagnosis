@@ -90,6 +90,7 @@ flags.DEFINE_integer("num_steps", 20, "Steps in LSTM sequence")
 flags.DEFINE_bool("save_samples", False, "Save every sequence as a TIFF in a /samples folder")
 flags.DEFINE_bool("omen_run", False, "Running from OMEN (rather than PrecisionTower)")
 flags.DEFINE_bool("park", False, 'Running from Park GPU (rather than PrecisionTower)')
+flags.DEFINE_string('base_path', '/data/recurrence_seq_lstm/', 'Results folder for holding ')
 
 FLAGS = flags.FLAGS
 BASIC = "basic"
@@ -665,12 +666,7 @@ def save_sample_image(input_data, label, model, step, epoch_count, vals):
   arr = batch[0,:,:,:]
   seq_pixels = model.num_steps * model.image_size
   arr = np.reshape(arr, (model.batch_size, seq_pixels, model.image_size, model.image_depth))
-  if FLAGS.omen_run:
-    samples_folder = os.path.join('/hdd', 'ID_net', 'samples', FLAGS.results_prepend)
-  elif FLAGS.park:
-    samples_folder = os.path.join('/home','param', 'IntelligentDiagnosis', 'samples', FLAGS.results_prepend)
-  else:
-    samples_folder = os.path.join('/data','recurrence_seq_lstm', 'samples', FLAGS.results_prepend)
+  samples_folder = os.path.join(FLAGS.base_path, 'samples', FLAGS.results_prepend)
   
   os.makedirs(samples_folder, exist_ok=True)
   for x in range(model.batch_size):
@@ -728,8 +724,8 @@ def run_epoch(session, model, results_file, epoch_count, csv_file=None, eval_op=
     if FLAGS.save_samples:
       save_sample_image(input_data, labels, model, step, epoch_count, vals)
     
-    if np.isnan(cost):
-      pdb.set_trace()
+    # if np.isnan(cost):
+    #   pdb.set_trace()
 
     costs += cost
     iters += model.input.num_steps
@@ -871,13 +867,14 @@ def main(_):
   if FLAGS.epochs:
     config.max_max_epoch = FLAGS.epochs
 
-  if FLAGS.omen_run:
-    base_directory = os.path.join('/hdd', 'ID_net')
-  elif FLAGS.park:
-    base_directory = os.path.join('/home', 'param', 'IntelligentDiagnosis')
-  else:
-    base_directory = os.path.join('/data', 'recurrence_seq_lstm')
-  results_path = os.path.join(base_directory, "results", FLAGS.results_prepend) #+ "_lr" + str(config.learning_rate) + "_kp" + str(int(config.keep_prob*100))
+  # if FLAGS.omen_run:
+  #   base_directory = os.path.join('/hdd', 'ID_net')
+  # elif FLAGS.park:
+  #   base_directory = os.path.join('/home', 'param', 'IntelligentDiagnosis')
+  # else:
+  #   base_directory = os.path.join('/data', 'recurrence_seq_lstm')
+  os.makedirs(os.path.join(FLAGS.base_path, 'results'), exist_ok=True)
+  results_path = os.path.join(FLAGS.base_path, "results", FLAGS.results_prepend)
   
   cprint("Data Sources:", 'white', 'on_magenta')
   cprint(FLAGS.recur_data_path, 'magenta', 'on_white')
@@ -886,7 +883,7 @@ def main(_):
     cprint('Testing with model %s' % (FLAGS.model_path), 'white', 'on_magenta' )
   cprint("Results saved to %s" % (results_path), 'white', 'on_magenta')
   
-  os.makedirs(os.path.join(base_directory, 'results', FLAGS.results_prepend), exist_ok=True)
+  os.makedirs(results_path, exist_ok=True)
   if config.test_mode == 0:  
     # os.makedirs(os.path.join(base_directory,"samples"), exist_ok=True)
     train_file = open(os.path.join(results_path,"train_results.txt"), 'at+')
