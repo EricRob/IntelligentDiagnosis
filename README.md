@@ -16,6 +16,12 @@
  * This file must be named in the format "[image name]\_Detectionstxt.txt" which can be achieved by running _rename\_detections.sh_ in the folder containing QuPath output.
  * Saved in directory specified by *--detections_path* parameter of _preprocess\_lstm.py_ (usually _[base]/qupath_output/_)
  5. Subject Lists
+ * recurrence_train_subjects.txt
+ * recurrence_valid_subjects.txt
+ * recurrence_test_subjects.txt
+ * nonrecurrence_train_subjects.txt
+ * nonrecurrence_valid_subjects.txt
+ * nonrecurrence_test_subjects.txt
 
 
 
