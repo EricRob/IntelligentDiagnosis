@@ -30,6 +30,14 @@ def main():
     feature_list = []
     x_ticks = []
     y_ticks = []
+    name_dict = { 'imm small / total AUC': 'Unclustered Immune Count / Total Count AUC', \
+    'imm large / all imm AUC': 'Clustered Immune Count / Immune Count AUC', \
+    'imm large / tum large AUC': 'Clustered Immune Count / Clustered Tumor Count AUC', \
+    'imm large / imm small AUC': 'Clustered Immune Count / Unclustered Immune Count AUC', \
+    'imm small / total AUC': 'Unclustered Immune Count / Total Count AUC', \
+    'tum large / all tum AUC': 'Clustered Tumor Count / Tumor Count AUC', \
+    'imm large / total AUC': 'Clustered Immune Count / Total Count AUC'
+    }
     with open(CSV_PATH, 'r') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
@@ -60,16 +68,17 @@ def main():
                     data[rad][clust][value] = float(row[value])
                     if value not in feature_list:
                         feature_list.append(value)
-    
+    # ipdb.set_trace()
     x_ticks.sort()
     y_ticks.sort()
     y_ticks.reverse()
-    ipdb.set_trace()
+    
     cmap = plt.cm.inferno
     fig, axs = plt.subplots(3, 2)
+    fig.set_figheight(8)
+    fig.set_figwidth(8)
     idx = 0
     for feature in feature_list:
-        embed()
         row = idx % 3
         col = idx // 3
         print(str((row, col)))
@@ -90,7 +99,7 @@ def main():
         axs[row, col].set_yticks(np.arange(7), y_ticks)
         axs[row, col].set_yticklabels(y_ticks)
 
-        axs[row, col].set_title(feature[:-4])
+        axs[row, col].set_title(name_dict[feature])
         axs[row, col].set(xlabel='Delaunay Pixel Radius', ylabel='Small Cluster Size')
         fig.colorbar(im, ax=axs[row, col])
         idx += 1

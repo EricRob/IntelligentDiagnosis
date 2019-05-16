@@ -15,10 +15,10 @@ import matplotlib.pyplot as plt
 from pylab import subplot, plot, subplots_adjust
 from skimage import io
 from PIL import Image
-from termcolor import cprint
 from IPython import embed
 from sklearn.metrics import roc_curve, auc
 from skimage.transform import rescale
+from termcolor import cprint
 
 # Global variables
 
@@ -753,7 +753,7 @@ def main():
     print("Creating image dictionary...")
     for image_name in sorted(image_dict):    
         image_patch_data = ops_within_patches(image_dict[image_name]["coords"])
-        if FLAGS.map_path:
+        if FLAGS.map_path and not FLAGS.from_outside:
             generate_heat_map_single_image(image_dict[image_name])
     if FLAGS.from_outside:
         return image_dict, subject_dict

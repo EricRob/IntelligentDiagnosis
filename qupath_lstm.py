@@ -1,7 +1,4 @@
-
-
-
-#!/user/bin/env python3 -tt
+#!/usr/bin/env python3 -tt
 """
 Module documentation.
 """
@@ -16,7 +13,6 @@ import os
 import sys
 from IPython import embed
 import pdb
-from termcolor import cprint
 import matplotlib.pyplot as plt
 from random import shuffle
 import argparse
@@ -25,11 +21,12 @@ from sklearn.metrics import roc_curve, auc
 from sklearn.cluster import KMeans
 from scipy.cluster.vq import vq
 from scipy.spatial import Voronoi, voronoi_plot_2d
-from shapely.geometry import Point
-from shapely.geometry.polygon import Polygon
-from tempfile import TemporaryFile
+# from shapely.geometry import Point
+# from shapely.geomety.polygon import Polygon
+# from tempfile import TemporaryFile
 from math import isnan
 import matplotlib.image as mpimg
+# from termcolor import cprint
 
 
 warnings.simplefilter('ignore', Image.DecompressionBombWarning)

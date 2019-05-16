@@ -41,17 +41,17 @@ from datetime import datetime
 
 import numpy as np
 import tensorflow as tf
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import os
 import sys
 
 import reader_features
 import util
-from scipy.misc import imsave
+# from scipy.misc import imsave
 import csv
 from termcolor import cprint
-import pdb
-from math import sqrt
+# import pdb
+# from math import sqrt
 
 from tensorflow.python.client import device_lib
 
@@ -88,8 +88,6 @@ flags.DEFINE_string("model_path", None, "Location of model to load from last che
 flags.DEFINE_bool("save_model", False, "Save model and checkpoints for future testing")
 flags.DEFINE_integer("num_steps", 20, "Steps in LSTM sequence")
 flags.DEFINE_bool("save_samples", False, "Save every sequence as a TIFF in a /samples folder")
-flags.DEFINE_bool("omen_run", False, "Running from OMEN (rather than PrecisionTower)")
-flags.DEFINE_bool("park", False, 'Running from Park GPU (rather than PrecisionTower)')
 flags.DEFINE_string('base_path', '/data/recurrence_seq_lstm/', 'Results folder for holding ')
 
 FLAGS = flags.FLAGS

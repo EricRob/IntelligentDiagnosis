@@ -17,17 +17,19 @@ import subprocess
 parser = argparse.ArgumentParser(description='Run sets of models for a given test set')
 
 parser.add_argument('--cumc', default=False, action='store_true', help='Run CU models for testing')
-parser.add_argument('--yale', default=False, action='store_true', help='Run Yale models for testing')
+parser.add_argument('--yumc', default=False, action='store_true', help='Run Yale models for testing')
 parser.add_argument('--sinai_test', default=False, action='store_true', help='Test models on Sinai data')
 parser.add_argument('--yale_test', default=False, action='store_true', help='Test models on Yale data')
 parser.add_argument('--geis_test', default=False, action='store_true', help='Test models on Geisinger data')
+parser.add_argument('--stage_one_test', default=False, action='store_true', help='Test models on only stage one data')
 parser.add_argument('--cu_test', default=False, action='store_true', help='Test models on CUMC data')
 parser.add_argument('--omen', default=False, action='store_true', help='Run on OMEN tower')
 parser.add_argument('--fullyc', default=False, action='store_true', help='Run fully connected models only')
 
 
-CU_MODELS = ['CU_Apr_05', 'FC_CU_Apr_05','CU_Feb_11_200', 'CU_Sinai_Feb_23_200']
-CU_MODELS = ['CU_Feb_11_200', 'CU_Sinai_Feb_23_200']
+# CU_MODELS = ['CU_Sinai_Apr_11', 'CU_Apr_09_200']
+CU_MODELS = ['DNN_CU_Sinai_Apr_13']
+# CU_MODELS = ['CU_Feb_11_200', 'CU_Sinai_Feb_23_200']
 YALE_MODELS = ['Yale_Feb_15_200']
 
 
@@ -42,6 +44,7 @@ class PrecisionConfig(object):
 	YALE_TEST_DIR = os.path.join('/data', 'recurrence_seq_lstm', 'data_conditions', 'yale_testing_data')
 	GEIS_TEST_DIR = os.path.join('/data', 'recurrence_seq_lstm', 'data_conditions', 'geis_testing_data')
 	CU_TEST_DIR = os.path.join('/data', 'recurrence_seq_lstm', 'data_conditions', 'cu_testing_data')
+	STAGE_ONE_DIR = os.path.join('/data', 'recurrence_seq_lstm', 'data_conditions', 'stage_one_testing')
 	SINAI_TEST_DIR = os.path.join('/data', 'recurrence_seq_lstm', 'data_conditions', 'sinai_testing_data')
 	RESULTS_DIR = os.path.join('/data', 'recurrence_seq_lstm', 'results')
 	OMEN = ''
@@ -54,12 +57,14 @@ class OmenConfig(object):
 	YALE_TEST_DIR = os.path.join('/hdd', 'ID_net', 'data_conditions', 'yale_testing_data')
 	GEIS_TEST_DIR = os.path.join('/hdd', 'ID_net', 'data_conditions', 'geis_testing_data')
 	CU_TEST_DIR = os.path.join('/hdd', 'ID_net', 'data_conditions', 'cu_testing_data')
+	STAGE_ONE_DIR = os.path.join('/hdd', 'ID_net', 'data_conditions', 'stage_one_testing')
 	SINAI_TEST_DIR = os.path.join('/hdd', 'ID_net', 'data_conditions', 'sinai_testing_data')
 	RESULTS_DIR = os.path.join('/hdd', 'ID_net', 'results')
-	OMEN = '--omen_run=True '
+	OMEN = '--base_path=/hdd/ID_net/ '
 
 def test_model(base, model, test_dir, name, config):
 	if name in model:
+		cprint(name + 'in model: ' + model + ', skipping.', 'yellow')
 		return
 
 	data_t = '--recur_data_path=' + test_dir + ' --nonrecur_data_path=' + test_dir
@@ -119,7 +124,7 @@ def fix_checkpoint(model, config):
 				if config.REPLACE_DIR in line:
 					writing.append(line.replace(config.REPLACE_DIR, config.RESULTS_DIR))
 			if writing:
-				cprint('Replacing checkpoints in ' + d)
+				cprint('Replacing checkpoints in ' + model)
 				with open(checkpoint_file, 'w+') as f:
 					for line in writing:
 						f.write(line)
@@ -145,6 +150,8 @@ def main():
 	models = []
 	if ARGS.cumc:
 		models = models + CU_MODELS
+	if ARGS.yumc:
+		models = models + YALE_MODELS
 
 	if ARGS.fullyc:
 		fc_models = []
@@ -156,7 +163,7 @@ def main():
 	for model in models:
 		exit = fix_checkpoint(model, config)
 		if exit:
-			cprint('No valid checkpoint file for ' + model)
+			cprint('No valid checkpoint file for ' + model, 'red', 'on_white')
 			continue
 
 		if 'FC' in model:
@@ -172,6 +179,8 @@ def main():
 			test_model(base, model, config.GEIS_TEST_DIR, 'Geis', config)
 		if ARGS.cu_test:
 			test_model(base, model, config.CU_TEST_DIR, 'CU', config)
+		if ARGS.stage_one_test:
+			test_model(base, model, config.STAGE_ONE_DIR, 'Stage_One', config)
 
 
 # Main body

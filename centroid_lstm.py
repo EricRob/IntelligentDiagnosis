@@ -15,11 +15,11 @@ from scipy.ndimage import measurements
 from skimage import transform
 from math import floor
 from numpy.lib.stride_tricks import as_strided
-from termcolor import cprint
 import numbers
 import qupath_lstm as qupath
 import time
 import struct
+from termcolor import cprint
 
 
 # flags.DEFINE_bool("overwrite", False, "Overwrite image binary files if they exist.")
@@ -1010,7 +1010,7 @@ def remove_empty_delaunay_tiles(dels, all_tiles):
 	for tile in dels:
 		# Is this a bug? Should it be both Tumor and Immune Cells?
 		# Just 'Tumor' has shown to have better results.
-		if not dels[tile]['Tumor'] and not dels[tile]['Immune cells']:
+		if not dels[tile]['Tumor']:# and not dels[tile]['Immune cells']:
 			remove_list.append(tile)
 	for tile in remove_list:
 		dels.pop(tile)

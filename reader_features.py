@@ -172,7 +172,6 @@ def read_data(r_filename, nr_filename, config):
 	r_queue = tf.train.string_input_producer(r_filename)
 	nr_queue = tf.train.string_input_producer(nr_filename)
 
-
 	r_result = _read_from_file(r_queue, config, class_label = 1)
 	nr_result = _read_from_file(nr_queue, config, class_label = 0)
 
