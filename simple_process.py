@@ -17,7 +17,7 @@ warnings.simplefilter('ignore', UserWarning)
 
 class OriginalPatchConfig(object):
 	images_dir = './out'
-	json_file = './output.json'
+	json_file = './data.json'
 	qupath_script = './qupath_script.groovy'
 	image_bin_dir = './'
 	bin_path = './'
