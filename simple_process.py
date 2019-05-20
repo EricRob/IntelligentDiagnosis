@@ -15,7 +15,7 @@ import simple_centroid as gauss
 warnings.simplefilter('ignore', FutureWarning)
 warnings.simplefilter('ignore', UserWarning)
 
-class OriginalPatchConfig(object):
+class Config(object):
 	images_dir = './'
 	json_file = './data.json'
 	image_csv = './image_list.csv'
@@ -67,11 +67,14 @@ def bin_file_requirements_met(image):
 
 def gauss_sampling(data, bin_file, config):
 	err_list = []
-	gauss_config = gauss.OriginalPatchConfig_test()
-
-	gauss_config.image_data_folder_path = config.images_dir
-
+	
 	for image in data:
+		if image.source.lower() == 'yale':
+			gauss_config = gauss.YaleConfig_test()
+		else:
+			gauss_config = gauss.OriginalPatchConfig_test()
+		gauss_config.image_data_folder_path = config.images_dir
+
 		if not os.path.exists(image.bin):
 			cprint('Creating image binary file for %s: %s' % (image.subject, image.img_base), 'white', 'on_green')
 			val = bin_file_requirements_met(image)
@@ -109,7 +112,7 @@ def gauss_sampling(data, bin_file, config):
 	return err_list
 
 def main():
-	config = OriginalPatchConfig()
+	config = Config()
 	data = process_csv_input(config)
 	err_list = []
 	for label in data:

@@ -34,31 +34,8 @@ DETECTION_SAMPLING = True
 # MINIMUM_PATCH_CELLS = 20
 
 # Class declarations
-class OriginalPatchConfig_train(object):
-	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/original_images" # Location of image to be split into patches
-	features_path = '/data/recurrence_seq_lstm/feature_testing'
-	patch_size = 500 # Pixel length and width of each patch square
-	tile_size = patch_size * 5
-	edge_overlap = 75 # Amount of overlap between patches within a sample
-	sample_size = 100 # Final size of patch (usually 100)
-	scaling_factor = patch_size / sample_size
-	patch_keep_percentage = 75 # Percentage of patch that must be data (i.e. non-background)
-	tile_keep_percentage = 35 # Percentage of tile that must contain cell data (i.e. non-background)
-	maximum_std_dev = 3 * patch_size # Std dev size for a tile with 100% density
-	maximum_seq_per_tile = 6 # Round number of sequences to the nearest integer
-	maximum_sample_count = 20000
-	image_height = sample_size
-	image_width = sample_size
-	image_depth = 3
-	num_steps = 20
-	large_cluster = 1
-	pixel_radius = 40
-	MINIMUM_PATCH_CELLS = 10
-	add_features = True
-	OTHER_PATCH_THRESHOLD = 0.3
-	OTHER_TILE_THRESHOLD = 0.8
 
-class OriginalPatchConfig_test(object):
+class OriginalConfig(object):
 	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/original_images" # Location of image to be split into patches
 	features_path = '/data/recurrence_seq_lstm/feature_testing'
 	patch_size = 500 # Pixel length and width of each patch square
@@ -82,103 +59,8 @@ class OriginalPatchConfig_test(object):
 	OTHER_PATCH_THRESHOLD = 0.3 #0.5
 	OTHER_TILE_THRESHOLD = 0.8
 
-class OriginalPatchConfig_train_small(object):
-	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/original_images" # Location of image to be split into patches
-	features_path = '/data/recurrence_seq_lstm/feature_testing'
-	patch_size = 250 # Pixel length and width of each patch square
-	tile_size = patch_size * 10
-	edge_overlap = 75 # Amount of overlap between patches within a sample
-	sample_size = 100 # Final size of patch (usually 100)
-	scaling_factor = patch_size / sample_size
-	patch_keep_percentage = 75 # Percentage of patch that must be data (i.e. non-background)
-	tile_keep_percentage = 35 # Percentage of tile that must contain cell data (i.e. non-background)
-	maximum_std_dev = 1500 # Std dev size for a tile with 100% density
-	maximum_seq_per_tile = 24 # Round number of sequences to the nearest integer
-	maximum_sample_count = 10000
-	image_height = sample_size
-	image_width = sample_size
-	image_depth = 3
-	num_steps = 20
-	large_cluster = 1
-	pixel_radius = 40
-	MINIMUM_PATCH_CELLS = 5
-	add_features = True
-	OTHER_PATCH_THRESHOLD = 0.3
-	OTHER_TILE_THRESHOLD = 0.8
 
-class OriginalPatchConfig_test_small(object):
-	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/original_images" # Location of image to be split into patches
-	features_path = '/data/recurrence_seq_lstm/feature_testing'
-	patch_size = 250 # Pixel length and width of each patch square
-	tile_size = patch_size * 10
-	edge_overlap = 75 # Amount of overlap between patches within a sample
-	sample_size = 100 # Final size of patch (usually 100)
-	scaling_factor = patch_size / sample_size
-	patch_keep_percentage = 75 # Percentage of patch that must be data (i.e. non-background)
-	tile_keep_percentage = 35 # Percentage of tile that must contain cell data (i.e. non-background)
-	maximum_std_dev = 1500 # Std dev size for a tile with 100% density
-	maximum_seq_per_tile = 24 # Round number of sequences to the nearest integer
-	maximum_sample_count = 10000
-	image_height = sample_size
-	image_width = sample_size
-	image_depth = 3
-	num_steps = 20
-	large_cluster = 1
-	pixel_radius = 40
-	MINIMUM_PATCH_CELLS = 5 #1
-	add_features = True
-	OTHER_PATCH_THRESHOLD = 0.3 #0.5
-	OTHER_TILE_THRESHOLD = 0.8
-
-class SinaiConfig_train(object):
-	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/original_images" # Location of image to be split into patches
-	features_path = '/data/recurrence_seq_lstm/feature_testing'
-	patch_size = 500 # Pixel length and width of each patch square
-	tile_size = patch_size * 5
-	edge_overlap = 75 # Amount of overlap between patches within a sample
-	sample_size = 100 # Final size of patch (usually 100)
-	scaling_factor = patch_size / sample_size
-	patch_keep_percentage = 75 # Percentage of patch that must be data (i.e. non-background)
-	tile_keep_percentage = 35 # Percentage of tile that must contain cell data (i.e. non-background)
-	maximum_std_dev = 3 * patch_size # Std dev size for a tile with 100% density
-	maximum_seq_per_tile = 6 # Round number of sequences to the nearest integer
-	maximum_sample_count = 10000
-	image_height = sample_size
-	image_width = sample_size
-	image_depth = 3
-	num_steps = 20
-	large_cluster = 1
-	pixel_radius = 40
-	MINIMUM_PATCH_CELLS = 20 #50
-	add_features = True
-	OTHER_PATCH_THRESHOLD = 0.50 #0.1
-	OTHER_TILE_THRESHOLD = 0.8
-
-class SinaiConfig_test(object):
-	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/original_images" # Location of image to be split into patches
-	features_path = '/data/recurrence_seq_lstm/feature_testing'
-	patch_size = 500 # Pixel length and width of each patch square
-	tile_size = patch_size * 5
-	edge_overlap = 75 # Amount of overlap between patches within a sample
-	sample_size = 100 # Final size of patch (usually 100)
-	scaling_factor = patch_size / sample_size
-	patch_keep_percentage = 75 # Percentage of patch that must be data (i.e. non-background)
-	tile_keep_percentage = 35 # Percentage of tile that must contain cell data (i.e. non-background)
-	maximum_std_dev = 3 * patch_size # Std dev size for a tile with 100% density
-	maximum_seq_per_tile = 6 # Round number of sequences to the nearest integer
-	maximum_sample_count = 10000
-	image_height = sample_size
-	image_width = sample_size
-	image_depth = 3
-	num_steps = 20
-	large_cluster = 1
-	pixel_radius = 40
-	MINIMUM_PATCH_CELLS = 50 #50
-	add_features = True
-	OTHER_PATCH_THRESHOLD = 0.50 #0.1
-	OTHER_TILE_THRESHOLD = 0.8
-
-class YaleConfig_train(object):
+class YaleConfig(object):
 	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/original_images/" # Location of image to be split into patches
 	features_path = '/data/recurrence_seq_lstm/feature_testing'
 	patch_size = 250 # Pixel length and width of each patch square
@@ -198,78 +80,6 @@ class YaleConfig_train(object):
 	large_cluster = 1
 	pixel_radius = 40
 	MINIMUM_PATCH_CELLS = 10
-	add_features = True
-	OTHER_PATCH_THRESHOLD = 0.3
-	OTHER_TILE_THRESHOLD = 0.8
-
-class YaleConfig_test(object):
-	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/original_images/" # Location of image to be split into patches
-	features_path = '/data/recurrence_seq_lstm/feature_testing'
-	patch_size = 250 # Pixel length and width of each patch square
-	tile_size = patch_size * 5
-	edge_overlap = 75 # Amount of overlap between patches within a sample
-	sample_size = 100 # Final size of patch (usually 100)
-	scaling_factor = patch_size / sample_size
-	patch_keep_percentage = 75 # Percentage of patch that must be data (i.e. non-background)
-	tile_keep_percentage = 35 # Percentage of tile that must contain cell data (i.e. non-background)
-	maximum_std_dev = 3 * patch_size # Std dev size for a tile with 100% density
-	maximum_seq_per_tile = 6 # Round number of sequences to the nearest integer
-	maximum_sample_count = 10000
-	image_height = sample_size
-	image_width = sample_size
-	image_depth = 3
-	num_steps = 20
-	large_cluster = 1
-	pixel_radius = 40
-	MINIMUM_PATCH_CELLS = 10
-	add_features = True
-	OTHER_PATCH_THRESHOLD = 0.3
-	OTHER_TILE_THRESHOLD = 0.8
-
-class YaleConfig_train_small(object):
-	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/original_images/" # Location of image to be split into patches
-	features_path = '/data/recurrence_seq_lstm/feature_testing'
-	patch_size = 125 # Pixel length and width of each patch square
-	tile_size = patch_size * 10
-	edge_overlap = 75 # Amount of overlap between patches within a sample
-	sample_size = 100 # Final size of patch (usually 100)
-	scaling_factor = patch_size / sample_size
-	patch_keep_percentage = 75 # Percentage of patch that must be data (i.e. non-background)
-	tile_keep_percentage = 35 # Percentage of tile that must contain cell data (i.e. non-background)
-	maximum_std_dev = 3 * patch_size # Std dev size for a tile with 100% density
-	maximum_seq_per_tile = 24 # Round number of sequences to the nearest integer
-	maximum_sample_count = 10000
-	image_height = sample_size
-	image_width = sample_size
-	image_depth = 3
-	num_steps = 20
-	large_cluster = 1
-	pixel_radius = 40
-	MINIMUM_PATCH_CELLS = 5
-	add_features = True
-	OTHER_PATCH_THRESHOLD = 0.3
-	OTHER_TILE_THRESHOLD = 0.8
-
-class YaleConfig_test_small(object):
-	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/original_images/" # Location of image to be split into patches
-	features_path = '/data/recurrence_seq_lstm/feature_testing'
-	patch_size = 125 # Pixel length and width of each patch square
-	tile_size = patch_size * 10
-	edge_overlap = 75 # Amount of overlap between patches within a sample
-	sample_size = 100 # Final size of patch (usually 100)
-	scaling_factor = patch_size / sample_size
-	patch_keep_percentage = 75 # Percentage of patch that must be data (i.e. non-background)
-	tile_keep_percentage = 35 # Percentage of tile that must contain cell data (i.e. non-background)
-	maximum_std_dev = 3 * patch_size # Std dev size for a tile with 100% density
-	maximum_seq_per_tile = 24 # Round number of sequences to the nearest integer
-	maximum_sample_count = 10000
-	image_height = sample_size
-	image_width = sample_size
-	image_depth = 3
-	num_steps = 20
-	large_cluster = 1
-	pixel_radius = 40
-	MINIMUM_PATCH_CELLS = 5
 	add_features = True
 	OTHER_PATCH_THRESHOLD = 0.3
 	OTHER_TILE_THRESHOLD = 0.8
