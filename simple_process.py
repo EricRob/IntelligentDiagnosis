@@ -67,12 +67,12 @@ def bin_file_requirements_met(image):
 
 def gauss_sampling(data, bin_file, config):
 	err_list = []
-	
+
 	for image in data:
 		if image.source.lower() == 'yale':
-			gauss_config = gauss.YaleConfig_test()
+			gauss_config = gauss.YaleConfig()
 		else:
-			gauss_config = gauss.OriginalPatchConfig_test()
+			gauss_config = gauss.OriginalConfig()
 		gauss_config.image_data_folder_path = config.images_dir
 
 		if not os.path.exists(image.bin):
