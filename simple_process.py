@@ -6,6 +6,7 @@ import pdb
 import sys
 import warnings
 from termcolor import cprint
+from art import tprint
 
 import simple_centroid as gauss
 
@@ -36,12 +37,42 @@ class HE_Image:
 		self.mode = meta_data['mode']
 		self.mask = os.path.join(config.images_dir, 'mask_%s.tif' % self.img_base)
 		self.detections = os.path.join(config.detections_path, '%s Detectionstxt' % self.img_base)
+		self.error_code = self.bin_requirements_met(config)
+		self.create_bin = not os.path.exists(self.bin)
+		self.gauss_config = self.assign_gauss_config(config)
 
 	def assign_str_label(self, label):
 		if label:
 			return 'recurrence'
 		else:
 			return 'nonrecurrence'
+	def assign_gauss_config(self, config):
+		if self.source.lower() == 'yale':
+			gauss_config = gauss.YaleConfig()
+		else:
+			gauss_config = gauss.OriginalConfig()
+		gauss_config.image_data_folder_path = config.images_dir
+		return gauss_config
+	def bin_requirements_met(self, config):
+		val = 3
+		if os.path.exists(self.detections):
+			val -= 1
+		if os.path.exists(self.mask):
+			val -= 2
+		return val
+	def raise_error(self, feature_err=False):
+			if self.error_code == 3:
+				cprint('Detections and mask file not found for %s: %s' % (self.subject, self.img_base), 'red')
+				return [self.mode, self.subject, self.image, str(self.label), self.source, 'not found', 'not found', 'n/a']
+			elif self.error_code == 2:
+				cprint('Mask tiff not found for %s: %s' % (self.subject, self.img_base), 'red')
+				return [self.mode, self.subject, self.image, str(self.label), self.source, 'not found', 'ok', 'n/a']
+			elif self.error_code == 1:
+				cprint('Detections file not found for %s: %s' % (self.subject, self.img_base), 'red')
+				return [self.mode, self.subject, self.image, str(self.label), self.source, 'ok', 'not found', 'n/a']
+			elif feature_err:
+				print('No sequences processed for %s: %s' % (self.subject, self.img_base), 'red')
+				return [self.mode, self.subject, self.image, str(self.label), self.source, 'ok', 'ok', 'no features']
 
 
 def process_input_csv(config):
@@ -65,7 +96,7 @@ def write_error_csv(err_list, config):
 
 def bin_file_requirements_met(image):
 	val = 0
-	if os.path.exists(image.detections):
+	if os.path.exists(self.detections):
 		val += 1
 	if os.path.exists(image.mask):
 		val += 2
@@ -75,42 +106,34 @@ def generate_and_append_bin(image_list, bin_file, config):
 	err_list = []
 
 	for image in image_list:
-		if image.source.lower() == 'yale':
-			gauss_config = gauss.YaleConfig()
-		else:
-			gauss_config = gauss.OriginalConfig()
-		gauss_config.image_data_folder_path = config.images_dir
-
-		if not os.path.exists(image.bin):
-			cprint('Creating image binary file for %s: %s' % (image.subject, image.img_base), 'white', 'on_green')
-			val = bin_file_requirements_met(image)
-			if val == 3:
-				seq_features = gauss.generate_sequences(image.mask, \
-					gauss_config, image_name=image.img_base, subject_id=image.subject, detections=config.detections_path)
-
-				if not seq_features:
-					print('No sequences processed for %s: %s' % (image.subject, image.img_base), 'red')
-					err_list.append([image.mode, image.subject, image.image, str(image.label), image.source, 'ok', 'ok', 'no features'])
-					continue
-
-				gauss.regional_verification(seq_features, gauss_config, image.img_base, image.subject)
-
-				with open(image.bin, 'wb+') as image_bin:
-					gauss.write_image_bin(image_bin, image.image, image.subject, seq_features, gauss_config)
-			else:
-				if val == 0:
-					cprint('Detections and mask file not found for %s: %s' % (image.subject, image.img_base), 'red')
-					err_list.append([image.mode, image.subject, image.image, str(image.label), image.source, 'not found', 'not found', 'n/a'])
-				elif val == 1:
-					cprint('Mask tiff not found for %s: %s' % (image.subject, image.img_base), 'red')
-					err_list.append([image.mode, image.subject, image.image, str(image.label), image.source, 'not found', 'ok', 'n/a'])
-				elif val == 2:
-					cprint('Detections file not found for %s: %s' % (image.subject, image.img_base), 'red')
-					err_list.append([image.mode, image.subject, image.image, str(image.label), image.source, 'ok', 'not found', 'n/a'])
+		if image.create_bin:
+			if image.error_code:
+				err_list.append(image.raise_error())
 				continue
-			# Add error log for resolution with missing files
-
-		# cprint("Appending " + image + FILLER, 'green', end="\r")
+			else:
+				cprint('Creating image binary file for %s: %s' % (image.subject, image.img_base), 'white', 'on_green')
+				
+				features = gauss.generate_sequences(image.mask, \
+					image.gauss_config, \
+					image_name=image.img_base, \
+					subject_id=image.subject, \
+					detections=config.detections_path)
+				
+				if not features:
+					err_list.append(image.raise_error(feature_err=True))
+					continue
+				gauss.regional_verification(features, \
+					image.gauss_config, \
+					image.img_base, \
+					image.subject)
+				
+				with open(image.bin, 'wb+') as image_bin:
+					gauss.write_image_bin(image_bin, \
+						image.image, \
+						image.subject, \
+						features, \
+						image.gauss_config)
+		
 		with open(image.bin, 'rb+') as image_bin:
 			image_bytes = image_bin.read(os.path.getsize(image.bin))
 
@@ -118,6 +141,8 @@ def generate_and_append_bin(image_list, bin_file, config):
 	return err_list
 
 def main():
+	tprint('simple_process', font='speed')
+	tprint('by EricRob', 'rnd-small')
 	config = Config()
 	
 	input_data = process_input_csv(config)
@@ -126,9 +151,10 @@ def main():
 	for label in input_data:
 		for mode in input_data[label]:
 			with open(os.path.join(config.output_bin_dir, '%s_%s.bin' % (label, mode)), "wb+") as bin_file:
+				print(' ▁▂▃▅▆▓▒░✩ Working on %s_%s.bin ✩░▒▓▆▅▃▂▁' % (label, mode))
 				err_append = generate_and_append_bin(input_data[label][mode], bin_file, config)
 			err_list = err_list + err_append
-	
+	tprint('binaries\ngenerated!', font='sub-zero')
 	write_error_csv(err_list, config)
 
 	return 0
