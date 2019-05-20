@@ -24,6 +24,7 @@ class OriginalPatchConfig(object):
 	qupath_is_working = False
 	detections_path = './out'
 
+
 def bin_file_requirements_met(image, config):
 	detections_filename = os.path.join(config.detections_path, '%s Detectionstxt' % image)
 	mask_path = os.path.join(config.images_dir, 'mask_%s.tif' % image)
@@ -38,7 +39,7 @@ def gauss_sampling(data, bin_file, config):
 
 	gauss_config = gauss.OriginalPatchConfig_test()
 
-	gauss_config.image_data_folder_path = "./data/image"
+	gauss_config.image_data_folder_path = config.images_dir
 
 	for subject in data:
 		for image in data[subject]:
@@ -71,6 +72,7 @@ def gauss_sampling(data, bin_file, config):
 					elif val == 2:
 						cprint('Mask tiff not found for %s: %s' % (subject, image), 'red')						
 					continue
+				# Add error log for resolution with missing files
 
 			# cprint("Appending " + image + FILLER, 'green', end="\r")
 			with open(image_bin_path, 'rb+') as image_bin:
