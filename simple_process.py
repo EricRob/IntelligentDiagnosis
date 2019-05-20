@@ -1,10 +1,8 @@
 #!/usr/bin/python3 python3
 
 import csv
-import json
 import os
 import pdb
-import subprocess
 import sys
 import warnings
 from termcolor import cprint
@@ -17,7 +15,6 @@ warnings.simplefilter('ignore', UserWarning)
 
 class Config(object):
 	images_dir = './'
-	json_file = './data.json'
 	image_csv = './image_list.csv'
 	image_bin_dir = './'
 	output_bin_dir = './'
@@ -47,7 +44,7 @@ class HE_Image:
 			return 'nonrecurrence'
 
 
-def process_csv_input(config):
+def process_input_csv(config):
 	data = {'recurrence' : {'train': [], 'valid': [], 'test': []}, \
 	'nonrecurrence' : {'train': [], 'valid': [], 'test': []}}
 	with open(config.image_csv) as csvfile:
@@ -57,6 +54,15 @@ def process_csv_input(config):
 			data[he_img.str_label][he_img.mode].append(he_img)
 	return data
 
+def write_error_csv(err_list, config):
+	for error in err_list:
+		with open(config.err_list, 'w') as csvfile:
+			writer = csv.writer(csvfile)
+			writer.writerow(['mode', 'subject', 'image', 'label', 'source', 'mask', 'detections', 'other'])
+			for error in err_list:
+				writer.writerow(error)
+	return
+
 def bin_file_requirements_met(image):
 	val = 0
 	if os.path.exists(image.detections):
@@ -65,10 +71,10 @@ def bin_file_requirements_met(image):
 		val += 2
 	return val
 
-def gauss_sampling(data, bin_file, config):
+def generate_and_append_bin(image_list, bin_file, config):
 	err_list = []
 
-	for image in data:
+	for image in image_list:
 		if image.source.lower() == 'yale':
 			gauss_config = gauss.YaleConfig()
 		else:
@@ -113,19 +119,18 @@ def gauss_sampling(data, bin_file, config):
 
 def main():
 	config = Config()
-	data = process_csv_input(config)
+	
+	input_data = process_input_csv(config)
+	
 	err_list = []
-	for label in data:
-		for mode in data[label]:
+	for label in input_data:
+		for mode in input_data[label]:
 			with open(os.path.join(config.output_bin_dir, '%s_%s.bin' % (label, mode)), "wb+") as bin_file:
-				err_append = gauss_sampling(data[label][mode], bin_file, config)
+				err_append = generate_and_append_bin(input_data[label][mode], bin_file, config)
 			err_list = err_list + err_append
-	for error in err_list:
-		with open(config.err_list, 'w') as csvfile:
-			writer = csv.writer(csvfile)
-			writer.writerow(['mode', 'subject', 'image', 'label', 'source', 'mask', 'detections', 'other'])
-			for error in err_list:
-				writer.writerow(error)
+	
+	write_error_csv(err_list, config)
+
 	return 0
 
 if __name__ == '__main__':
