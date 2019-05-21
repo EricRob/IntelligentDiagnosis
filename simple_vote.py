@@ -94,9 +94,8 @@ def output_voting_results(subjects, config):
     score = []
     rec_votes = []
     nrec_votes = []
-
-    for subject_id in subjects:
-        subject = subjects[subject_id]
+    iter_list = sorted(subjects.items())
+    for _, subject in iter_list:
         subject.assign_network_label(config.vote_cutoff)
         truth.append(subject.truth_label)
         score.append(subject.net_label)
@@ -124,8 +123,7 @@ def output_voting_results(subjects, config):
         csvwriter.writerow([''])
         csvwriter.writerow(['Subject ID', 'Success', 'Ground Truth',
             'Network Score','Accurate Votes', 'Total Votes', 'Image Count'])
-        for subject_id in subjects:
-            subject = subjects[subject_id]
+        for _, subject in iter_list:
             csvwriter.writerow([subject.subject,
                 success_label(subject),
                 subject.truth_label,
