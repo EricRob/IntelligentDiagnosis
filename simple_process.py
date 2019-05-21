@@ -97,19 +97,22 @@ class HE_Image:
 			if self.error_code == 7:
 				cprint('H&E image, detections, and mask files not found for %s: %s' % (self.subject, self.img_base), 'red')
 				return [self.mode, self.subject, self.image, str(self.label), self.source, 'not found','not found', 'not found', 'n/a']
-			elif self.error_code == 6:
+			elif self.error_code == 1:
 				cprint('Mask tiff not found for %s: %s' % (self.subject, self.img_base), 'red')
 				return [self.mode, self.subject, self.image, str(self.label), self.source, 'ok', 'not found', 'ok', 'n/a']
-			elif self.error_code == 5:
+			elif self.error_code == 2:
 				cprint('Detections file not found for %s: %s' % (self.subject, self.img_base), 'red')
 				return [self.mode, self.subject, self.image, str(self.label), self.source, 'ok','ok', 'not found', 'n/a']
-			elif self.error_code == 4:
+			elif self.error_code == 3:
 				cprint('Detections and mask files not found for %s: %s' % (self.subject, self.img_base), 'red')
 				return [self.mode, self.subject, self.image, str(self.label), self.source, 'ok','not found', 'not found', 'n/a']
-			elif self.error_code == 3:
+			elif self.error_code == 4:
 				cprint('H&E image not found for %s: %s' % (self.subject, self.img_base), 'red')
 				return [self.mode, self.subject, self.image, str(self.label), self.source, 'not found','ok', 'ok', 'n/a']
-			elif self.error_code == 1:
+			elif self.error_code == 5:
+				cprint('H&E image and mask files not found for %s: %s' % (self.subject, self.img_base), 'red')
+				return [self.mode, self.subject, self.image, str(self.label), self.source, 'not found','not found', 'ok', 'n/a']
+			elif self.error_code == 6:
 				cprint('H&E image and detections files not found for %s: %s' % (self.subject, self.img_base), 'red')
 				return [self.mode, self.subject, self.image, str(self.label), self.source, 'not found','ok', 'not found', 'n/a']
 			elif feature_err:
