@@ -1,9 +1,29 @@
+#!/usr/bin/python3 python3
+
+'''
+##################
+
+Written by Eric J Robinson (https://github.com/EricRob)
+
+##################
+
+Process output of recurrence_lstm into voting scores
+for all subjects in a testing condition.
+
+Outputs a csv with a status for each subject and some
+basic summary statistics
+
+##################
+
+'''
+
 # Imports
 import sys
 import os
 import csv
 from sklearn.metrics import roc_auc_score
 import pdb
+from art import tprint
 
 # Function declarations
 
@@ -66,7 +86,14 @@ class VotingSummary:
 
 def process_voting_input(voting_filename):
     subjects = {}
-    
+    count = 0
+    line_art = 'ₒ₍₊˒₃˓₎ₒ▁▂▃▅▆▓▒░✩'
+    line_index = 9
+    with open(voting_filename) as csvfile:  
+        csvreader = csv.DictReader(csvfile)
+        row_count = sum(1 for row in csvreader)
+        row_print = row_count // 9
+
     with open(voting_filename) as csvfile:
         csvreader = csv.DictReader(csvfile)
         for row in csvreader:
@@ -75,7 +102,11 @@ def process_voting_input(voting_filename):
                 subjects[subject].add_vote(row)
             else:
                 subjects[subject] = VotingSummary(row, category='subject')
-
+            if count % row_print == 0:
+                print(line_art[:line_index], end='\r')
+                line_index += 1
+            count += 1
+    print(line_art + '--> Votes counted!')
     return subjects
 
 def success_label(subject):
@@ -90,6 +121,7 @@ def accurate_votes(subject):
         return subject.nonrecur_votes
 
 def output_voting_results(subjects, config):
+    print('Writing output csv...')
     truth = []
     score = []
     rec_votes = []
@@ -135,8 +167,10 @@ def output_voting_results(subjects, config):
 
 def main():
     config = Config()
+    tprint('majo\nrity\nvote', font='sub-zero')
     subjects = process_voting_input(config.voting_filename)
     output_voting_results(subjects, config)
+    print('Done!')
 
 # Main body
 if __name__ == '__main__':
