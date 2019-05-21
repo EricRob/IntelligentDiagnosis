@@ -46,14 +46,14 @@ warnings.simplefilter('ignore', UserWarning)
 
 class Config(object):
 	images_dir = './'
+	mask_dir = './'
 	image_csv = './image_list.csv'
 	image_bin_dir = './'
-	output_bin_dir = './'
 	detections_path = './'
 	err_list = './error_list.csv'
 	os.makedirs(image_bin_dir, exist_ok=True)
 	os.makedirs(detections_path, exist_ok=True)
-	os.makedirs(output_bin_dir, exist_ok=True)
+	os.makedirs(image_bin_dir, exist_ok=True)
 
 class HE_Image:
 	def __init__(self, meta_data, config):
@@ -65,7 +65,7 @@ class HE_Image:
 		self.bin = os.path.join(config.image_bin_dir, self.img_base + '.bin')
 		self.source = meta_data['source']
 		self.mode = meta_data['mode']
-		self.mask = os.path.join(config.images_dir, 'mask_%s.tif' % self.img_base)
+		self.mask = os.path.join(config.mask_dir, 'mask_%s.tif' % self.img_base)
 		self.detections = os.path.join(config.detections_path, '%s Detectionstxt' % self.img_base)
 		self.error_code = self.bin_requirements_met(config)
 		self.gauss_config = self.assign_gauss_config(config)
@@ -185,8 +185,8 @@ def main():
 	err_list = []
 	for label in input_data:
 		for mode in input_data[label]:
-			with open(os.path.join(config.output_bin_dir, '%s_%s.bin' % (label, mode)), "wb+") as bin_file:
-				print(' ▁▂▃▅▆▓▒░✩ Working on %s_%s.bin ✩░▒▓▆▅▃▂▁' % (label, mode))
+			with open(os.path.join(config.image_bin_dir, '%s_%s.bin' % (label, mode)), "wb+") as bin_file:
+				print('▁▂▃▅▆▓▒░✩ Working on %s_%s.bin ✩░▒▓▆▅▃▂▁' % (label, mode))
 				err_append = generate_and_append_bin(input_data[label][mode], bin_file, config)
 			err_list = err_list + err_append
 	tprint('binaries\ngenerated', font='sub-zero')
