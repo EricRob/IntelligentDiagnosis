@@ -173,7 +173,7 @@ def generate_and_append_bin(image_list, bin_file, config):
 						image.subject, \
 						features, \
 						image.gauss_config)
-		
+
 		with open(image.bin, 'rb+') as image_bin:
 			image_bytes = image_bin.read(os.path.getsize(image.bin))
 
