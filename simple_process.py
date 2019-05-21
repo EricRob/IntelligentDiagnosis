@@ -139,14 +139,6 @@ def write_error_csv(err_list, config):
 				writer.writerow(error)
 	return
 
-def bin_file_requirements_met(image):
-	val = 0
-	if os.path.exists(self.detections):
-		val += 1
-	if os.path.exists(image.mask):
-		val += 2
-	return val
-
 def generate_and_append_bin(image_list, bin_file, config):
 	err_list = []
 
