@@ -68,7 +68,6 @@ class HE_Image:
 		self.mask = os.path.join(config.images_dir, 'mask_%s.tif' % self.img_base)
 		self.detections = os.path.join(config.detections_path, '%s Detectionstxt' % self.img_base)
 		self.error_code = self.bin_requirements_met(config)
-		self.create_bin = not os.path.exists(self.bin)
 		self.gauss_config = self.assign_gauss_config(config)
 
 	def assign_str_label(self, label):
@@ -92,6 +91,8 @@ class HE_Image:
 		if os.path.exists(self.mask):
 			err -= 1
 		return err
+	def create_bin(self):
+		return not os.path.exists(self.bin)
 	def raise_error(self, feature_err=False):
 			if self.error_code == 7:
 				cprint('H&E image, detections, and mask files not found for %s: %s' % (self.subject, self.img_base), 'red')
@@ -147,7 +148,7 @@ def generate_and_append_bin(image_list, bin_file, config):
 	err_list = []
 
 	for image in image_list:
-		if image.create_bin:
+		if image.create_bin():
 			if image.error_code:
 				err_list.append(image.raise_error())
 				continue
