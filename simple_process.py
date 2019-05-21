@@ -1,5 +1,35 @@
 #!/usr/bin/python3 python3
 
+'''
+##################
+
+Written by Eric J Robinson (https://github.com/EricRob)
+
+##################
+
+Processing of an H&E image, qupath detections, and a binary mask
+to generate a binary file readable by the recurrence_lstm network.
+
+Requires a valid image, tsv of qupath output, binary mask from gimp,
+and image_list.csv.
+
+##################
+
+Sample image_list.csv:
+
+|  mode  | subject |    image     | label | source |
+|--------|---------|--------------|-------|--------|
+| train  |  00-00  | 00_00_00.tif |   0   |  CUMC  |
+| train  |  11-11  | 11_11_11.tif |   1   |  CUMC  |
+| valid  |  00-00  | 00_00_00.tif |   0   |  CUMC  |
+| valid  |  11-11  | 11_11_11.tif |   1   |  CUMC  |
+| test   |  00-00  | 00_00_00.tif |   0   |  CUMC  |
+| test   |  11-11  | 11_11_11.tif |   1   |  CUMC  |
+
+####################
+
+'''
+
 import csv
 import os
 import pdb
@@ -54,25 +84,36 @@ class HE_Image:
 		gauss_config.image_data_folder_path = config.images_dir
 		return gauss_config
 	def bin_requirements_met(self, config):
-		val = 3
+		err = 7
+		if os.path.exists(os.path.join(config.images_dir, self.image)):
+			err -= 4
 		if os.path.exists(self.detections):
-			val -= 1
+			err -= 2
 		if os.path.exists(self.mask):
-			val -= 2
-		return val
+			err -= 1
+		return err
 	def raise_error(self, feature_err=False):
-			if self.error_code == 3:
-				cprint('Detections and mask file not found for %s: %s' % (self.subject, self.img_base), 'red')
-				return [self.mode, self.subject, self.image, str(self.label), self.source, 'not found', 'not found', 'n/a']
-			elif self.error_code == 2:
+			if self.error_code == 7:
+				cprint('H&E image, detections, and mask files not found for %s: %s' % (self.subject, self.img_base), 'red')
+				return [self.mode, self.subject, self.image, str(self.label), self.source, 'not found','not found', 'not found', 'n/a']
+			elif self.error_code == 6:
 				cprint('Mask tiff not found for %s: %s' % (self.subject, self.img_base), 'red')
-				return [self.mode, self.subject, self.image, str(self.label), self.source, 'not found', 'ok', 'n/a']
-			elif self.error_code == 1:
+				return [self.mode, self.subject, self.image, str(self.label), self.source, 'ok', 'not found', 'ok', 'n/a']
+			elif self.error_code == 5:
 				cprint('Detections file not found for %s: %s' % (self.subject, self.img_base), 'red')
-				return [self.mode, self.subject, self.image, str(self.label), self.source, 'ok', 'not found', 'n/a']
+				return [self.mode, self.subject, self.image, str(self.label), self.source, 'ok','ok', 'not found', 'n/a']
+			elif self.error_code == 4:
+				cprint('Detections and mask files not found for %s: %s' % (self.subject, self.img_base), 'red')
+				return [self.mode, self.subject, self.image, str(self.label), self.source, 'ok','not found', 'not found', 'n/a']
+			elif self.error_code == 3:
+				cprint('H&E image not found for %s: %s' % (self.subject, self.img_base), 'red')
+				return [self.mode, self.subject, self.image, str(self.label), self.source, 'not found','ok', 'ok', 'n/a']
+			elif self.error_code == 1:
+				cprint('H&E image and detections files not found for %s: %s' % (self.subject, self.img_base), 'red')
+				return [self.mode, self.subject, self.image, str(self.label), self.source, 'not found','ok', 'not found', 'n/a']
 			elif feature_err:
 				print('No sequences processed for %s: %s' % (self.subject, self.img_base), 'red')
-				return [self.mode, self.subject, self.image, str(self.label), self.source, 'ok', 'ok', 'no features']
+				return [self.mode, self.subject, self.image, str(self.label), self.source, 'ok','ok', 'ok', 'no features']
 
 
 def process_input_csv(config):
@@ -89,7 +130,7 @@ def write_error_csv(err_list, config):
 	for error in err_list:
 		with open(config.err_list, 'w') as csvfile:
 			writer = csv.writer(csvfile)
-			writer.writerow(['mode', 'subject', 'image', 'label', 'source', 'mask', 'detections', 'other'])
+			writer.writerow(['mode', 'subject', 'image', 'label', 'source', 'image', 'mask', 'detections', 'other'])
 			for error in err_list:
 				writer.writerow(error)
 	return
@@ -112,7 +153,6 @@ def generate_and_append_bin(image_list, bin_file, config):
 				continue
 			else:
 				cprint('Creating image binary file for %s: %s' % (image.subject, image.img_base), 'white', 'on_green')
-				
 				features = gauss.generate_sequences(image.mask, \
 					image.gauss_config, \
 					image_name=image.img_base, \
@@ -142,7 +182,6 @@ def generate_and_append_bin(image_list, bin_file, config):
 
 def main():
 	tprint('simple_process', font='speed')
-	tprint('by EricRob', 'rnd-small')
 	config = Config()
 	
 	input_data = process_input_csv(config)
@@ -154,7 +193,7 @@ def main():
 				print(' ▁▂▃▅▆▓▒░✩ Working on %s_%s.bin ✩░▒▓▆▅▃▂▁' % (label, mode))
 				err_append = generate_and_append_bin(input_data[label][mode], bin_file, config)
 			err_list = err_list + err_append
-	tprint('binaries\ngenerated!', font='sub-zero')
+	tprint('binaries\ngenerated', font='sub-zero')
 	write_error_csv(err_list, config)
 
 	return 0
