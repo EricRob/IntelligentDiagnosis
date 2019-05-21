@@ -1,0 +1,12 @@
+version: '2.3'
+
+services:
+  mela-nn:
+    build:
+      context: .
+      dockerfile: ./build/mela-nn.Dockerfile
+    runtime: nvidia
+    dns:
+      - 208.67.222.222
+    volumes:
+      - /home/wanglab/Desktop/recurrence_seq_lstm/IntelligentDiagnosis:/opt/out/
