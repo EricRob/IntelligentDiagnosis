@@ -112,7 +112,7 @@ class HE_Image:
 				cprint('H&E image and detections files not found for %s: %s' % (self.subject, self.img_base), 'red')
 				return [self.mode, self.subject, self.image, str(self.label), self.source, 'not found','ok', 'not found', 'n/a']
 			elif feature_err:
-				print('No sequences processed for %s: %s' % (self.subject, self.img_base), 'red')
+				cprint('No sequences processed for %s: %s' % (self.subject, self.img_base), 'red')
 				return [self.mode, self.subject, self.image, str(self.label), self.source, 'ok','ok', 'ok', 'no features']
 
 
