@@ -1,5 +1,6 @@
 
 ;gimp -i -b '(batch-mask "*.tif" 217)' -b '(gimp-quit 0)'
+; Name this script 'batch-mask.scm' and save into your GIMP scripting path
 (define (batch-mask pattern lower)
   (let* ((filelist (cadr (file-glob pattern 1))))
     (while (not (null? filelist))
