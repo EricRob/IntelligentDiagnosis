@@ -21,7 +21,8 @@ sudo docker-compose run mela-nn bash
 ```
 
 -----------------
-__ATTN:__ _(Use simple\_\*.py unless you want a specific, known feature from the leagacy code)_
+__ATTN:__ _Use simple\_\*.py unless you want a specific, known feature from the leagacy code_
+
 Everything after this point is legacy code and features. This code was written in development of the current workflow as methods for verification or testing. Everything in the current paper is included in the simple\_\*.py scripts.
 
 # Data Required for Preprocessing and Running Network
