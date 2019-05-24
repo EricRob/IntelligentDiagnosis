@@ -21,7 +21,7 @@ sudo docker-compose run mela-nn bash
 ```
 
 -----------------
-
+_(Use simple\_\*.py unless you want a specific, known feature from the leagacy code)_
 
 # Data Required for Preprocessing and Running Network
 1. Raw image files (TIFF)
@@ -48,12 +48,8 @@ sudo docker-compose run mela-nn bash
  * nonrecurrence_valid_subjects.txt
  * nonrecurrence_test_subjects.txt
 
-
-
-
 # Legacy Pipeline 
 
-_(Use simple\_\*.py unless you want a specific, known feature from the leagacy code)_
 
 0. Review data for adherence to quality standards, if multi-layered TIFFs run export_top_layer.py
 1. Split large images into regular TIFF format (from BigTIFF, run large_image_splitter.py and gimp convert-tiff script)
