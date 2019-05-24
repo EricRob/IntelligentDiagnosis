@@ -45,11 +45,11 @@ warnings.simplefilter('ignore', FutureWarning)
 warnings.simplefilter('ignore', UserWarning)
 
 class Config(object):
-	images_dir = './'
-	mask_dir = './'
+	images_dir = './bigfolder'
+	mask_dir = './bigfolder'
 	image_csv = './image_list.csv'
 	image_bin_dir = './'
-	detections_path = './'
+	detections_path = './bigfolder'
 	err_list = './error_list.csv'
 	os.makedirs(image_bin_dir, exist_ok=True)
 	os.makedirs(detections_path, exist_ok=True)
@@ -158,11 +158,6 @@ def generate_and_append_bin(image_list, bin_file, config):
 				if not features:
 					err_list.append(image.raise_error(feature_err=True))
 					continue
-				gauss.regional_verification(features, \
-					image.gauss_config, \
-					image.img_base, \
-					image.subject)
-				
 				with open(image.bin, 'wb+') as image_bin:
 					gauss.write_image_bin(image_bin, \
 						image.image, \
@@ -186,7 +181,7 @@ def main():
 	for label in input_data:
 		for mode in input_data[label]:
 			with open(os.path.join(config.image_bin_dir, '%s_%s.bin' % (label, mode)), "wb+") as bin_file:
-				print('▁▂▃▅▆▓▒░✩ Working on %s_%s.bin ✩░▒▓▆▅▃▂▁' % (label, mode))
+				cprint('Working on %s_%s.bin' % (label, mode), 'blue', 'on_white')
 				err_append = generate_and_append_bin(input_data[label][mode], bin_file, config)
 			err_list = err_list + err_append
 	tprint('binaries\ngenerated', font='sub-zero')

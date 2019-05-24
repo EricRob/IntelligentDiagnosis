@@ -28,7 +28,7 @@ from art import tprint
 # Function declarations
 
 class Config(object):
-    voting_filename = os.path.join('/data/recurrence_seq_lstm/results/tester_list/voting_file.csv')
+    voting_filename = os.path.join('./voting_file.csv')
     output_csv = os.path.join('./voting_results.csv')
     vote_cutoff = 0.5
 
@@ -48,11 +48,11 @@ class VotingSummary:
             self.init_image(row)
 
     def init_subject(self, row):
-        self.images = {row['names'].strip().upper(): VotingSummary(row, category='image')}
+        self.images = {row['name'].strip().upper(): VotingSummary(row, category='image')}
         return
     
     def init_image(self, row):
-        self.name = row['names'].strip().upper()
+        self.name = row['name'].strip().upper()
 
     def add_vote(self, row):
         if (self.subject + row['coords']) in self.keys:
@@ -63,7 +63,7 @@ class VotingSummary:
             self.total_votes += 1
             self.keys.append(self.subject + row['coords'])
             if self.category == 'subject':
-                image = row['names'].strip().upper()
+                image = row['name'].strip().upper()
                 if image not in self.images:
                     self.images[image] = VotingSummary(row, category='image')
                 else:
@@ -87,12 +87,13 @@ class VotingSummary:
 def process_voting_input(voting_filename):
     subjects = {}
     count = 0
-    line_art = 'ₒ₍₊˒₃˓₎ₒ▁▂▃▅▆▓▒░✩'
-    line_index = 9
+    line_art = '^o^ =========='
+    ending = "0))"
+    line_index = 4
     with open(voting_filename) as csvfile:  
         csvreader = csv.DictReader(csvfile)
         row_count = sum(1 for row in csvreader)
-        row_print = row_count // 9
+        row_print = row_count // (len(line_art) - line_index)
 
     with open(voting_filename) as csvfile:
         csvreader = csv.DictReader(csvfile)
@@ -103,10 +104,10 @@ def process_voting_input(voting_filename):
             else:
                 subjects[subject] = VotingSummary(row, category='subject')
             if count % row_print == 0:
-                print(line_art[:line_index], end='\r')
+                print(line_art[:line_index] + ending, end='\r')
                 line_index += 1
             count += 1
-    print(line_art + '--> Votes counted!')
+    print(line_art + '==> Votes counted!')
     return subjects
 
 def success_label(subject):

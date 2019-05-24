@@ -832,7 +832,7 @@ def main(_):
     test_file = open(os.path.join(results_path,"secondary_test_results.txt"), 'at+')
     # csv_file = open(os.path.join(results_path,"secondary_voting_file.csv"), 'wt+')
     csv_file = open(os.path.join(results_path,"voting_file.csv"), 'wt+')
-    csv_file.write("ID,names,output,label,unscaled_nr,unscaled_rec,scaled_nr,scaled_rec,coords\n")
+    csv_file.write("ID,name,output,label,unscaled_nr,unscaled_rec,scaled_nr,scaled_rec,coords\n")
 
   if FLAGS.save_samples:
     os.makedirs(os.path.join(FLAGS.base_path,"samples"), exist_ok=True)
