@@ -21,7 +21,8 @@ sudo docker-compose run mela-nn bash
 ```
 
 -----------------
-_(Use simple\_\*.py unless you want a specific, known feature from the leagacy code)_
+__ATTN:__ _(Use simple\_\*.py unless you want a specific, known feature from the leagacy code)_
+Everything after this point is legacy code and features. This code was written in development of the current workflow as methods for verification or testing. Everything in the current paper is included in the simple\_\*.py scripts.
 
 # Data Required for Preprocessing and Running Network
 1. Raw image files (TIFF)
