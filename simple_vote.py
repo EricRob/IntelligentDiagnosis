@@ -24,13 +24,10 @@ import csv
 from sklearn.metrics import roc_auc_score
 import pdb
 from art import tprint
+from config import Config
 
 # Function declarations
 
-class Config(object):
-    voting_filename = os.path.join('./voting_file.csv')
-    output_csv = os.path.join('./voting_results.csv')
-    vote_cutoff = 0.5
 
 class VotingSummary:
     def __init__(self, row, category='subject'):
@@ -84,18 +81,18 @@ class VotingSummary:
         self.str_net_label = self.assign_str_label(self.net_label)
 
 
-def process_voting_input(voting_filename):
+def process_voting_input(voting_csv):
     subjects = {}
     count = 0
     line_art = '^o^ =========='
     ending = "0))"
     line_index = 4
-    with open(voting_filename) as csvfile:  
+    with open(voting_csv) as csvfile:  
         csvreader = csv.DictReader(csvfile)
         row_count = sum(1 for row in csvreader)
         row_print = row_count // (len(line_art) - line_index)
 
-    with open(voting_filename) as csvfile:
+    with open(voting_csv) as csvfile:
         csvreader = csv.DictReader(csvfile)
         for row in csvreader:
             subject = row['ID'].strip().upper()
@@ -166,13 +163,28 @@ def output_voting_results(subjects, config):
                 len(subject.images)])
     return
 
-def main():
-    config = Config()
+def get_config(config_name):
+    try:
+        pdb.set_trace()
+        if config_name == 'default':
+            with open('./default_config.file', 'rb') as f:
+                config = pickle.load(f)
+        else:
+            config = pickle.load(os.path.join(config_name + '.file'))
+    except:
+        print('[ERROR] No valid config file: %s' % config_name)
+
+def main(ars):
+    config = get_config(ars.conf)
     tprint('majo\nrity\nvote', font='sub-zero')
-    subjects = process_voting_input(config.voting_filename)
+    subjects = process_voting_input(config.voting_csv)
     output_voting_results(subjects, config)
     print('Done!')
 
 # Main body
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description='Create decisions based on output of recurrence_seq_lstm')
+    parser.add_argument('--conf', default='default', type=str, help='Name of configuration file for processing and voting')
+    ars = parser.parse_args()
+    main(ars)
+    sys.exit(0)

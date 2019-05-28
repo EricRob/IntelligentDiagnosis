@@ -72,7 +72,7 @@ flags.DEFINE_string("model_path", None, "Location of model to load from last che
 flags.DEFINE_bool("save_model", False, "Save model and checkpoints for future testing")
 flags.DEFINE_integer("num_steps", 20, "Steps in LSTM sequence")
 flags.DEFINE_bool("save_samples", False, "Save every sequence as a TIFF in a /samples folder")
-flags.DEFINE_string('base_path', '/data/recurrence_seq_lstm/', 'Results folder for holding ')
+flags.DEFINE_string('base_path', './', 'Results folder for holding ')
 flags.DEFINE_string('test_path', None, 'Data path when testing from a new institution')
 
 FLAGS = flags.FLAGS
@@ -794,24 +794,11 @@ def main(_):
     config.learning_rate = FLAGS.learning_rate
     config.keep_prob = FLAGS.keep_prob
   
-  # gpus = [
-  #     x.name for x in device_lib.list_local_devices() if x.device_type == "GPU"
-  # ]
-  # if FLAGS.num_gpus > len(gpus):
-  #   raise ValueError(
-  #       "Your machine has only %d gpus "
-  #       "which is fewer than the requested --num_gpus=%d."
-  #       % (len(gpus), FLAGS.num_gpus))
 
   if FLAGS.epochs:
     config.max_max_epoch = FLAGS.epochs
 
-  # if FLAGS.omen_run:
-  #   base_directory = os.path.join('/hdd', 'ID_net')
-  # elif FLAGS.park:
-  #   base_directory = os.path.join('/home', 'param', 'IntelligentDiagnosis')
-  # else:
-  #   base_directory = os.path.join('/data', 'recurrence_seq_lstm')
+
   os.makedirs(os.path.join(FLAGS.base_path, 'results'), exist_ok=True)
   results_path = os.path.join(FLAGS.base_path, "results", FLAGS.results_prepend)
   

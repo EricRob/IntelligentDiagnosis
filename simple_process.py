@@ -37,6 +37,9 @@ import sys
 import warnings
 from termcolor import cprint
 from art import tprint
+import argparse
+import pickle
+from config import Config
 
 import simple_centroid as gauss
 
@@ -44,16 +47,6 @@ import simple_centroid as gauss
 warnings.simplefilter('ignore', FutureWarning)
 warnings.simplefilter('ignore', UserWarning)
 
-class Config(object):
-	images_dir = './bigfolder'
-	mask_dir = './bigfolder'
-	image_csv = './image_list.csv'
-	image_bin_dir = './'
-	detections_path = './bigfolder'
-	err_list = './error_list.csv'
-	os.makedirs(image_bin_dir, exist_ok=True)
-	os.makedirs(detections_path, exist_ok=True)
-	os.makedirs(image_bin_dir, exist_ok=True)
 
 class HE_Image:
 	def __init__(self, meta_data, config):
@@ -66,7 +59,7 @@ class HE_Image:
 		self.source = meta_data['source']
 		self.mode = meta_data['mode']
 		self.mask = os.path.join(config.mask_dir, 'mask_%s.tif' % self.img_base)
-		self.detections = os.path.join(config.detections_path, '%s Detectionstxt' % self.img_base)
+		self.detections = os.path.join(config.detections_dir, '%s Detectionstxt' % self.img_base)
 		self.error_code = self.bin_requirements_met(config)
 		self.gauss_config = self.assign_gauss_config(config)
 
@@ -132,7 +125,7 @@ def process_input_csv(config):
 
 def write_error_csv(err_list, config):
 	for error in err_list:
-		with open(config.err_list, 'w') as csvfile:
+		with open(config.err_csv, 'w') as csvfile:
 			writer = csv.writer(csvfile)
 			writer.writerow(['mode', 'subject', 'image', 'label', 'source', 'image', 'mask', 'detections', 'other'])
 			for error in err_list:
@@ -153,7 +146,7 @@ def generate_and_append_bin(image_list, bin_file, config):
 					image.gauss_config, \
 					image_name=image.img_base, \
 					subject_id=image.subject, \
-					detections=config.detections_path)
+					detections=config.detections_dir)
 				
 				if not features:
 					err_list.append(image.raise_error(feature_err=True))
@@ -171,10 +164,20 @@ def generate_and_append_bin(image_list, bin_file, config):
 		bin_file.write(image_bytes)
 	return err_list
 
-def main():
+def get_config(config_name):
+	try:
+		if config_name == 'default':
+			with open('./default_config.file', 'rb') as f:
+				config = pickle.load(f)
+		else:
+			config = pickle.load(os.path.join(config_name + '.file'))
+	except:
+		print('[ERROR] No valid config file: %s' % config_name)
+
+def main(ars):
 	tprint('simple_process', font='speed')
-	config = Config()
-	
+	config = get_config(ars.conf)
+
 	input_data = process_input_csv(config)
 	
 	err_list = []
@@ -190,5 +193,8 @@ def main():
 	return 0
 
 if __name__ == '__main__':
-	main()
+	parser = argparse.ArgumentParser(description='Create binary files for feeding into recurrence_seq_lstm')
+	parser.add_argument('--conf', default='default', type=str, help='Name of configuration file for processing and voting')
+	ars = parser.parse_args()
+	main(ars)
 	sys.exit(0)

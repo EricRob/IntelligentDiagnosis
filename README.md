@@ -25,7 +25,7 @@ __ATTN:__ _Use simple\_\*.py unless you want a specific, known feature from the 
 
 Everything after this point is legacy code and features. This code was written in development of the current workflow as methods for verification or testing. Everything in the current paper is included in the simple\_\*.py scripts.
 
-# Data Required for Preprocessing and Running Network
+## Data Required for Preprocessing and Running Network
 1. Raw image files (TIFF)
  * Stored in _[base]/image\_data/original\_images/_
 2. Binary Mask (TIFF)
@@ -50,7 +50,7 @@ Everything after this point is legacy code and features. This code was written i
  * nonrecurrence_valid_subjects.txt
  * nonrecurrence_test_subjects.txt
 
-# Legacy Pipeline 
+## Legacy Pipeline 
 
 
 0. Review data for adherence to quality standards, if multi-layered TIFFs run export_top_layer.py
