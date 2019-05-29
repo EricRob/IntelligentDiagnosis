@@ -20,8 +20,10 @@ To start the built container and open into a bash prompt:
 sudo docker-compose run mela-nn bash
 ```
 
------------------
+
 __ATTN:__ _Use simple\_\*.py unless you want a specific, known feature from the leagacy code_
+
+# Running The Code
 ## config.py
 
 A configuration must be created prior to running any of the simple_*.py code. Run this code, follow the prompts, and move your data to the correct locations prior to running simple_process.py or simple_vote.py
