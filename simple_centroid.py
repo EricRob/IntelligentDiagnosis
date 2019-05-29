@@ -21,23 +21,13 @@ import time
 import struct
 from termcolor import cprint
 
-
-# flags.DEFINE_bool("overwrite", False, "Overwrite image binary files if they exist.")
-
-# FLAGS = flags.FLAGS
-
 # Global variables
-FEATURE_LIST = ['total_area', 'cell_perimeter', 'nuc_area', 'cell_area']
-DETECTION_SAMPLING = True
-# OTHER_TILE_THRESHOLD = 0.8
-# OTHER_PATCH_THRESHOLD = 0.5
-# MINIMUM_PATCH_CELLS = 20
 
 # Class declarations
 
 class OriginalConfig(object):
-	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/original_images" # Location of image to be split into patches
-	features_path = '/data/recurrence_seq_lstm/feature_testing'
+	image_data_folder_path = "./data/images" # Location of image to be split into patches
+	features_path = './data/features_testing'
 	patch_size = 500 # Pixel length and width of each patch square
 	tile_size = patch_size * 5
 	edge_overlap = 75 # Amount of overlap between patches within a sample
@@ -61,8 +51,8 @@ class OriginalConfig(object):
 
 
 class YaleConfig(object):
-	image_data_folder_path = "/data/recurrence_seq_lstm/image_data/original_images/" # Location of image to be split into patches
-	features_path = '/data/recurrence_seq_lstm/feature_testing'
+	image_data_folder_path = "./data/images" # Location of image to be split into patches
+	features_path = './data/features_testing'
 	patch_size = 250 # Pixel length and width of each patch square
 	tile_size = patch_size * 5
 	edge_overlap = 75 # Amount of overlap between patches within a sample
@@ -91,8 +81,8 @@ class QuPathConfig(object):
 	all_features = False
 	closest_centers = 5
 	classifier = 'v2'
-	feature_directory = '/data/recurrence_seq_lstm/feature_testing'
-	detections = '/data/recurrence_seq_lstm/qupath_output/'
+	feature_directory = './data/features_testing'
+	detections = './data/detections'
 	small_d_cluster = 3
 	delaunay_radius = 40
 	load = False
@@ -751,25 +741,13 @@ def generate_sequences(mask_filename, config, image_name=None, subject_id=None, 
 	centroid_count = get_centroid_count(tile_centroids, bottom_centroids, right_centroids)
 
 	skip_count = 0
-	if DETECTION_SAMPLING:
-		if image_info:
-			skip_count += detection_sample_from_dist(mask, tile_centroids, config, all_cells, image_info=image_info)
-			skip_count += detection_sample_from_dist(mask, bottom_centroids, config, all_cells, image_info=image_info)
-			skip_count += detection_sample_from_dist(mask, right_centroids, config, all_cells, image_info=image_info)
-			skip_corner, corner_centroid = corner_detection_sample_from_dist(mask, corner_centroid, config, keep_corner, all_cells, image_info=image_info)
-		else:
-			skip_count += detection_sample_from_dist(mask, tile_centroids, config, all_cells)
-			skip_count += detection_sample_from_dist(mask, bottom_centroids, config, all_cells)
-			skip_count += detection_sample_from_dist(mask, right_centroids, config, all_cells)
-			skip_corner, corner_centroid = corner_detection_sample_from_dist(mask, corner_centroid, config, keep_corner, all_cells)
-		skip_count += skip_corner
-		if not corner_centroid:
-			keep_corner = False
-	else:
-		skip_count += sample_from_distribution(mask, tile_centroids, config)
-		skip_count += sample_from_distribution(mask, bottom_centroids, config)
-		skip_count += sample_from_distribution(mask, right_centroids, config)
-		skip_count += corner_sample_from_distribution(mask, corner_centroid, config, keep_corner)
+	skip_count += detection_sample_from_dist(mask, tile_centroids, config, all_cells)
+	skip_count += detection_sample_from_dist(mask, bottom_centroids, config, all_cells)
+	skip_count += detection_sample_from_dist(mask, right_centroids, config, all_cells)
+	skip_corner, corner_centroid = corner_detection_sample_from_dist(mask, corner_centroid, config, keep_corner, all_cells)
+	skip_count += skip_corner
+	if not corner_centroid:
+		keep_corner = False
 
 	cprint("Keeping " + str(centroid_count - skip_count) + "/" + str(tile_count) + " tiles")
 

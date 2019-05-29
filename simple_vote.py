@@ -85,7 +85,7 @@ def process_voting_input(voting_csv):
     subjects = {}
     count = 0
     line_art = '^o^ =========='
-    ending = "0))"
+    ending = "((0))"
     line_index = 4
     with open(voting_csv) as csvfile:  
         csvreader = csv.DictReader(csvfile)
@@ -165,7 +165,6 @@ def output_voting_results(subjects, config):
 
 def get_config(config_name):
     try:
-        pdb.set_trace()
         if config_name == 'default':
             with open('./default_config.file', 'rb') as f:
                 config = pickle.load(f)
@@ -173,9 +172,12 @@ def get_config(config_name):
             config = pickle.load(os.path.join(config_name + '.file'))
     except:
         print('[ERROR] No valid config file: %s' % config_name)
+        print('[INFO] Check --conf parameter and make sure you have run config.py for initial setup.')
 
 def main(ars):
     config = get_config(ars.conf)
+    if not config:
+        sys.exit(1)
     tprint('majo\nrity\nvote', font='sub-zero')
     subjects = process_voting_input(config.voting_csv)
     output_voting_results(subjects, config)

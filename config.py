@@ -35,7 +35,7 @@ class Config:
 		self.err_csv = './error_list.csv'
 		self.voting_csv = './voting_file.csv'
 		self.output_csv = './voting_results.csv'
-		self.vote_cutoff = 0.5
+		self.vote_cutoff_float = 0.5
 
 	def initialize_dirs(self):
 		os.makedirs(self.image_bin_dir, exist_ok=True)
@@ -50,14 +50,15 @@ class Config:
 			return 'dir path, default=%s' % getattr(self, val)
 		elif 'csv' in val:
 			return 'csv, default=%s' % getattr(self, val)
+		elif 'float' in val:
+			return 'float, default=%s' % getattr(self, val)
 	def valid_suffix(self, val, inp):
 		if 'csv' in val:
 			if '.csv' not in inp:
 				inp = inp.split('.')[0] + '.csv'
 		elif val == 'filename':
-			inp = inp + '.file'
-		elif 'cutoff' in val:
-			inp = str(0.5)
+			if '.file' not in inp:
+				inp = inp.split('.')[0] + '.file'
 		return inp
 
 # Function declarations
@@ -85,11 +86,15 @@ def query_yes_no(question, default="yes"):
                              "(or 'y' or 'n').\n")
 
 def create_default(config):
-	if query_yes_no('Use default values for configuration?'):
-		if query_yes_no('Initialize project directories?'):
+	if query_yes_no('Initialize project directories? (Selecting Yes does not overwrite)'):
 			config.initialize_dirs()
+	else:
+		cprint('[WARN] When using custom directories you must set the -v flag when running docker container', 'yellow')
+	
+	if query_yes_no('Use default values for configuration?'):
 		return True
 	else:
+
 		return False
 
 def set_custom_values(config):
@@ -119,8 +124,8 @@ def main():
 	else:
 		print('Exiting: No changes made to configurations')
 		return
-
-	cprint('\n--> Creating configuration...', 'grey', 'on_white')
+	print()
+	cprint('--> Creating configuration...', 'grey', 'on_white')
 	if create_default(config):
 		config.save()
 		cprint('Default configuration %s saved! Ready to create binaries' % config.filename, 'green')

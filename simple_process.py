@@ -172,11 +172,14 @@ def get_config(config_name):
 		else:
 			config = pickle.load(os.path.join(config_name + '.file'))
 	except:
-		print('[ERROR] No valid config file: %s' % config_name)
+		print('[ERROR] No valid config file: %s.' % config_name)
+		print('[INFO] Check --conf parameter and make sure you have run config.py for initial setup.')
 
 def main(ars):
 	tprint('simple_process', font='speed')
 	config = get_config(ars.conf)
+	if not config:
+		sys.exit(1)
 
 	input_data = process_input_csv(config)
 	
