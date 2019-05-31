@@ -1,4 +1,4 @@
-# This image is available in docker hub as intelligentdiagnosis_mela-nn:latest
+# This image is available in docker hub as ericrob/intelligentdiagnosis_mela-nn:latest
 FROM tensorflow/tensorflow:1.9.0-gpu-py3
 COPY requirements.txt /opt/out/
 WORKDIR /opt/out/
