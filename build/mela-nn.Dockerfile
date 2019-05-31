@@ -1,4 +1,3 @@
-FROM tensorflow/tensorflow:1.9.0-gpu-py3
-COPY requirements.txt /opt/out/
-WORKDIR /opt/out/
-RUN pip3 install -r requirements.txt
+# Use this when pulling down the pre-built image
+# Created for machines that have proxy issues (CUMC)
+FROM intelligentdiagnosis_mela-nn:latest
