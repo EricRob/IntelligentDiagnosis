@@ -50,7 +50,7 @@ Requires a valid image, tsv of qupath output, binary mask from gimp, and image_l
 ### Outputs
 If an image binary file does not exist, it is created and saved to the `image_bin_dir` directory specified in the configuration
 
-All issues encountered in creating image binaries are detailed in the `err_csv` specified n the configuration (error\_list.csv by default).
+All issues encountered in creating image binaries are detailed in the `err_csv` specified in the configuration (error\_list.csv by default).
 
 Six condition binary files are created for running recurrence_lstm:
 * recurrence_train.bin
