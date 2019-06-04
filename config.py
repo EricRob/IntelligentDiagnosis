@@ -34,7 +34,8 @@ class Config:
 		self.detections_dir = './data/detections'
 		self.err_csv = './data/error_list.csv'
 		self.voting_csv = 'voting_file.csv'
-		self.output_csv = './voting_results.csv'
+		self.output_csv = 'voting_results.csv'
+		self.results_dir = None
 		self.vote_cutoff_float = 0.5
 
 	def initialize_dirs(self):
