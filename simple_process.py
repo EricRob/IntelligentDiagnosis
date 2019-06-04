@@ -192,8 +192,6 @@ def main(ars):
 			err_list = err_list + err_append
 	tprint('binaries\ngenerated', font='sub-zero')
 	write_error_csv(err_list, config)
-	pdb.set_trace()
-
 	return 0
 
 if __name__ == '__main__':
