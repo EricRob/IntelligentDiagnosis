@@ -33,7 +33,7 @@ class Config:
 		self.image_bin_dir = './data/image_binaires'
 		self.detections_dir = './data/detections'
 		self.err_csv = './data/error_list.csv'
-		self.voting_csv = './voting_file.csv'
+		self.voting_csv = 'voting_file.csv'
 		self.output_csv = './voting_results.csv'
 		self.vote_cutoff_float = 0.5
 
