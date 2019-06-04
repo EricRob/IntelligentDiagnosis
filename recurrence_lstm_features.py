@@ -73,7 +73,7 @@ flags.DEFINE_bool("save_model", False, "Save model and checkpoints for future te
 flags.DEFINE_integer("num_steps", 20, "Steps in LSTM sequence")
 flags.DEFINE_bool("save_samples", False, "Save every sequence as a TIFF in a /samples folder")
 flags.DEFINE_string('base_path', './', 'Results folder for holding ')
-flags.DEFINE_string('test_path', None, 'Data path when testing from a new institution')
+flags.DEFINE_string('data_path', None, 'Data path when testing from a new institution')
 
 FLAGS = flags.FLAGS
 BASIC = "basic"
@@ -738,6 +738,8 @@ def get_config():
     config = TestConfig()
   elif FLAGS.config == "color":
     config = ColorConfig()
+  elif FLAGS.config == "train":
+    config = ColorConfig()
   else:
     raise ValueError("Invalid config: %s", FLAGS.config)
   if FLAGS.rnn_mode:
@@ -761,6 +763,9 @@ def data_exists():
   return True
 def main(_):
   waiting = False
+  if FLAGS.data_path:
+    FLAGS.recur_data_path = FLAGS.data_path
+    FLAGS.nonrecur_data_path = FLAGS.data_path
 
   while (not data_exists()):
     waiting = True
@@ -774,9 +779,7 @@ def main(_):
 
   config = get_config()
 
-  if FLAGS.test_path:
-    FLAGS.recur_data_path = FLAGS.test_path
-    FLAGS.nonrecur_data_path = FLAGS.test_path
+
 
   if not FLAGS.recur_data_path:
     raise ValueError("Must set --recur_data_path to recurrence data directory")

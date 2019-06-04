@@ -124,12 +124,11 @@ def process_input_csv(config):
 	return data
 
 def write_error_csv(err_list, config):
-	for error in err_list:
-		with open(config.err_csv, 'w') as csvfile:
-			writer = csv.writer(csvfile)
-			writer.writerow(['mode', 'subject', 'image', 'label', 'source', 'image', 'mask', 'detections', 'other'])
-			for error in err_list:
-				writer.writerow(error)
+	with open(config.err_csv, 'w') as csvfile:
+		writer = csv.writer(csvfile)
+		writer.writerow(['mode', 'subject', 'image', 'label', 'source', 'image', 'mask', 'detections', 'other'])
+		for error in err_list:
+			writer.writerow(error)
 	return
 
 def generate_and_append_bin(image_list, bin_file, config):
@@ -193,7 +192,6 @@ def main(ars):
 			err_list = err_list + err_append
 	tprint('binaries\ngenerated', font='sub-zero')
 	write_error_csv(err_list, config)
-
 	return 0
 
 if __name__ == '__main__':

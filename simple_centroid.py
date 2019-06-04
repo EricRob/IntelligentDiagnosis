@@ -599,13 +599,9 @@ def split_and_combine_patch_lists(tile_dict, bottom_dict, right_dict, corner_dic
 	sequences = append_patch_lists(sequences, bottom_dict, num_steps)
 	sequences = append_patch_lists(sequences, right_dict, num_steps)
 
-	if DETECTION_SAMPLING:
-		if keep_corner and corner_dict['corner']['coords']:
-			sequences = append_corner_patch_lists(sequences, corner_dict['corner']['coords'], num_steps, corner_tile_num)
-	else:
-		if keep_corner and corner_dict['coords']:
-			sequences = append_corner_patch_lists(sequences, corner_dict['coords'], num_steps, corner_tile_num)
-	
+	if keep_corner and corner_dict['corner']['coords']:
+		sequences = append_corner_patch_lists(sequences, corner_dict['corner']['coords'], num_steps, corner_tile_num)
+
 	return sequences
 
 def append_corner_patch_lists(patch_list, coords_list, num_steps, corner_tile_num):
