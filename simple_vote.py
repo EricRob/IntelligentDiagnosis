@@ -170,6 +170,7 @@ def get_config(config_name):
                 config = pickle.load(f)
         else:
             config = pickle.load(os.path.join(config_name + '.file'))
+        return config
     except:
         print('[ERROR] No valid config file: %s' % config_name)
         print('[INFO] Check --conf parameter and make sure you have run config.py for initial setup.')
