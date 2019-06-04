@@ -179,6 +179,7 @@ def main(ars):
 	tprint('simple_process', font='speed')
 	config = get_config(ars.conf)
 	if not config:
+		print("f")
 		sys.exit(1)
 
 	input_data = process_input_csv(config)
@@ -196,8 +197,13 @@ def main(ars):
 	return 0
 
 if __name__ == '__main__':
+	print("a")
 	parser = argparse.ArgumentParser(description='Create binary files for feeding into recurrence_seq_lstm')
+	print("b")
 	parser.add_argument('--conf', default='default', type=str, help='Name of configuration file for processing and voting')
+	print("c")
 	ars = parser.parse_args()
+	print("d")
 	main(ars)
+	print("e")
 	sys.exit(0)
