@@ -119,7 +119,7 @@ def main():
 		else:
 			print('Exiting: No changes made to configurations')
 			return
-	elif not query_yes_no('No default configuration found, create default configuration?' % config.filename):
+	elif query_yes_no('No default configuration found, create default configuration?'):
 			config.filename = config.valid_suffix('filename', input('New configuration name: '))
 	else:
 		print('Exiting: No changes made to configurations')
