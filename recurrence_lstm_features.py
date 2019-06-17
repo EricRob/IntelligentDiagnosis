@@ -797,6 +797,15 @@ def main(_):
     time.sleep(300)
   stdout_backup = sys.stdout
 
+  config = get_config()
+
+
+
+  if not FLAGS.recur_data_path:
+    raise ValueError("Must set --recur_data_path to recurrence data directory")
+
+  if not FLAGS.nonrecur_data_path:
+    raise ValueError("Must set --nonrecur_data_path to recurrence data directory")
   
   #If training (not testing) need to set these training parameters (but they are set by default in flags)
   if config.test_mode == 0:
