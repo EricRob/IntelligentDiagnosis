@@ -2,3 +2,7 @@ data
 bigfolder
 __pycache__
 spreadsheets
+*.file
+results
+scripts
+
