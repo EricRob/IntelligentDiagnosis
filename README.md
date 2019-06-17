@@ -62,5 +62,34 @@ Six condition binary files are created for running recurrence_lstm:
 
 If no images are listed for a given mode, or no image binary files are successfully found/created, then an empty binary file is created. This is acceptable behavior for the testing condition where the train and valid files are required to exist, but are not used.
 
+## recurrence\_lstm\_features.py and recurrence\_lstm\_FC\_features.py
+Using the binary files created by simple\_process.py, train a the neural network into a set of usable parameters
+
+Whenever running this script, the `--name` parameter is required. Name should be a unique string identifying the current training or testing session.
+
+To load data from a non-default location, use the `--data_path` parameter:
+```
+python recurrence_lstm_features.py --name=[DNN training name] --data_path=[str filepath to data]
+```
+
+### Training
+By default, the network runs the training configuration for the number of epochs specified in the config file. Training can be started with the line:
+```
+python recurrence_lstm_features.py --name=[DNN training name]
+```
+
+Default training uses the hyperparameters `--learning_rate=0.005` and `--keep_prob=0.7` (a dropout rate of 0.3). These hyperparameters can be changed at the command line:
+```
+python recurrence_lstm_features.py --name=[DNN training name] --learning_rate=1e-5 --keep_prob=0.9
+```
+
+### Testing
+To test a trained model, set the `--config` and `--model_path` parameters:
+```
+python recurrence_lstm_features.py --name=[DNN testing name] --config=test --model_path=[filepath to model directory]
+```
+
+**Note:** For the model being tested, the model_path directory must contain the `checkpoint` file with lines accurately pointing to the `.data`, `.index`, and `.meta` checkpoint files.
+
 ## simple\_vote.py
 Process output of recurrence_lstm into voting scores for all subjects in a testing condition. If using a custom configuration, specify with the `--conf` argument.
