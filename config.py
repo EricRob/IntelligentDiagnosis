@@ -37,6 +37,7 @@ class Config:
 		self.output_csv = 'voting_results.csv'
 		self.results_dir = None
 		self.vote_cutoff_float = 0.5
+		self.training_epochs_int = 200
 
 	def initialize_dirs(self):
 		os.makedirs(self.image_bin_dir, exist_ok=True)
@@ -53,6 +54,8 @@ class Config:
 			return 'csv, default=%s' % getattr(self, val)
 		elif 'float' in val:
 			return 'float, default=%s' % getattr(self, val)
+		elif 'int' in val:
+			return 'integer, default=%s' % getattr(self, val)
 	def valid_suffix(self, val, inp):
 		if 'csv' in val:
 			if '.csv' not in inp:
