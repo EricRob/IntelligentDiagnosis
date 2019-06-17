@@ -39,12 +39,14 @@ from math import sqrt
 
 from tensorflow.python.client import device_lib
 
+from config import Config
+import pickle
+
 flags = tf.flags
 logging = tf.logging
 
-flags.DEFINE_string(
-    "config", "color",
-    "Configuration for the current run. Can be small, medium, large, test, or (default) color.")
+flags.DEFINE_string("config", "train", "Configuration for the current run. Can be small, medium, large, test, or (default) color.")
+flags.DEFINE_string('data_config', 'default', 'Name of configuration file with filepaths for loading data')
 flags.DEFINE_string("recur_data_path", None,
                     "Where the recurrence binary file is stored.")
 flags.DEFINE_string("nonrecur_data_path", None,
@@ -73,7 +75,7 @@ flags.DEFINE_bool("save_model", False, "Save model and checkpoints for future te
 flags.DEFINE_integer("num_steps", 20, "Steps in LSTM sequence")
 flags.DEFINE_bool("save_samples", False, "Save every sequence as a TIFF in a /samples folder")
 flags.DEFINE_string('base_path', './', 'Results folder for holding ')
-flags.DEFINE_string('test_path', None, 'Data path when testing from a new institution')
+flags.DEFINE_string('data_path', None, 'Data path when testing from a new institution')
 
 FLAGS = flags.FLAGS
 BASIC = "basic"
@@ -738,6 +740,8 @@ def get_config():
     config = TestConfig()
   elif FLAGS.config == "color":
     config = ColorConfig()
+  elif FLAGS.config == "train":
+    config = ColorConfig()
   else:
     raise ValueError("Invalid config: %s", FLAGS.config)
   if FLAGS.rnn_mode:
@@ -754,14 +758,35 @@ def create_log_directory(eval_dir):
 def data_exists():
   conditions = ['train', 'valid', 'test']
   for c in conditions:
-    r_path = os.path.join(FLAGS.recur_data_path, 'recurrence_' + c + '.bin')
-    nr_path = os.path.join(FLAGS.nonrecur_data_path, 'nonrecurrence_' + c + '.bin')
+    r_path = os.path.join(FLAGS.data_path, 'recurrence_' + c + '.bin')
+    nr_path = os.path.join(FLAGS.data_path, 'nonrecurrence_' + c + '.bin')
     if not os.path.exists(r_path) or not os.path.exists(nr_path):
       return False
   return True
-def main(_):
-  waiting = False
 
+def get_data_config(config_name):
+  try:
+    if config_name == 'default':
+      with open('./default_config.file', 'rb') as f:
+        config = pickle.load(f)
+    else:
+        config = pickle.load(os.path.join(config_name + '.file'))
+    return config
+  except:
+    print('[ERROR] No valid config file: %s.' % config_name)
+    print('[INFO] Check --conf parameter and make sure you have run config.py for initial setup.')
+
+def main(_):
+  config = get_config()
+  data_config = get_data_config(FLAGS.data_config)
+
+  if FLAGS.data_path:
+    FLAGS.recur_data_path = FLAGS.nonrecur_data_path = FLAGS.data_path
+  else:
+    FLAGS.data_path = FLAGS.recur_data_path = FLAGS.nonrecur_data_path = data_config.image_bin_dir
+
+  waiting = False
+  pdb.set_trace()
   while (not data_exists()):
     waiting = True
     cprint(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ' -- Waiting another minute for data...', 'yellow')
@@ -772,17 +797,6 @@ def main(_):
     time.sleep(300)
   stdout_backup = sys.stdout
 
-  config = get_config()
-
-  if FLAGS.test_path:
-    FLAGS.recur_data_path = FLAGS.test_path
-    FLAGS.nonrecur_data_path = FLAGS.test_path
-
-  if not FLAGS.recur_data_path:
-    raise ValueError("Must set --recur_data_path to recurrence data directory")
-
-  if not FLAGS.nonrecur_data_path:
-    raise ValueError("Must set --nonrecur_data_path to recurrence data directory")
   
   #If training (not testing) need to set these training parameters (but they are set by default in flags)
   if config.test_mode == 0:
@@ -802,9 +816,8 @@ def main(_):
   os.makedirs(os.path.join(FLAGS.base_path, 'results'), exist_ok=True)
   results_path = os.path.join(FLAGS.base_path, "results", FLAGS.results_prepend)
   
-  cprint("Data Sources:", 'white', 'on_magenta')
-  cprint(FLAGS.recur_data_path, 'magenta', 'on_white')
-  cprint(FLAGS.nonrecur_data_path, 'magenta', 'on_white')
+  cprint("Data Source: %s" % FLAGS.data_path, 'white', 'on_magenta')
+
   if FLAGS.config == 'test':
     cprint('Testing with model %s' % (FLAGS.model_path), 'white', 'on_magenta' )
   cprint("Results saved to %s" % (results_path), 'white', 'on_magenta')
