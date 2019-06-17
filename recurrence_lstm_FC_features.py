@@ -34,8 +34,8 @@ import util
 # from scipy.misc import imsave
 import csv
 from termcolor import cprint
-# import pdb
-# from math import sqrt
+import pdb
+from math import sqrt
 
 from tensorflow.python.client import device_lib
 
@@ -72,53 +72,14 @@ flags.DEFINE_string("model_path", None, "Location of model to load from last che
 flags.DEFINE_bool("save_model", False, "Save model and checkpoints for future testing")
 flags.DEFINE_integer("num_steps", 20, "Steps in LSTM sequence")
 flags.DEFINE_bool("save_samples", False, "Save every sequence as a TIFF in a /samples folder")
-flags.DEFINE_string('base_path', '/data/recurrence_seq_lstm/', 'Results folder for holding ')
+flags.DEFINE_string('base_path', './', 'Results folder for holding ')
+flags.DEFINE_string('test_path', None, 'Data path when testing from a new institution')
+
 
 FLAGS = flags.FLAGS
 BASIC = "basic"
 CUDNN = "cudnn"
 BLOCK = "block"
-
-def arrange_kernels_on_grid(kernel, layer, config, pad = 0):
- #kernel: 3,3,32,32
-  def factorization(n):
-    for i in range(int(sqrt(float(n))), 0, -1):
-      if n % i == 0:
-        return (i, int(n / i))
-  (grid_Y, grid_X) = factorization (kernel.get_shape()[3].value)
-  # print ('grid: %d = (%d, %d)' % (kernel.get_shape()[3].value, grid_Y, grid_X))
-
-  x_min = tf.reduce_min(kernel)
-  x_max = tf.reduce_max(kernel)
-  kernel = (kernel - x_min) / (x_max - x_min)
-
-  # pad x_dim and y_dim
-  x_pad = tf.pad(kernel, tf.constant( [[pad,pad],[pad,pad],[0,0],[0,0]] ), mode = 'CONSTANT')
-  
-  # x_dim and y_dim dimensions, w.r.t. padding
-  y_dim = kernel.get_shape()[0] + 2 * pad
-  x_dim = kernel.get_shape()[1]+ 2* pad
-  channels = kernel.get_shape()[2]
-
-  # put NumKernels to the 1st dimension
-  x_pad = tf.transpose(x_pad, (3, 0, 1, 2)) #8, 12, 3, 3
-  # organize grid on y_dim axis
-  x_pad = tf.reshape(x_pad, tf.stack([grid_X, y_dim * grid_Y, x_dim, channels])) #8, 12, 3, 3
-
-  # switch x_dim and y_dim axes
-  x_pad = tf.transpose(x_pad, (0, 2, 1, 3)) #8, 3, 12, 3
-  # organize grid on x_dim axis
-  x_pad = tf.reshape(x_pad, tf.stack([1, x_dim * grid_X, y_dim * grid_Y, channels])) #1, 24, 12, 3
-
-  # back to normal order (not combining with the next step for clarity)
-  x_pad = tf.transpose(x_pad, (2, 1, 3, 0)) # 12, 24, 3, 1
-
-  # to tf.image_summary order [batch_size, height, width, channels],
-  #   where in this case batch_size == 1
-  x_pad = tf.transpose(x_pad, (3, 0, 1, 2))
-
-  # scaling to [0, 255] is not necessary for tensorboard
-  return x_pad
 
 def data_type():
   return tf.float16 if FLAGS.use_fp16 else tf.float32
@@ -359,10 +320,6 @@ class SeqModel(object):
                 padding="same",
                 name = "conv%s" % str(i+1))
 
-        if i == 0 and is_training:
-          kernel = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, 'Model/conv1/conv1/kernel')[0]
-          grid = arrange_kernels_on_grid(kernel, i, config)
-          tf.summary.image('Model/conv1/conv1/kernel', grid, max_outputs=1)
         if i+1 in pools:
           pool = tf.layers.max_pooling2d(conv, pool_size=2, strides=2, padding="same", name="pool1")
         else:
@@ -802,7 +759,7 @@ def data_exists():
   conditions = ['train', 'valid', 'test']
   for c in conditions:
     r_path = os.path.join(FLAGS.recur_data_path, 'recurrence_' + c + '.bin')
-    nr_path = os.path.join(FLAGS.recur_data_path, 'nonrecurrence_' + c + '.bin')
+    nr_path = os.path.join(FLAGS.nonrecur_data_path, 'nonrecurrence_' + c + '.bin')
     if not os.path.exists(r_path) or not os.path.exists(nr_path):
       return False
   return True
@@ -820,6 +777,10 @@ def main(_):
 
   config = get_config()
 
+  if FLAGS.test_path:
+    FLAGS.recur_data_path = FLAGS.test_path
+    FLAGS.nonrecur_data_path = FLAGS.test_path
+
   if not FLAGS.recur_data_path:
     raise ValueError("Must set --recur_data_path to recurrence data directory")
 
@@ -835,25 +796,11 @@ def main(_):
       raise ValueError("Must set --keep_prob hyperparameter (dropout rate)")
     config.learning_rate = FLAGS.learning_rate
     config.keep_prob = FLAGS.keep_prob
-  
-  # gpus = [
-  #     x.name for x in device_lib.list_local_devices() if x.device_type == "GPU"
-  # ]
-  # if FLAGS.num_gpus > len(gpus):
-  #   raise ValueError(
-  #       "Your machine has only %d gpus "
-  #       "which is fewer than the requested --num_gpus=%d."
-  #       % (len(gpus), FLAGS.num_gpus))
+
 
   if FLAGS.epochs:
     config.max_max_epoch = FLAGS.epochs
 
-  # if FLAGS.omen_run:
-  #   base_directory = os.path.join('/hdd', 'ID_net')
-  # elif FLAGS.park:
-  #   base_directory = os.path.join('/home', 'param', 'IntelligentDiagnosis')
-  # else:
-  #   base_directory = os.path.join('/data', 'recurrence_seq_lstm')
   os.makedirs(os.path.join(FLAGS.base_path, 'results'), exist_ok=True)
   results_path = os.path.join(FLAGS.base_path, "results", FLAGS.results_prepend)
   
@@ -874,7 +821,7 @@ def main(_):
     test_file = open(os.path.join(results_path,"secondary_test_results.txt"), 'at+')
     # csv_file = open(os.path.join(results_path,"secondary_voting_file.csv"), 'wt+')
     csv_file = open(os.path.join(results_path,"voting_file.csv"), 'wt+')
-    csv_file.write("ID,names,output,label,unscaled_nr,unscaled_rec,scaled_nr,scaled_rec,coords\n")
+    csv_file.write("ID,name,output,label,unscaled_nr,unscaled_rec,scaled_nr,scaled_rec,coords\n")
 
   if FLAGS.save_samples:
     os.makedirs(os.path.join(FLAGS.base_path,"samples"), exist_ok=True)
