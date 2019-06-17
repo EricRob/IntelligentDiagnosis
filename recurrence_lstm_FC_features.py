@@ -820,7 +820,9 @@ def main(_):
 
   if FLAGS.epochs:
     config.max_max_epoch = FLAGS.epochs
-
+  else:
+    config.max_max_epoch = data_config.training_epochs_int
+    
   os.makedirs(os.path.join(FLAGS.base_path, 'results'), exist_ok=True)
   results_path = os.path.join(FLAGS.base_path, "results", FLAGS.name)
 
