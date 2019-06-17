@@ -56,7 +56,7 @@ flags.DEFINE_float("learning_rate", 0.005,
 flags.DEFINE_float("keep_prob", 0.7,
                     "hyperparameter of model's dropout rate")
 flags.DEFINE_string("eval_dir", "/tmp/recurrence_lstm/", "Directory where to write event logs." )
-flags.DEFINE_string("results_prepend", None, "Identifier for saving results to prevent overwrite with similar tests" )
+flags.DEFINE_string("name", None, "Identifier for saving results to prevent overwrite with similar tests" )
 flags.DEFINE_string("save_path", None,
                     "Model output directory.")
 flags.DEFINE_bool("use_fp16", False,
@@ -603,7 +603,7 @@ def save_sample_image(input_data, label, model, step, epoch_count, vals):
   arr = batch[0,:,:,:]
   seq_pixels = model.num_steps * model.image_size
   arr = np.reshape(arr, (model.batch_size, seq_pixels, model.image_size, model.image_depth))
-  samples_folder = os.path.join(FLAGS.base_path, 'samples', FLAGS.results_prepend)
+  samples_folder = os.path.join(FLAGS.base_path, 'samples', FLAGS.name)
   
   os.makedirs(samples_folder, exist_ok=True)
   for x in range(model.batch_size):
@@ -696,10 +696,6 @@ def run_epoch(session, model, results_file, epoch_count, csv_file=None, eval_op=
               (step * 1.0 / model.input.epoch_size,
                  costs / (step + 1.0)
                 ))
-        # loss_file.write("%.3f, %.3f\n" %
-        #       (step * 1.0 / model.input.epoch_size,
-        #         np.exp(costs / iters)
-        #         ))
     
     start_time = time.time()
   #print("Accuracy : %.3f  Epoch Size : %d " % (correct_num * 1.0 / model.input.epoch_size / model.input.batch_size, model.input.epoch_size)
@@ -740,8 +736,10 @@ def get_config():
     config = TestConfig()
   elif FLAGS.config == "color":
     config = ColorConfig()
+    FLAGS.save_model = True
   elif FLAGS.config == "train":
     config = ColorConfig()
+    FLAGS.save_model = True
   else:
     raise ValueError("Invalid config: %s", FLAGS.config)
   if FLAGS.rnn_mode:
@@ -773,10 +771,13 @@ def get_data_config(config_name):
         config = pickle.load(os.path.join(config_name + '.file'))
     return config
   except:
-    print('[ERROR] No valid config file: %s.' % config_name)
+    cprint('[ERROR] No valid config file: %s.' % config_name, 'red')
     print('[INFO] Check --conf parameter and make sure you have run config.py for initial setup.')
 
 def main(_):
+  if not FLAGS.name:
+    cprint('[ERROR] Must set --name parameter!', 'red')
+    raise ValueError("Must set --name (name for current session)")
   config = get_config()
   data_config = get_data_config(FLAGS.data_config)
 
@@ -786,11 +787,12 @@ def main(_):
     FLAGS.data_path = FLAGS.recur_data_path = FLAGS.nonrecur_data_path = data_config.image_bin_dir
 
   waiting = False
-  pdb.set_trace()
+  
   while (not data_exists()):
     waiting = True
     cprint(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ' -- Waiting another minute for data...', 'yellow')
     time.sleep(60)
+
   cprint('Data exists!', 'green')
   if waiting:
     cprint('waited for data, now waiting five more minutes to make sure it is all there ... ', 'yellow')
@@ -798,14 +800,6 @@ def main(_):
   stdout_backup = sys.stdout
 
   config = get_config()
-
-
-
-  if not FLAGS.recur_data_path:
-    raise ValueError("Must set --recur_data_path to recurrence data directory")
-
-  if not FLAGS.nonrecur_data_path:
-    raise ValueError("Must set --nonrecur_data_path to recurrence data directory")
   
   #If training (not testing) need to set these training parameters (but they are set by default in flags)
   if config.test_mode == 0:
@@ -823,7 +817,7 @@ def main(_):
 
 
   os.makedirs(os.path.join(FLAGS.base_path, 'results'), exist_ok=True)
-  results_path = os.path.join(FLAGS.base_path, "results", FLAGS.results_prepend)
+  results_path = os.path.join(FLAGS.base_path, "results", FLAGS.name)
   
   cprint("Data Source: %s" % FLAGS.data_path, 'white', 'on_magenta')
 
@@ -848,8 +842,6 @@ def main(_):
 
 
   eval_config = get_config()
-  #eval_config.batch_size = 10
-  #eval_config.num_steps = 50
 
   create_log_directory(FLAGS.eval_dir)
 
