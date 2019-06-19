@@ -1,0 +1,11 @@
+legacy
+sample_data
+scripts
+spreadsheets
+*.py
+*.sh
+*.file
+results
+*.scm
+data
+
