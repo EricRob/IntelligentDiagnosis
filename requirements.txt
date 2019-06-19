@@ -2,3 +2,5 @@ art
 scikit-learn
 scikit-image
 scipy
+easyplot
+
