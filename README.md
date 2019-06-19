@@ -13,7 +13,7 @@ To create the container:
 sudo docker-compose build
 ```
 
-__When there is a change to `docker-compose.yml` or `build/apnea.Dockerfile`, the container must be rebuilt.__
+__When there is a change to `docker-compose.yml` or `build/mela-nn.Dockerfile`, the container must be rebuilt.__
 
 To start the built container and open into a bash prompt:
 ```
