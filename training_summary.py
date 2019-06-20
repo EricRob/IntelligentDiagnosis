@@ -13,6 +13,7 @@ import argparse
 import pdb
 import csv
 import math
+from termcolor import cprint
 import pickle
 import numpy as np
 from config import Config
@@ -41,10 +42,16 @@ class Summary:
         self.loss.append(float(row[7]))
 
     def load_file(self):
-        with open(self.file) as csvfile:
-            csvreader = csv.reader(csvfile, delimiter=',')
-            for row in csvreader:
-                self.add_row(row)
+        try:
+            with open(self.file) as csvfile:
+                csvreader = csv.reader(csvfile, delimiter=',')
+                for row in csvreader:
+                    self.add_row(row)
+            self.broken = False
+        except Exception as e:
+            self.broken = True
+            cprint('[ERROR] Encountered issue opening %s -- Does it exist at that location?' % self.file, 'red')
+
     def create_dicts(self, TO_PLOT):
         self.data = {}
         for item in TO_PLOT:
@@ -76,11 +83,19 @@ def factor_int(n):
 
 def add_subplot(summaries, fig, plot_name, idx):
     subplot = fig.add_subplot(idx)
+    epochs = None
     for summary in summaries:
+        if summary.broken:
+            continue
         epochs = np.arange(1, len(summary.data[plot_name]) + 1)
         print('%s -- cond: %s, epochs: %d, plot_len:%d' % (plot_name, summary.condition, len(epochs), len(summary.data[plot_name])))
         subplot.plot(epochs, summary.data[plot_name], label=summary.condition, color=summary.color)
     subplot.set_title(plot_name)
+
+    if not epochs:
+        cprint('[ERROR] Unable to produce %s subplot, no data available' % plot_name, 'red')
+        return
+    
     if not plot_name == 'loss':
         subplot.set_ylim([0,1.05]) 
         subplot.plot(epochs, np.repeat(0.5, len(epochs)), color='black', ls='--')
@@ -101,6 +116,11 @@ def get_config(config_name):
         print('[ERROR] No valid config file: %s' % config_name)
         print('[INFO] Check --conf parameter and make sure you have run config.py for initial setup.')
 
+def valid_summary_exists(summaries):
+    for summary in summaries:
+        if not summary.broken:
+            return True
+    return False
 
 def main(ars):
     # Change this to add or remove data from the graphs.
@@ -116,6 +136,9 @@ def main(ars):
     # This is what we will summarize
     summaries = [Summary('train', model_path, TO_PLOT), Summary('valid', model_path, TO_PLOT), Summary('test', model_path, TO_PLOT)]
 
+    if not valid_summary_exists(summaries):
+        cprint('[ERROR] No valid training summary files exist, exiting', 'red', 'on_white')
+        sys.exit(1)
     # epochs = np.arange(1, len(summaries[0].data[TO_PLOT[0]]) + 1)
     fig = plt.figure()
     for plot in TO_PLOT:
