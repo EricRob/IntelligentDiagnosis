@@ -120,7 +120,7 @@ def accurate_votes(subject):
     else:
         return subject.nonrecur_votes
 
-def output_voting_results(subjects, config):
+def output_voting_results(subjects, config, model):
     print('Writing output csv...')
     truth = []
     score = []
@@ -140,7 +140,7 @@ def output_voting_results(subjects, config):
     accuracy = (len(nrec_votes) - sum(nrec_votes) + sum(rec_votes)) / (len(rec_votes) + len(nrec_votes))
     auc = roc_auc_score(truth, score)
 
-    with open(os.path.join(config.results_dir, config.output_csv), 'w+') as csvfile:
+    with open(os.path.join(config.results_dir, model, config.output_csv), 'w+') as csvfile:
         csvwriter = csv.writer(csvfile)
         csvwriter.writerow(['SUMMARY'])
         csvwriter.writerow(['Sensitivity:', '%.3f' % sensitivity])
@@ -179,19 +179,18 @@ def get_config(config_name):
 
 def main(ars):
     config = get_config(ars.conf)
-    config.results_dir = ars.results
     if not config:
         sys.exit(1)
     tprint('majo\nrity\nvote', font='sub-zero')
-    subjects = process_voting_input(os.path.join(config.results_dir, config.voting_csv))
-    output_voting_results(subjects, config)
+    subjects = process_voting_input(os.path.join(config.results_dir, ars.model, config.voting_csv))
+    output_voting_results(subjects, config, ars.model)
     print('Done!')
 
 # Main body
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Create decisions based on output of recurrence_seq_lstm')
     parser.add_argument('--conf', default='default', type=str, help='Name of configuration file for processing and voting')
-    parser.add_argument('--results', default='None', type=str, required=True, help='Directory location of voting_csv to test and summarize')
+    parser.add_argument('--model', default='None', type=str, required=True, help='Directory location of voting_csv to test and summarize')
     ars = parser.parse_args()
     main(ars)
     sys.exit(0)
