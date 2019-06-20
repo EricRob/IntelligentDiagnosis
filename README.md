@@ -110,10 +110,10 @@ The value of `--model` must be a directory in the configuration's `results_dir`.
 
 ## summary.py
 Process the training logs of recurrence_lstm into a figure saved as a jpg image. The figure is a 2x2 subplot with values of each available epoch for:
-|[model name]|
---------------------------------
+
+
 | Specificity  |  Sensitivity  |
-| Accuracy  |  Loss  |
+| Accuracy     |  Loss         |
 
 Requires specifying the model results you want to summarize with the `--model` command-line argument:
 ```
