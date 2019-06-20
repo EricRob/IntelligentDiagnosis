@@ -1,6 +1,6 @@
 
 # Environment setup
-## docker
+## Docker
 
 First, install [docker](https://docs.docker.com/install/#server) and [docker-compose](https://docs.docker.com/compose/install/).
 
