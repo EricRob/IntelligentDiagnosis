@@ -25,16 +25,25 @@ To attach a volume that is not available by default, add the `-v` flag:
 sudo docker-compose -v [local dir]:[container dir] run mela-nn bash
 ```
 
-__ATTN:__ _Use simple\_\*.py unless you want a specific, known feature from the leagacy code_
+__ATTN:__ _Use the code in the main directory unless you want a specific, known feature from the leagacy code_
 
 # Running The Code
 ## config.py
 
-A configuration must be created prior to running any of the simple_*.py code. Run this code, follow the prompts, and move your data to the correct locations prior to running simple_process.py or simple_vote.py
+A configuration must be created prior to running the main directory code. Run this code, follow the prompts, and move your data to the correct locations prior to running `process.py` or `vote.py`.
 
 
-## simple\_process.py 
-Requires a valid image, tsv of qupath output, binary mask from gimp, and image_list.csv. If using a custom configuration, specify with the `--conf` argument.
+## process.py 
+Requires a valid image, tsv of qupath output, binary mask from gimp, and image_list.csv. 
+
+```
+python process.py
+```
+
+If using a custom configuration, specify with the `--conf` argument (the only argument):
+```
+python process.py --conf=custom_config.file
+```
 
 ### Sample image_list.csv:
 
@@ -63,7 +72,7 @@ Six condition binary files are created for running recurrence_lstm:
 If no images are listed for a given mode, or no image binary files are successfully found/created, then an empty binary file is created. This is acceptable behavior for the testing condition where the train and valid files are required to exist, but are not used.
 
 ## recurrence\_lstm\_features.py and recurrence\_lstm\_FC\_features.py
-Using the binary files created by simple\_process.py, train a the neural network into a set of usable parameters
+Using the binary files created by process.py, train a the neural network into a set of usable parameters
 
 Whenever running this script, the `--name` parameter is required. Name should be a unique string identifying the current training or testing session.
 
@@ -91,15 +100,15 @@ python recurrence_lstm_features.py --name=[DNN testing name] --config=test --mod
 
 **Note:** For the model being tested, the model_path directory must contain the `checkpoint` file with lines accurately pointing to the `.data`, `.index`, and `.meta` checkpoint files.
 
-## simple\_vote.py
+## vote.py
 Process output of recurrence_lstm into voting scores for all subjects in a testing condition. Requires specifying the model results you want to summarize with the `--model` command-line argument:
 ```
-python simple_vote.py --model=[DNN testing name]
+python vote.py --model=[DNN testing name]
 ```
 
 The value of `--model` must be a directory in the configuration's `results_dir`. If using a custom configuration, specify with the `--conf` argument.
 
-## training_summary.py
+## summary.py
 Process the training logs of recurrence_lstm into a figure saved as a jpg image. The figure is a 2x2 subplot with values of each available epoch for:
 * Specificity
 * Sensitivity
@@ -108,5 +117,5 @@ Process the training logs of recurrence_lstm into a figure saved as a jpg image.
 
 Requires specifying the model results you want to summarize with the `--model` command-line argument:
 ```
-python training_summary.py --model=[DNN testing name]
+python summary.py --model=[DNN testing name]
 ```
