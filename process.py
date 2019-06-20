@@ -41,7 +41,7 @@ import argparse
 import pickle
 from config import Config
 
-import simple_centroid as gauss
+import gauss
 
 
 warnings.simplefilter('ignore', FutureWarning)
@@ -176,7 +176,7 @@ def get_config(config_name):
 		print('[INFO] Check --conf parameter and make sure you have run config.py for initial setup.')
 
 def main(ars):
-	tprint('simple_process', font='speed')
+	tprint('process.py', font='speed')
 	config = get_config(ars.conf)
 	if not config:
 		sys.exit(1)

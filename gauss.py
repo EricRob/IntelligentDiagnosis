@@ -16,7 +16,7 @@ from skimage import transform
 from math import floor
 from numpy.lib.stride_tricks import as_strided
 import numbers
-import simple_qupath as qupath
+import qupath
 import time
 import struct
 from termcolor import cprint
