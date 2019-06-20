@@ -817,9 +817,7 @@ def main(_):
   else:
     config.max_max_epoch = data_config.training_epochs_int
 
-
-  os.makedirs(os.path.join(FLAGS.base_path, 'results'), exist_ok=True)
-  results_path = os.path.join(FLAGS.base_path, "results", FLAGS.name)
+  results_path = os.path.join(data_config.results, FLAGS.name)
   
   cprint("Data Source: %s" % FLAGS.data_path, 'white', 'on_magenta')
 
