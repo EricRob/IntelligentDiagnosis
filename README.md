@@ -92,4 +92,21 @@ python recurrence_lstm_features.py --name=[DNN testing name] --config=test --mod
 **Note:** For the model being tested, the model_path directory must contain the `checkpoint` file with lines accurately pointing to the `.data`, `.index`, and `.meta` checkpoint files.
 
 ## simple\_vote.py
-Process output of recurrence_lstm into voting scores for all subjects in a testing condition. If using a custom configuration, specify with the `--conf` argument.
+Process output of recurrence_lstm into voting scores for all subjects in a testing condition. Requires specifying the model results you want to summarize with the `--model` command-line argument:
+```
+python simple_vote.py --model=[DNN testing name]
+```
+
+The value of `--model` must be a directory in the configuration's `results_dir`. If using a custom configuration, specify with the `--conf` argument.
+
+## training_summary.py
+Process the training logs of recurrence_lstm into a figure saved as a jpg image. The figure is a 2x2 subplot with values of each available epoch for:
+* Specificity
+* Sensitivity
+* Accuracy
+* Loss
+
+Requires specifying the model results you want to summarize with the `--model` command-line argument:
+```
+python training_summary.py --model=[DNN testing name]
+```
