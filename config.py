@@ -126,6 +126,8 @@ def main():
 	elif query_yes_no('No default configuration found, create default configuration?'):
 			config.filename = config.valid_suffix('filename', 'default_config')
 			cprint('New default configuration: %s' % config.filename, 'yellow')
+	elif query_yes_no('Create new custom configuration?', default='no'):
+		config.filename = config.valid_suffix('filename', input('New configuration name: '))
 	else:
 		print('Exiting: No changes made to configurations')
 		return
