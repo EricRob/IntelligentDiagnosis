@@ -57,9 +57,7 @@ python process.py --conf=custom_config.file
 | test   |  11-11  | 11_11_11.tif |   1   |  CUMC  |
 
 ### Outputs
-If an image binary file does not exist, it is created and saved to the `image_bin_dir` directory specified in the configuration
-
-All issues encountered in creating image binaries are detailed in the `err_csv` specified in the configuration (error\_list.csv by default).
+If an image binary file does not exist, it is created and saved to the `image_bin_dir` directory specified in the configuration. All issues encountered in creating image binaries are detailed in the `err_csv` specified in the configuration (error\_list.csv by default).
 
 Six condition binary files are created for running recurrence_lstm:
 * recurrence_train.bin
@@ -69,7 +67,9 @@ Six condition binary files are created for running recurrence_lstm:
 * nonrecurrence_valid.bin
 * nonrecurrence_test.bin
 
-If no images are listed for a given mode, or no image binary files are successfully found/created, then an empty binary file is created. This is acceptable behavior for the testing condition where the train and valid files are required to exist, but are not used.
+Once the image binary file is created (or if it already exists), it's appended to the end of the appropriate condition binary file. This means that if images `A`, `B`, `C`, `D`, and `E` are the recurrent images in the `train` condition, then `recurrence_train.bin` will be equal to `ABCDE`.
+
+If no images are listed for a given mode, or no image binary files are successfully found/created, then an empty binary file is created. This is acceptable behavior for the testing condition where the train and valid files are required to exist but not used.
 
 ## recurrence\_lstm\_features.py and recurrence\_lstm\_FC\_features.py
 Using the binary files created by process.py, train a the neural network into a set of usable parameters
