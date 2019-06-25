@@ -41,7 +41,7 @@ import argparse
 import pickle
 from config import Config
 
-import gauss
+import gaussian
 
 
 warnings.simplefilter('ignore', FutureWarning)
@@ -70,9 +70,9 @@ class HE_Image:
 			return 'nonrecurrence'
 	def assign_gauss_config(self, config):
 		if self.source.lower() == 'yale':
-			gauss_config = gauss.YaleConfig()
+			gauss_config = gaussian.YaleConfig()
 		else:
-			gauss_config = gauss.OriginalConfig()
+			gauss_config = gaussian.OriginalConfig()
 		gauss_config.image_data_folder_path = config.images_dir
 		return gauss_config
 	def bin_requirements_met(self, config):
@@ -141,7 +141,7 @@ def generate_and_append_bin(image_list, bin_file, config):
 				continue
 			else:
 				cprint('Creating image binary file for %s: %s' % (image.subject, image.img_base), 'white', 'on_green')
-				features = gauss.generate_sequences(image.mask, \
+				features = gaussian.generate_sequences(image.mask, \
 					image.gauss_config, \
 					image_name=image.img_base, \
 					subject_id=image.subject, \
@@ -151,7 +151,7 @@ def generate_and_append_bin(image_list, bin_file, config):
 					err_list.append(image.raise_error(feature_err=True))
 					continue
 				with open(image.bin, 'wb+') as image_bin:
-					gauss.write_image_bin(image_bin, \
+					gaussian.write_image_bin(image_bin, \
 						image.image, \
 						image.subject, \
 						features, \
