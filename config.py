@@ -103,7 +103,7 @@ def create_default(config):
 
 def set_custom_values(config):
 	config_values = config.__dict__
-	for val in config_values:
+	for val in sorted(config_values):
 		if val == 'filename':
 			continue
 		inp = input('Setting for %s (%s): ' % (val, config.return_type(val)))
