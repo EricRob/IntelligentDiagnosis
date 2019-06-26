@@ -171,10 +171,13 @@ def get_config(config_name):
             with open('./default_config.file', 'rb') as f:
                 config = pickle.load(f)
         else:
-            config = pickle.load(os.path.join(config_name + '.file'))
+            if '.file' not in config_name:
+                config_name += '.file'
+            with open(os.path.join(config_name), 'rb') as f:
+                config = pickle.load(f)
         return config
     except:
-        print('[ERROR] No valid config file: %s' % config_name)
+        print('[ERROR] No valid config file: %s.' % config_name)
         print('[INFO] Check --conf parameter and make sure you have run config.py for initial setup.')
 
 def main(ars):
