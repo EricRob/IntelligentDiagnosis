@@ -1,7 +1,18 @@
-#!/user/bin/env python3 -tt
-"""
-Module documentation.
-"""
+#!/usr/bin/python3 python3
+
+'''
+##################
+
+Written by Eric J Robinson (https://github.com/EricRob)
+
+##################
+
+Tiles a large TIFF H&E image, generates cell-type features, samples patches from
+a gaussian distribution centered in each tile, and assemples patches into a RNN sequence.
+Then writes meta-data, feature values, sequence TIFF image data into a binary file.
+
+##################
+'''
 
 # Imports
 import sys
@@ -1089,8 +1100,8 @@ def write_image_bin(image_bin, image_name, subject_ID, seq_features, config):
 					# if float(feature_set[feature]) == 0:
 					# 	pdb.set_trace()
 					# if not feature_set[feature]:
-					# 	pdb.set_trace()
-					image_bin.write(struct.pack('d', feature_set[feature]))
+					# pdb.set_trace()
+					image_bin.write(struct.pack('d', feature))
 			for y,x in sequence:
 				patch = image[y:(y+config.patch_size),x:(x+config.patch_size),:]
 				# Need to verify this downscaling method				
