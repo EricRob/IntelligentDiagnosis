@@ -1,7 +1,16 @@
-#!/user/bin/env python3 -tt
-"""
-Module documentation.
-"""
+#!/usr/bin/python3 python3
+
+'''
+##################
+
+Written by Eric J Robinson (https://github.com/EricRob)
+
+##################
+
+Create graphs to display the sensitivity, specificity, accuracy, and loss of the recurrence_lstm network training.
+
+##################
+'''
 
 # Imports
 import sys
@@ -109,11 +118,13 @@ def get_config(config_name):
             with open('./default_config.file', 'rb') as f:
                 config = pickle.load(f)
         else:
-            config = pickle.load(os.path.join(config_name + '.file'))
-        
+            if '.file' not in config_name:
+                config_name += '.file'
+            with open(os.path.join(config_name), 'rb') as f:
+                config = pickle.load(f)
         return config
     except:
-        print('[ERROR] No valid config file: %s' % config_name)
+        print('[ERROR] No valid config file: %s.' % config_name)
         print('[INFO] Check --conf parameter and make sure you have run config.py for initial setup.')
 
 def valid_summary_exists(summaries):
