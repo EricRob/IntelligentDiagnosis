@@ -101,7 +101,7 @@ def add_subplot(summaries, fig, plot_name, idx):
         subplot.plot(epochs, summary.data[plot_name], label=summary.condition, color=summary.color)
     subplot.set_title(plot_name)
 
-    if not epochs:
+    if not len(epochs):
         cprint('[ERROR] Unable to produce %s subplot, no data available' % plot_name, 'red')
         return
     
