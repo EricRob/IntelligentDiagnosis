@@ -15,13 +15,13 @@ from shapely.geometry.polygon import Polygon
 from shapely.geometry import Point
 import pdb
 import pickle
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from termcolor import cprint
 from scipy import stats
 # from sklearn.preprocessing import normalize
 
 # Global variables
-DET_PATH = '/Users/ericrobinson/Desktop/test_det'
+DET_PATH = '/Users/ericrobinson/Dropbox/Detections Files/GeisDetections'
 IMG_TO_SUBJ = '/Users/ericrobinson/Desktop/image_to_subject_ID.csv'
 PICKLE_PATH = '/Users/ericrobinson/Desktop/pickles'
 
@@ -48,24 +48,24 @@ class DetFile(object):
         if len(row) < 65:
             pass
         try:
-            if row[0] == 'Immune cells':
-                if not np.isnan(float(row[65])) and not np.isnan(float(row[38])) and not np.isnan(float(row[39])):
-                    self.imm_coords.append((float(row[38]), float(row[39])))
-                    self.imm_areas.append(float(row[65]))
-                    cluster_centroid = (float(row[80]), float(row[81]))
-                    cluster_size = int(row[89])
-                    if cluster_size  <= self.cluster_limit:
+            if row['Class'] == 'Immune cells':
+                if not np.isnan(float(row['Nucleus: Area'])) and not np.isnan(float(row['Centroid X'])) and not np.isnan(float(row['Centroid Y'])):
+                    self.imm_coords.append((float(row['Centroid X']), float(row['Centroid Y'])))
+                    self.imm_areas.append(float(row['Nucleus: Area']))
+                    cluster_centroid = (float(row['Cluster  mean: Centroid X']), float(row['Cluster  mean: Centroid Y']))
+                    cluster_size = int(row['Cluster  size'])
+                    if cluster_size  < self.cluster_limit:
                         self.imm_small[cluster_centroid] = cluster_size
                     else:
                         self.imm_large[cluster_centroid] = cluster_size
 
-            elif row[0] == 'Tumor':
-                if not np.isnan(float(row[65])) and not np.isnan(float(row[38])) and not np.isnan(float(row[39])):
-                    self.tumor_coords.append((float(row[38]), float(row[39])))
-                    self.tumor_areas.append(float(row[65]))
-                    cluster_centroid = (float(row[80]), float(row[81]))
-                    cluster_size = int(row[89])
-                    if cluster_size  <= self.cluster_limit:
+            elif row['Class'] == 'Tumor':
+                if not np.isnan(float(row['Nucleus: Area'])) and not np.isnan(float(row['Centroid X'])) and not np.isnan(float(row['Centroid Y'])):
+                    self.tumor_coords.append((float(row['Centroid X']), float(row['Centroid Y'])))
+                    self.tumor_areas.append(float(row['Nucleus: Area']))
+                    cluster_centroid = (float(row['Cluster  mean: Centroid X']), float(row['Cluster  mean: Centroid Y']))
+                    cluster_size = int(row['Cluster  size'])
+                    if cluster_size  < self.cluster_limit:
                         self.tum_small[cluster_centroid] = cluster_size
                     else:
                         self.tum_large[cluster_centroid] = cluster_size
@@ -133,9 +133,6 @@ class DetFile(object):
 
 def voronoi_finite_polygons_2d(vor, radius=None):
 
-    if vor.points.shape[1] != 2:
-        raise ValueError("Requires 2D input")
-
     new_regions = []
     new_vertices = vor.vertices.tolist()
 
@@ -195,9 +192,6 @@ def place_cells_in_regions(regions, vertices, det_f):
     region_num = 0
     skip_rows = []
 
-    # It's not recognizing region 7? Hack: place all of the other regions and the leftovers are in 7
-    cell_locations[:,4] = 7
-
     for region in regions:
         polygon = Polygon(vertices[region])
         row_num = 0
@@ -207,10 +201,25 @@ def place_cells_in_regions(regions, vertices, det_f):
                 cell_locations[row_num, 4] = region_num
                 det_f.region_counts[region_num, cell_locations[row_num, 2]] += 1
                 skip_rows.append(row)
-            if region_num == 7 and cell_locations[row_num, 4] == 7:
-                det_f.region_counts[region_num, cell_locations[row_num, 2]] += 1
+
             row_num += 1
         region_num += 1
+
+    region_num = 0
+    skip_rows = [ list(item) for item in skip_rows ]
+    for row in det_f.region_counts:
+        if sum(row) < 1:
+            print('Empty cell region: {}'.format(region_num))
+            cell_num = 0
+            for cell in cell_locations:
+                c_list = list(cell)
+                if c_list not in skip_rows:
+                    cell_locations[cell_num, 4] = region_num
+                    det_f.region_counts[region_num, cell[2]] += 1
+                cell_num += 1
+        region_num += 1
+
+
     return cell_locations
 
 def img_list():
@@ -247,13 +256,6 @@ def remove_nan_values(arr):
     no_nans = arr[np.invert(nan_locs)]
     return no_nans  
 
-def quick_hist(arr1, arr2):
-    plt.clf()
-    # ar1, bin1 = np.histogram(arr1, bins='auto', density=True)
-    # ar2, bin2 = np.histogram(arr2, bins='auto', density=True)
-    plt.hist(arr1, bin='auto',alpha = 0.5)
-    plt.hist(arr2, bin='auto', alpha = 0.5)
-    plt.show()
 
 def sort_and_trim(arr, percentile):
     arr = np.sort(arr)
@@ -279,16 +281,13 @@ def run_thresholds(start, stop, samples, labels, values):
         sens = np.nan_to_num(rec_under / (rec_under + rec_over)) # TP / (FN + TP)
         spec = np.nan_to_num(1 - nr_over / (nr_over + nr_under)) # TN / (FP + TN)
 
-        # nr_acc = nr_under / (nr_under + nr_over)
-        # rec_acc =  rec_over / (rec_under + rec_over)
 
         acc = (nr_over + rec_under) / (len(labels))
         holds.append(thresh)
         accuracies.append(acc)
         sensitivities.append(sens)
         specificities.append(spec)
-        # print('Threshold: ' + "{0:02f}".format(thresh) + ' NR accuracy:' + str("{0:03f}".format(nr_acc)) + ' RE accuracy: ' + str("{0:03f}".format(rec_acc)))
-        # print('Threshold: ' + "{0:02f}".format(thresh) + ' Acc: ' + "{0:03f}".format(acc) + '  Sens: ' + "{0:03f}".format(sens) + '  Spec:'+ "{0:03f}".format(1-spec) )
+
 
     max_acc = max(accuracies)
     
@@ -310,28 +309,11 @@ def place_clusters(regions, vertices, det_f):
         run_clusters(det_f, det_f.imm_small, region_num, 2, polygon)
         run_clusters(det_f, det_f.imm_large, region_num, 3, polygon)
 
-        # for cluster in det_f.tum_small:
-        #     point = Point(int(cluster[0]), int(cluster[1]))
-        #     if polygon.contains(point):
-        #         det_f.delaunay_region_vals[region_num,0] += det_f.tum_small[cluster]
-        # for cluster in det_f.tum_large:
-        #     point = Point(int(cluster[0]), int(cluster[1]))
-        #     if polygon.contains(point):
-        #         det_f.delaunay_region_vals[region_num,1] += det_f.tum_large[cluster]
-        # for cluster in det_f.imm_small:
-        #     point = Point(int(cluster[0]), int(cluster[1]))
-        #     if polygon.contains(point):
-        #         det_f.delaunay_region_vals[region_num,2] += det_f.imm_small[cluster]
-        # for cluster in det_f.imm_large:
-        #     point = Point(int(cluster[0]), int(cluster[1]))
-        #     if polygon.contains(point):
-        #         det_f.delaunay_region_vals[region_num,3] += det_f.imm_large[cluster]
         region_num += 1
 
 def run_clusters(det_f, cluster_dict, region_num, val_ind, polygon):
     for cluster in cluster_dict:
         try:
-            # pdb.set_trace()
             point = Point(int(cluster[0]), int(cluster[1]))
             if polygon.contains(point):
                 det_f.delaunay_region_vals[region_num, val_ind] += cluster_dict[cluster]
@@ -396,23 +378,23 @@ def calculate_feature_histograms(re_list, nr_list, source='all_sources'):
         
     pass
 
-def norm_arrays(re_list, nr_list):
-    all_scores = []
-    for val in re_list:
-        all_scores.append(val.features['Immune Area / Tumor Area'])
-    for val in nr_list:
-        all_scores.append(val.features['Immune Area / Tumor Area'])
-    arr = np.array(all_scores)
-    arr[np.isnan(arr)] = 0
-    sorted_arr = np.copy(arr)
-    sorted_arr.sort()
-    arr[np.isinf(arr)] = sorted_arr[-8]
-    norm_arr = (arr - np.min(arr)) / np.ptp(arr)
-    norm_re = norm_arr[:len(re_list)]
-    norm_nr = norm_arr[len(re_list):]
+# def norm_arrays(re_list, nr_list):
+#     all_scores = []
+#     for val in re_list:
+#         all_scores.append(val.features['Immune Area / Tumor Area'])
+#     for val in nr_list:
+#         all_scores.append(val.features['Immune Area / Tumor Area'])
+#     arr = np.array(all_scores)
+#     arr[np.isnan(arr)] = 0
+#     sorted_arr = np.copy(arr)
+#     sorted_arr.sort()
+#     arr[np.isinf(arr)] = sorted_arr[-8]
+#     norm_arr = (arr - np.min(arr)) / np.ptp(arr)
+#     norm_re = norm_arr[:len(re_list)]
+#     norm_nr = norm_arr[len(re_list):]
 
-    #pdb.set_trace()
-    return
+#     #pdb.set_trace()
+#     return
 
 def print_features(re_list, nr_list, img_to_subj):
     with open(os.path.join(PICKLE_PATH, 'area_features.csv'), 'w') as csvfile:
@@ -461,12 +443,7 @@ def main(ars):
                 elif ars.source == 'cumc' and img_to_subj[img_name] not in cumc:
                     print('skipping %s' % img_name)
                     continue
-                #else:
-                 #   if img_to_subj[img_name] in yale or img_to_subj[img_name] in geis:
-                  #      print('final else: skipping %s' % img_name)
-                   #     continue
-                    #else:
-                     #   print('using sinai')
+
             except Exception as e:
                 cprint('[ERROR] Entered exception', 'red')
                 pass
@@ -504,19 +481,10 @@ def main(ars):
                 # pdb.set_trace()
                 print('reading detections file')
                 with open(fd, 'r') as f:
-                    header = f.readline()
-                    # header = header.split('\t')
-                    # line = f.readline()
-                    # i = 0
-                    # for val in header:
-                    #   print('%s: %d' % (val, i))
-                    #   print(str(line.split('\t')[i]))
-                    #   i += 1
-                    # pdb.set_trace()
-                    for line in f:
-                        if line == '\n':
-                            continue
-                        det_f.add_row(line.split('\t'))
+                    det_reader = csv.DictReader(f, delimiter='\t')
+                    for row in det_reader:
+                        det_f.add_row(row)
+
                 det_f.build_coord_array()
                 print('clustering...')
                 if det_f.imm_coord_array.shape[0] == 0 or len(det_f.imm_coord_array) < 8:
@@ -533,10 +501,8 @@ def main(ars):
                 regions, vertices = voronoi_finite_polygons_2d(vor)
                 print('placing in regions...')
                 cell_locs = place_cells_in_regions(regions, vertices, det_f)
-                # Determine densest clusters
                 det_f.densest_regions_calculate()
 
-                # Place delaunay centroids in densest clusters
                 place_clusters(regions, vertices, det_f)
                 det_f.add_region_areas(cell_locs)
                 det_f.add_features()
@@ -547,9 +513,7 @@ def main(ars):
                     re_list.append(det_f)
                 elif labels[img_name] == 0:
                     nr_list.append(det_f)
-                # Count delaunay clusters
-                
-                # np.save(ff_array, det_f.feat_arr)
+
             if img_name not in img_to_subj:
                 continue
             subj = img_to_subj[img_name]
@@ -558,29 +522,6 @@ def main(ars):
             except Exception as e:
                 pdb.set_trace()
             
-            # if subj in cumc:
-            #     top_k = 2
-            #     ind_one = np.argpartition(final_feature[:,0], -top_k)[-top_k:]
-            #     ind_two = np.argpartition(final_feature[:,1], -top_k)[-top_k:]
-            #     mean_one = sum(final_feature[:,0][ind_one]) / top_k
-            #     mean_two = sum(final_feature[:,1][ind_two]) / top_k
-            #     if mean_one == float('inf') or mean_two == float('inf'):
-            #         pass
-            #     elif label == 1:
-            #         re_scores_one.append(mean_one)
-            #         re_scores_two.append(mean_two)
-            #     elif label == 0:
-            #         nr_scores_one.append(mean_one)
-            #         nr_scores_two.append(mean_two)
-
-
-        # re_labels = np.ones(len(re_scores_one))
-        # nr_labels = np.zeros(len(nr_scores_one))
-
-        # re_portion_np = np.array(re_scores_one)
-        # nr_portion_np = np.array(nr_scores_one)
-        # np_labels = np.concatenate((re_labels, nr_labels))
-        # np_values = np.concatenate((re_portion_np, nr_portion_np))
     calculate_feature_histograms(re_list, nr_list, source=ars.source)
     print_features(re_list, nr_list, img_to_subj)
     # norm_arrays(re_list, nr_list)
