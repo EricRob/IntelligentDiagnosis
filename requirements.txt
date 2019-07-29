@@ -3,4 +3,5 @@ scikit-learn
 scikit-image
 scipy
 easyplot
-
+matplotlib
+Shapely
