@@ -45,9 +45,24 @@ Requires a valid image, tsv of qupath output, binary mask from gimp, and image_l
 python process.py
 ```
 
-If using a custom configuration, specify with the `--conf` argument (the only argument):
+If using a custom configuration, specify with the `--conf` argument:
 ```
 python process.py --conf=custom_config.file
+```
+
+By defauly process.py will create all train, valid, and test sets. If you want to create only a certain set, specify with the `--set` argument:
+```
+python process.py --set=train
+```
+
+By default process.py will create all recurrence and nonrecurrence binaries. If you want to process only one, specify with the `--label` argument
+```
+python process.py --label=recurrence
+```
+
+If want to create binary files for an additional set of images not in the default image_list, specify the `--image_list` argument (Must specify entire path and must be a csv file):
+```
+python process.py --image_list=./data/testing_images.csv
 ```
 
 ### Sample image_list.csv:
@@ -66,7 +81,7 @@ If an image binary file does not exist, it is created and saved to the
 `image_bin_dir` directory specified in the configuration. All issue
 encountered in creating image binaries are detailed in the `err_csv` specified in the configuration (error\_list.csv by default).
 
-Six condition binary files are created for running recurrence_lstm:
+Depending on if the set hyperparameter was specified, a maximum of six condition binary files can be created for running recurrence_lstm:
 * recurrence_train.bin
 * recurrence_valid.bin
 * recurrence_test.bin
