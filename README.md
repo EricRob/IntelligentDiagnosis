@@ -30,6 +30,8 @@ __ATTN:__ _Use the code in the main directory unless you want a specific, known 
 # Running The Code
 ## config.py
 
+NOTE: PROMPT SHOULD BE FIXED BECAUSE CURRENTLY SAYING YES TO OVERWRITE DEFAULT CONFIG DOESN'T ASK YOU TO RENAME.
+
 A configuration must be created prior to running the main directory code. Run this code, follow the prompts, and move your data to the correct locations prior to running `process.py` or `vote.py`.
 
 
@@ -57,7 +59,8 @@ python process.py --conf=custom_config.file
 | test   |  11-11  | 11_11_11.tif |   1   |  CUMC  |
 
 ### Outputs
-If an image binary file does not exist, it is created and saved to the `image_bin_dir` directory specified in the configuration. All issues encountered in creating image binaries are detailed in the `err_csv` specified in the configuration (error\_list.csv by default).
+If an image binary file does not exist, it is created and saved to the 
+`image_bin_dir` directory specified in the configuration. All issuese ncountered in creating image binaries are detailed in the `err_csv` specified in the configuration (error\_list.csv by default).
 
 Six condition binary files are created for running recurrence_lstm:
 * recurrence_train.bin
@@ -92,6 +95,12 @@ Default training uses the hyperparameters `--learning_rate=0.005` and `--keep_pr
 python recurrence_lstm_features.py --name=[DNN training name] --learning_rate=1e-5 --keep_prob=0.9
 ```
 
+You can also specify the number of epochs using the --epochs hyperparameter
+NOTE: the default number of epochs is 50? 
+```
+python recurrence_lstm_features.py --name=[DNN training name] --epochs=50
+```
+
 ### Testing
 To test a trained model, set the `--config` and `--model_path` parameters:
 ```
@@ -116,7 +125,9 @@ Process the training logs of recurrence_lstm into a figure saved as a jpg image.
 * Accuracy
 * Loss
 
-Requires specifying the model results you want to summarize with the `--model` command-line argument:
+Requires specifying the model results you want to summarize with the `--model` command-line argument (requires train_results.txt, test_results.txt, and valid_results.txt files)
+
+NOTE: [DNN testing name] should really be DNN training name?? 
 ```
 python summary.py --model=[DNN testing name]
 ```

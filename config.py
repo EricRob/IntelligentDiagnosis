@@ -27,10 +27,12 @@ from termcolor import cprint
 class Config:
 	def __init__(self, filename='./default_config.file'):
 		self.filename = filename
-		self.images_dir = './data/images'
-		self.mask_dir = './data/masks'
+		#self.images_dir = './data/original_images'
+		self.images_dir = '/data/recurrence_seq_lstm/image_data/original_images'
+		#self.mask_dir = './data/masks'
+		self.mask_dir = '/data/recurrence_seq_lstm/image_data/masks'
 		self.image_csv = './data/image_list.csv'
-		self.image_bin_dir = './data/image_binaires'
+		self.image_bin_dir = './data/image_binaries'
 		self.detections_dir = './data/detections'
 		self.err_csv = './data/error_list.csv'
 		self.voting_csv = 'voting_file.csv'
