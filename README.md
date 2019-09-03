@@ -29,11 +29,14 @@ __ATTN:__ _Use the code in the main directory unless you want a specific, known 
 
 # Running The Code
 ## config.py
+A configuration must be created prior to running the main directory code. 
+Run this code, follow the prompts asking if you'd like to create a new configuration or overwrite the current default configuration. 
 
-NOTE: PROMPT SHOULD BE FIXED BECAUSE CURRENTLY SAYING YES TO OVERWRITE DEFAULT CONFIG DOESN'T ASK YOU TO RENAME.
+```
+python config.py
+```
 
-A configuration must be created prior to running the main directory code. Run this code, follow the prompts, and move your data to the correct locations prior to running `process.py` or `vote.py`.
-
+Move your data to the correct locations specified in config.py prior to running `process.py` or `vote.py`.
 
 ## process.py 
 Requires a valid image, tsv of qupath output, binary mask from gimp, and image_list.csv. 
@@ -58,9 +61,10 @@ python process.py --conf=custom_config.file
 | test   |  00-00  | 00_00_00.tif |   0   |  CUMC  |
 | test   |  11-11  | 11_11_11.tif |   1   |  CUMC  |
 
-### Outputs
+### Output of running process.py
 If an image binary file does not exist, it is created and saved to the 
-`image_bin_dir` directory specified in the configuration. All issuese ncountered in creating image binaries are detailed in the `err_csv` specified in the configuration (error\_list.csv by default).
+`image_bin_dir` directory specified in the configuration. All issue
+encountered in creating image binaries are detailed in the `err_csv` specified in the configuration (error\_list.csv by default).
 
 Six condition binary files are created for running recurrence_lstm:
 * recurrence_train.bin
@@ -79,6 +83,7 @@ Using the binary files created by process.py, train a the neural network into a 
 
 Whenever running this script, the `--name` parameter is required. Name should be a unique string identifying the current training or testing session.
 
+The default data_path location is in the image_binaries directory. 
 To load data from a non-default location, use the `--data_path` parameter:
 ```
 python recurrence_lstm_features.py --name=[DNN training name] --data_path=[str filepath to data]
@@ -90,44 +95,51 @@ By default, the network runs the training configuration for the number of epochs
 python recurrence_lstm_features.py --name=[DNN training name]
 ```
 
-Default training uses the hyperparameters `--learning_rate=0.005` and `--keep_prob=0.7` (a dropout rate of 0.3). These hyperparameters can be changed at the command line:
+Default training uses the hyperparameters `--learning_rate=0.005` and 
+`--keep_prob=0.7` (a dropout rate of 0.3). These hyperparameters can be changed at the command line:
 ```
 python recurrence_lstm_features.py --name=[DNN training name] --learning_rate=1e-5 --keep_prob=0.9
 ```
 
-You can also specify the number of epochs using the --epochs hyperparameter
-NOTE: the default number of epochs is 50? 
+To specify the number of epochs, use the hyperparameter `--epochs`
 ```
 python recurrence_lstm_features.py --name=[DNN training name] --epochs=50
 ```
 
 ### Testing
-To test a trained model, set the `--config` and `--model_path` parameters:
+To test a trained model, set the `--config`, `--model_path`, and `--test_set`  parameters:
 ```
-python recurrence_lstm_features.py --name=[DNN testing name] --config=test --model_path=[filepath to model directory]
+python recurrence_lstm_features.py --name=[DNN testing name] --config=test --model_path=[filepath to model directory] --test_set=[filepath to image list with images to test on]
 ```
 
 **Note:** For the model being tested, the model_path directory must contain the `checkpoint` file with lines accurately pointing to the `.data`, `.index`, and `.meta` checkpoint files.
 
+### Output of testing 
+The DNN testing directory can be found in the results directory and contains two files:
+* voting_file.csv
+* secontary_test_results.txt
+
 ## vote.py
-Process output of recurrence_lstm into voting scores for all subjects in a testing condition. Requires specifying the model results you want to summarize with the `--model` command-line argument:
+Process output of recurrence_lstm into voting scores for all subjects in a testing condition. Requires specifying the model results you want to summarize with the `--model` command-line argument. The value of `--model` must be a directory in the configuration's `results_dir`.
 ```
 python vote.py --model=[DNN testing name]
 ```
 
-The value of `--model` must be a directory in the configuration's `results_dir`. If using a custom configuration, specify with the `--conf` argument.
+ If using a custom configuration, specify with the `--conf` argument.
+```
+python vote.py --model=[DNN testing name] --conf=custom_config.file
+```
 
 ## summary.py
-Process the training logs of recurrence_lstm into a figure saved as a jpg image. The figure is a 2x2 subplot with values of each available epoch for:
+Process the training logs of recurrence_lstm for train, valid, and test into a figure saved as a jpg image. The figure is a 2x2 subplot with values of each available epoch for:
 
 * Specificity
 * Sensitivity
 * Accuracy
 * Loss
 
-Requires specifying the model results you want to summarize with the `--model` command-line argument (requires train_results.txt, test_results.txt, and valid_results.txt files)
+Requires specifying the model results you want to summarize with the `--model` command-line argument. Model directory must contain train_results.txt, test_results.txt, and valid_results.txt.
 
-NOTE: [DNN testing name] should really be DNN training name?? 
 ```
-python summary.py --model=[DNN testing name]
+python summary.py --model=[DNN training name]
 ```
