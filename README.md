@@ -122,9 +122,9 @@ python recurrence_lstm_features.py --name=[DNN training name] --epochs=50
 ```
 
 ### Testing
-To test a trained model, set the `--config`, `--model_path`, and `--test_set`  parameters:
+To test a trained model, set the `--config` and `--model_path` parameters:
 ```
-python recurrence_lstm_features.py --name=[DNN testing name] --config=test --model_path=[filepath to model directory] --test_set=[filepath to image list with images to test on]
+python recurrence_lstm_features.py --name=[DNN testing name] --config=test --model_path=[filepath to model directory]
 ```
 
 **Note:** For the model being tested, the model_path directory must contain the `checkpoint` file with lines accurately pointing to the `.data`, `.index`, and `.meta` checkpoint files.
@@ -153,7 +153,7 @@ Process the training logs of recurrence_lstm for train, valid, and test into a f
 * Accuracy
 * Loss
 
-Requires specifying the model results you want to summarize with the `--model` command-line argument. Model directory must contain train_results.txt, test_results.txt, and valid_results.txt.
+Requires specifying the directory with the model results you want to summarize with the `--model` command-line argument. Model directory must contain train_results.txt, test_results.txt, and valid_results.txt because this data is used to generate the summary graphs.
 
 ```
 python summary.py --model=[DNN training name]
