@@ -50,7 +50,7 @@ If using a custom configuration, specify with the `--conf` argument:
 python process.py --conf=custom_config.file
 ```
 
-By defauly process.py will create all train, valid, and test sets. If you want to create only a certain set, specify with the `--set` argument:
+By default process.py will create all train, valid, and test sets. If you want to create only a certain set, specify with the `--set` argument:
 ```
 python process.py --set=train
 ```
@@ -122,6 +122,11 @@ python recurrence_lstm_features.py --name=[DNN training name] --epochs=50
 ```
 
 ### Testing
+If you want to test on a different set of images than the set used in the training data, run this line using the `--image_list` hyperparameter to specify the set of images (this file must be a csv and the entire data path must be specified) and set the `--set` hyperparameter to test:
+```
+python process.py --set=test --image_list=./data/testing_images.csv
+```
+
 To test a trained model, set the `--config` and `--model_path` parameters:
 ```
 python recurrence_lstm_features.py --name=[DNN testing name] --config=test --model_path=[filepath to model directory]
@@ -132,7 +137,7 @@ python recurrence_lstm_features.py --name=[DNN testing name] --config=test --mod
 ### Output of testing 
 The DNN testing directory can be found in the results directory and contains two files:
 * voting_file.csv
-* secontary_test_results.txt
+* secondary_test_results.txt
 
 ## vote.py
 Process output of recurrence_lstm into voting scores for all subjects in a testing condition. Requires specifying the model results you want to summarize with the `--model` command-line argument. The value of `--model` must be a directory in the configuration's `results_dir`.

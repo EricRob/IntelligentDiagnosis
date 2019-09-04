@@ -79,9 +79,8 @@ class Summary:
 
 def factor_int(n):
     # Find the set of integer factors closest to a square. Hopefully n isn't prime, or this will be an image of a long row
-    nsqrt = math.ceil(math.sqrt(n))
+    val = math.ceil(math.sqrt(n))
     solution = False
-    val = nsqrt
     while not solution:
         val2 = int(n/val)
         if val2 * val == float(n):
