@@ -768,10 +768,13 @@ def get_data_config(config_name):
       with open('./default_config.file', 'rb') as f:
         config = pickle.load(f)
     else:
-        config = pickle.load(os.path.join(config_name + '.file'))
+      if '.file' not in config_name:
+        config_name += '.file'
+      with open(os.path.join(config_name), 'rb') as f:
+        config = pickle.load(f)
     return config
   except:
-    cprint('[ERROR] No valid config file: %s.' % config_name, 'red')
+    print('[ERROR] No valid config file: %s.' % config_name)
     print('[INFO] Check --conf parameter and make sure you have run config.py for initial setup.')
 
 def main(_):
@@ -817,9 +820,7 @@ def main(_):
   else:
     config.max_max_epoch = data_config.training_epochs_int
 
-
-  os.makedirs(os.path.join(FLAGS.base_path, 'results'), exist_ok=True)
-  results_path = os.path.join(FLAGS.base_path, "results", FLAGS.name)
+  results_path = os.path.join(data_config.results, FLAGS.name)
   
   cprint("Data Source: %s" % FLAGS.data_path, 'white', 'on_magenta')
 

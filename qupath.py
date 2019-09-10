@@ -1,7 +1,16 @@
-#!/user/bin/env python3 -tt
-"""
-Module documentation.
-"""
+#!/usr/bin/python3 python3
+
+'''
+##################
+
+Written by Eric J Robinson (https://github.com/EricRob)
+
+##################
+
+Take in the qupath detections file, make it usable, and create the information necessary for writing features.
+
+##################
+'''
 
 # Imports
 import csv
@@ -139,7 +148,7 @@ def main(subject_id = None, image_name=None, image_processor=False, config=None)
     DETECTIONS = config.detections
     OMIT_CLASS = config.omit_class
 
-    detections_file = os.path.join(DETECTIONS, image_name + ' Detectionstxt')
+    detections_file = os.path.join(DETECTIONS, image_name + '_Detectionstxt.txt')
     if not os.path.exists(detections_file):
         print('No detections file in qupath_lstm')
         return None, None
@@ -147,7 +156,7 @@ def main(subject_id = None, image_name=None, image_processor=False, config=None)
     delaunay = {}
     data = {}
 
-    detections_file = image_name + ' Detectionstxt'
+    detections_file = image_name + '_Detectionstxt.txt'
 
     with open(os.path.join(DETECTIONS, detections_file), 'r') as f:
         subject = 'subj'

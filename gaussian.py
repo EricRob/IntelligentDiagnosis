@@ -1,7 +1,18 @@
-#!/user/bin/env python3 -tt
-"""
-Module documentation.
-"""
+#!/usr/bin/python3 python3
+
+'''
+##################
+
+Written by Eric J Robinson (https://github.com/EricRob)
+
+##################
+
+Tiles a large TIFF H&E image, generates cell-type features, samples patches from
+a gaussian distribution centered in each tile, and assemples patches into a RNN sequence.
+Then writes meta-data, feature values, sequence TIFF image data into a binary file.
+
+##################
+'''
 
 # Imports
 import sys
@@ -16,7 +27,7 @@ from skimage import transform
 from math import floor
 from numpy.lib.stride_tricks import as_strided
 import numbers
-import simple_qupath as qupath
+import qupath
 import time
 import struct
 from termcolor import cprint
@@ -933,7 +944,7 @@ def sequence_features(seq, tile, delys, mask, config):
 	if tile not in delys:
 		return (0, 0)
 
-	features = {}
+	features = []
 	class_features = {}
 
 	# Summarize info for clusters associated with a given tile
@@ -959,13 +970,22 @@ def sequence_features(seq, tile, delys, mask, config):
 			class_features[cell_class]['cell_area'] += size * delys[tile][cell_class][cluster]['mean_cell_area']
 
 	# Process summarized info into features
-	features['imm large / imm total'] = safe_division(class_features['Immune cells']['large_cell_count'],  class_features['Immune cells']['total_cell_count'])
-	features['imm large / all cells'] = safe_division(class_features['Immune cells']['large_cell_count'], (class_features['Immune cells']['total_cell_count'] + class_features['Tumor']['total_cell_count']))
-	features['imm large / tumor large'] = safe_division(class_features['Immune cells']['large_cell_count'], class_features['Tumor']['large_cell_count'])
-	features['imm large / imm small'] = safe_division(class_features['Immune cells']['large_cell_count'], class_features['Immune cells']['small_cell_count'])
-	features['all imm / all cells'] = safe_division(class_features['Immune cells']['total_cell_count'], (class_features['Immune cells']['total_cell_count'] + class_features['Tumor']['total_cell_count']))
-	features['imm area / tumor area'] = safe_division(class_features['Immune cells']['cell_area'], class_features['Tumor']['cell_area'])
-	features['imm area / total area'] = safe_division(class_features['Immune cells']['cell_area'], (class_features['Tumor']['cell_area'] + class_features['Immune cells']['cell_area']))
+
+	# 'imm large / imm total'
+	features.append(safe_division(class_features['Immune cells']['large_cell_count'],  class_features['Immune cells']['total_cell_count']))
+	# 'imm large / all cells'
+	features.append(safe_division(class_features['Immune cells']['large_cell_count'], (class_features['Immune cells']['total_cell_count'] + class_features['Tumor']['total_cell_count'])))
+	# 'imm large / tumor large'
+	features.append(safe_division(class_features['Immune cells']['large_cell_count'], class_features['Tumor']['large_cell_count']))
+	# 'imm large / imm small'
+	features.append(safe_division(class_features['Immune cells']['large_cell_count'], class_features['Immune cells']['small_cell_count']))
+	# 'all imm / all cells'
+	features.append(safe_division(class_features['Immune cells']['total_cell_count'], (class_features['Immune cells']['total_cell_count'] + class_features['Tumor']['total_cell_count'])))
+	# 'imm area / tumor area'
+	features.append(safe_division(class_features['Immune cells']['cell_area'], class_features['Tumor']['cell_area']))
+	# 'imm area / total area'
+	features.append(safe_division(class_features['Immune cells']['cell_area'], (class_features['Tumor']['cell_area'] + class_features['Immune cells']['cell_area'])))
+
 
 	return features, class_features
 
@@ -1080,8 +1100,8 @@ def write_image_bin(image_bin, image_name, subject_ID, seq_features, config):
 					# if float(feature_set[feature]) == 0:
 					# 	pdb.set_trace()
 					# if not feature_set[feature]:
-					# 	pdb.set_trace()
-					image_bin.write(struct.pack('d', feature_set[feature]))
+					# pdb.set_trace()
+					image_bin.write(struct.pack('d', feature))
 			for y,x in sequence:
 				patch = image[y:(y+config.patch_size),x:(x+config.patch_size),:]
 				# Need to verify this downscaling method				

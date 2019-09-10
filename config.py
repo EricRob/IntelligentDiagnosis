@@ -35,7 +35,7 @@ class Config:
 		self.err_csv = './data/error_list.csv'
 		self.voting_csv = 'voting_file.csv'
 		self.output_csv = 'voting_results.csv'
-		self.results_dir = None
+		self.results_dir = './results'
 		self.vote_cutoff_float = 0.5
 		self.training_epochs_int = 200
 
@@ -103,7 +103,7 @@ def create_default(config):
 
 def set_custom_values(config):
 	config_values = config.__dict__
-	for val in config_values:
+	for val in sorted(config_values):
 		if val == 'filename':
 			continue
 		inp = input('Setting for %s (%s): ' % (val, config.return_type(val)))
@@ -124,7 +124,10 @@ def main():
 			print('Exiting: No changes made to configurations')
 			return
 	elif query_yes_no('No default configuration found, create default configuration?'):
-			config.filename = config.valid_suffix('filename', input('New configuration name: '))
+			config.filename = config.valid_suffix('filename', 'default_config')
+			cprint('New default configuration: %s' % config.filename, 'yellow')
+	elif query_yes_no('Create new custom configuration?', default='no'):
+		config.filename = config.valid_suffix('filename', input('New configuration name: '))
 	else:
 		print('Exiting: No changes made to configurations')
 		return
