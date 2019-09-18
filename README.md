@@ -1,3 +1,4 @@
+# Running Neural Network for Training and Testing
 
 # Environment setup
 ## Docker
@@ -132,7 +133,7 @@ To test a trained model, set the `--config` and `--model_path` parameters:
 python recurrence_lstm_features.py --name=[DNN testing name] --config=test --model_path=[filepath to model directory]
 ```
 
-**Note:** For the model being tested, the model_path directory must contain the `checkpoint` file with lines accurately pointing to the `.data`, `.index`, and `.meta` checkpoint files.
+**Note:** For the model being tested, the model_path directory must contain the `checkpoint` file with lines accurately pointing to the `.data`, `.index`, and `.meta` checkpoint files. The checkpoint and the corresponsing directory should be refer and contain the model for the last epoch of training. 
 
 ### Output of testing 
 The DNN testing directory can be found in the results directory and contains two files:

@@ -24,8 +24,10 @@
  * nonrecurrence_valid_subjects.txt
  * nonrecurrence_test_subjects.txt
 
-## Legacy Pipeline 
+---
 
+
+## Legacy Pipeline 
 
 0. Review data for adherence to quality standards, if multi-layered TIFFs run export_top_layer.py
 1. Split large images into regular TIFF format (from BigTIFF, run large_image_splitter.py and gimp convert-tiff script)
@@ -38,7 +40,136 @@
 
 ---
 
-# preprocess_lstm.py
+**Steps to produce Image, Mask, and Detection files for Neural Network**
+
+# Environment
+Terminal commands from IntelligentDiagnosis/legacy folder 
+
+# Creating .tif Image Files
+1. Convert any images to Flat LZW TIFF `.tif` extention using ObjectiveConverter (or whatever means of converting images are available)
+
+2. Create a new folder called `images` and add converted images to the folder. 
+In addition this folder must contain: 
+    - tiff-convert.scm
+    - batch-mask.scm
+
+### Splitting Big TIFF Images
+If the image is *greater than 4GB* it is considered a Big TIFF and must be split into smaller images
+
+IntelligentDiagnosis/legacy contains a file named `image_splitter.py`
+In the terminal run this command to produce the split images: 
+```
+python large_image_splitter.py
+```
+
+This file takes 5 possible parameters:  
+    - `--base_path` 
+    - `--image_list`
+    - `--dst`
+    - `--destructive`
+    - `--force_split`
+
+To specify the full file path to the directory with the Big TIFF Images to be split use the `--base_path` parameter
+
+Default: */data/recurrence_seq_lstm/image_data/original_images*
+
+In the terminal run this command to produce the split images: 
+```
+python large_image_splitter.py --base_path=/home/wanglab/Desktop/LargeImages
+```
+
+To specify the images to be split, there must be a spreadsheet with the names of the images. The spreadsheet can be specified with the `--image_list` parameter 
+
+Default: *large_images.csv*
+
+In the terminal run this command to produce the split images: 
+```
+python large_image_splitter.py --image_list=large_images.csv
+```
+
+To specify the desintation folder for the split images use the `--dst` parameter. If there is no destination specified, the destination will be set to the base path folder
+
+Default: *None*
+
+In the terminal run this command to produce the split images: 
+```
+python large_image_splitter.py --dst=/home/wanglab/Desktop/SplitImages
+```
+
+To delete the original Big TIFF images after they are split set the 
+`--destructive` parameter to True. 
+
+Default: *False*
+
+In the terminal run this command to produce the split images: 
+```
+python large_image_splitter.py --destructive=True
+```
+
+To force the image to be split only in *half* set the `--force_split` parameter to True
+
+Default: *False*
+
+In the terminal run this command to produce the split images: 
+```
+python large_image_splitter.py --force_split=True
+```
+
+
+# Creating Mask Files
+__NOTE__: while binary masks can be created using preprocess_lstm.py it is better to do it separately this way and after move the images to the correct 
+folders/paths described in config.py
+
+Run this command in the terminal. Requires tiff-convert.scm is in the folder with the images.
+```
+gimp -i -b '(tiff-convert "*.tif")' -b '(gimp-quit 0)'
+```
+OUTPUT: gimp file for each Image
+
+Run this command in the terminal. Requires batch-mask.scm is in the folder with the images.
+```
+gimp -i -b '(batch-mask "*.tif" 217)' -b '(gimp-quit 0)'
+```
+OUTPUT: mask file for each Image
+
+Separate the mask files into a separate folder named `masks` 
+
+# Creating Detection Files
+1. Create an empty folder and open Qupath. Once Qupath is ready, click 
+`Create Project` and select the empty folder 
+
+2. In qupath select `Add Images` and add all the converted images to the project
+**NOTE**: Must use the tiff-convert gimp images in order for qupath to be able to display the images
+
+__ATTN__: The script used to produce detection files is called 
+`qupath_script.groovy`. Before running the script, ensure that: 
+- `runClassifier` has the correct path to the classifier file and that the file exists 
+- `saveDetectionMeasurements` has the correct path to the folder to save the Detection files 
+
+> Running the Script
+3. Press `Automate` and then `Show script editor`. Then press `File` --> `Open` and select `qupath_script.groovy`. Then Press `Run for Project` and select the images you would like produce detection files for. 
+
+Output: Dectection.txt files in the folder specified in 
+`saveDetectionMeasurements`
+
+Separate the detection files into a separate folder named `Detections` 
+
+# Create Image List 
+Lastly, the neural network will require an `image_list.csv` with all of the testing, validation, and training images you want to use that can then be found in the Images, Masks, and Detections folders.  
+
+This spreadsheet should specify 5 requirements for each Image: 
+    - Mode (train, valid, test)
+    - Subject_ID
+    - Image Name 
+    - label (0 or 1)
+    - Source
+
+__ATTN__: Ensure that at the end of file creations the paths to all of the folders containing the Images, Masks, and Detections, respectively, and the path to the image_list.csv correspond with the paths specified in config.py for running the neural network. 
+
+---
+
+
+## preprocess_lstm.py
 
 Append together image binary files for feeding into recurrence_seq_lstm. If an image's binary files does not exist, then one will first be created and then appended to the condition binary file.
 
@@ -46,7 +177,7 @@ If a binary file does not exist, and some of the necessary data for its creation
 
 This script inherently depends on **centroid_lstm.py** and **qupath_lstm.py**. With certain parameters, it can additionally interact with **subject_list_generator.py** and **gimp_threshold_mask** (a custom gimp batch script).
 
-## Overall File Creation Flags
+## preprocess_lstm.py Creation Flags
 
 ### --condition_path
 
@@ -71,22 +202,32 @@ python3 preprocess_lstm.py --condition_path=/data/recurrence_seq_lstm/data_condi
 
 Generate randomized lists of subjects for cross-validation testing. Succesfully using this parameter also requires specifying **--verified_list** and **--new_condition** parameters.
 
-Default: *None*
+Default: *False*
 
 
 ```
-python3 preprocess_lstm.py --generate_conditions --verified_list=NewSubjList.csv --new_condition=New_Subjects_Condition
+python3 preprocess_lstm.py --generate_conditions=True --verified_list=NewSubjList.csv --new_condition=New_Subjects_Condition
 ```
 
 ### --verified_list
 
 List of subjects used for creating new cross-validation conditions. It is assume that this list exists in the folder specified by **--data_conditions** Succesfully using this parameter also requires specifying **--generate_conditions** and **--new_condition** parameters.
 
-Default: *None*
+Default: *None* // the default of this is not None... 
+
+```
+python3 preprocess_lstm.py --generate_conditions=True --verified_list=NewSubjList.csv --new_condition=New_Subjects_Condition
+```
+
+### --new_condition
+
+Name of the new cross-validation condition to be created
+
+Default: *YALE_CUMC*
 
 
 ```
-python3 preprocess_lstm.py --generate_conditions --verified_list=NewSubjList.csv --new_condition=New_Subjects_Condition
+python3 preprocess_lstm.py --generate_conditions --verified_list=NewSubjList.csv --new_condition=SINAI_YALE
 ```
 
 ### --cross_val_folds
@@ -99,7 +240,7 @@ Default: *6*
 
 
 ```
-python3 preprocess_lstm.py --generate_conditions --cross_val_folds=6 --verified_list=NewSubjList.csv --new_condition=New_Subjects_Condition
+python3 preprocess_lstm.py --generate_conditions=True --cross_val_folds=6 --verified_list=NewSubjList.csv --new_condition=New_Subjects_Condition
 ```
 
 ### --data_conditions
@@ -111,7 +252,7 @@ Succesfully using this parameter also requires specifying **--generate_condition
 Default: */data/recurrence_seq_lstm/data_conditions*
 
 ```
-python3 preprocess_lstm.py --generate_conditions --data_conditions=/data/recurennce_seq_lstm/data_conditions/ --verified_list=NewSubjList.csv --new_condition=New_Subjects_Condition
+python3 preprocess_lstm.py --generate_conditions=True --data_conditions=/data/recurennce_seq_lstm/data_conditions/ --verified_list=NewSubjList.csv --new_condition=New_Subjects_Condition
 ```
 
 ### --config
@@ -213,7 +354,7 @@ python3 preprocess_lstm.py --overwrite
 
 ### --no_write
 
-Skip writing binary files. All normal functions of writing will execute, except the final step of writing to the binary file.
+Skip writing binary files. All normal functions of writing will execute, except the final step of writing to the binary file. Note: this is used for patch data creation. 
 
 Default: *False*
 
@@ -225,7 +366,8 @@ python3 preprocess_lstm.py --no_write
 
 If the **--condition_path** is specified, this flag is ignored.
 
-Generate only recurrence binary file from lists in the *config.image_data_folder_path/per_mode_subjects* directory.
+Generate only recurrence binary file from lists in the 
+*config.image_data_folder_path/per_mode_subjects* directory.
 
 Default: *False*
 
@@ -267,6 +409,25 @@ Default: *None*
 python3 preprocess_lstm.py --mode=valid
 ```
 
+### --skip
+
+If an image binary file does not exist, do not attemp to write it
+
+Default: *False*
+
+```
+python3 preprocess_lstm.py --skip
+```
+
+### --qptwo 
+Run qp2 detections concurrently with another process 
+
+Default: *False*
+
+```
+python preprocess_lstm.py --qptwo
+```
+
 ## Gauss Configuration Flags
 
 ### --gauss_seq
@@ -275,7 +436,7 @@ Number of sequences to generate per tile with gaussian samples.
 
 **Only works with the "original" configuration.** This should normally be specified in the configuration rather than with this flag.
 
-Default: *6*
+Default: *None*
 
 ```
 python3 preprocess_lstm.py --gauss_seq=6
@@ -287,7 +448,7 @@ Size of standard deviation from tile centers for 2D gaussian sampling of patch l
 
 **Only works with the "original" configuration.** This should normally be specified in the configuration rather than with this flag.
 
-Default: *1500*
+Default: *None*
 
 ```
 python3 preprocess_lstm.py --gauss_stdev=1500
@@ -299,7 +460,7 @@ Tile dimensions for splitting sample image for gauss distribution.
 
 **Only works with the "original" configuration.** This should normally be specified in the configuration rather than with this flag.
 
-Default: *1500*
+Default: *None*
 
 ```
 python3 preprocess_lstm.py --gauss_tile_size=1500
@@ -336,7 +497,7 @@ The desired pixel radius of delaunay triangulation. This parameter is only used 
 
 This is specified in the config as *pixel_radius*. If this parameter is not specified, the config default is used.
 
-Default: *config default*
+Default: *40*
 
 ```
 python3 preprocess_lstm.py --delaunay_radius=40
@@ -469,12 +630,22 @@ python3 majority_vote.py --og_image_path=/data/recurrence_seq_lstm/image_data/or
 
 ### --patch_size
 
-The patch size used for adjust temperature values in the heat map.
+The patch size used for adjust temperature values in the heat map. Dimensions of square patches taken from original image to generate the sequences given to the newtork. 
 
 Default: *500*
 
 ```
 python3 majority_vote.py --patch_size=500
+```
+
+### --patch_overlap 
+
+Overlap portion of patches taken from the original images 
+
+Defautl: *0.3*
+
+```
+python3 majority_vote.py --patch_overlap=0.3
 ```
 
 ### --map_path

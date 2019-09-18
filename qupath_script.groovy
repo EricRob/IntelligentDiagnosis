@@ -48,7 +48,7 @@ for (detection in getDetectionObjects()) {
     n++
 }
 fireHierarchyUpdate()
-runClassifier('/data/geis_qupath/part_one/classifiers/jaya_geiss_jan_30.qpclassifier');
+runClassifier('/data/qupath_data/qupath_classifiers/cu_geiss_jan_30.qpclassifier');
 selectObjectsByClass(qupath.lib.objects.PathRootObject);
 runPlugin('qupath.opencv.features.DelaunayClusteringPlugin', '{"distanceThreshold": 40.0,  "limitByClass": true,  "addClusterMeasurements": true}');
-saveDetectionMeasurements('/data/recurrence_seq_lstm/qupath_output/', ); 
+saveDetectionMeasurements('/home/wanglab/Desktop/TesterDetections'); 

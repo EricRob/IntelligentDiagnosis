@@ -114,6 +114,13 @@ def success_label(subject):
         return 'PASS'
     else:
         return 'FAIL'
+
+def prediction_label(subject):
+    if subject.net_label == 0:
+        return 'NONRECURRENT'
+    else:
+        return 'RECURRENT'
+
 def accurate_votes(subject):
     if subject.truth_label:
         return subject.recur_votes
@@ -153,10 +160,11 @@ def output_voting_results(subjects, config, model):
         csvwriter.writerow(['Recurrent count:', len(rec_votes)])
         csvwriter.writerow(['Cutoff:', config.vote_cutoff_float])
         csvwriter.writerow([''])
-        csvwriter.writerow(['Subject ID', 'Success', 'Ground Truth',
+        csvwriter.writerow(['Subject ID', 'Prediction', 'Success', 'Ground Truth',
             'Network Score','Accurate Votes', 'Total Votes', 'Image Count'])
         for _, subject in iter_list:
             csvwriter.writerow([subject.subject,
+                prediction_label(subject),
                 success_label(subject),
                 subject.truth_label,
                 '%.2f' % subject.vote,
