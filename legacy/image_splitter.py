@@ -35,13 +35,12 @@ if not FLAGS.dst:
 # Function declarations
 def split_image_in_half(img, large_image_name):
 	cprint("Loading " + large_image_name + " into memory", 'yellow')
-	#img = tiff.imread(img_path)
 	new_filename = os.path.join(FLAGS.dst,large_image_name.split('.tif')[0])
-	cprint(img.size, 'green')
-	cprint(img.shape, 'blue')
+
 	if os.path.exists(new_filename + "_B1.tif"):
 		cprint("Region 1 already exists, skipping " + large_image_name + " entirely")
 		return
+	
 	y_center = img.shape[0] // 2
 
 	top = img[0:y_center,:,:]
@@ -49,7 +48,6 @@ def split_image_in_half(img, large_image_name):
 
 	cprint("Saving top...", 'green')
 	tiff.imsave(new_filename + "_B1.tif", top)
-	cprint(top.size, 'green')
 
 	del top
 	cprint("Saving bottom...", 'green')
@@ -63,13 +61,11 @@ def split_image_in_half(img, large_image_name):
 def split_image_into_fourths(img, large_image_name):
 	cprint("Loading " + large_image_name + " into memory", 'yellow')
 	
-	#img = tiff.imread(img_path, key=0)
 	new_filename = os.path.join(FLAGS.dst,large_image_name.split('.tif')[0])
 	x_shape = img.shape[1]
 	y_shape = img.shape[0]
 	x_center = x_shape // 2
 	y_center = y_shape // 2
-	cprint(img.size, 'green')
 
 	if os.path.exists(new_filename + "_Q1.tif"):
 		cprint("Region 1 already exists, skipping Q1")
@@ -77,7 +73,6 @@ def split_image_into_fourths(img, large_image_name):
 		nw = img[0:y_center, 0:x_center, :]
 		cprint("Saving NW...", 'green')
 		tiff.imsave(new_filename + "_Q1.tif", nw )
-		cprint(nw.size, 'green')
 		del nw
 	
 	if os.path.exists(new_filename + "_Q2.tif"):
@@ -110,7 +105,6 @@ def split_image_into_fourths(img, large_image_name):
 
 def split_image_into_ninths(img, large_image_name):
 	cprint("Loading " + large_image_name + " into memory", 'yellow')
-	#img = tiff.imread(img_path)
 	new_filename = os.path.join(FLAGS.dst,large_image_name.split('.tif')[0])
 	if os.path.exists(new_filename + "_N1.tif"):
 		cprint("Region 1 already exists, skipping " + large_image_name)
@@ -121,7 +115,6 @@ def split_image_into_ninths(img, large_image_name):
 	x_right = x_left * 2
 	y_top = y_shape // 3
 	y_bottom = y_top * 2
-	cprint(img.size, 'green')
 
 	one = img[0:y_top, 0:x_left, :]
 	cprint('Saving region 1...', 'green')
@@ -177,14 +170,13 @@ def split_image_into_ninths(img, large_image_name):
 def main():
 	with open(os.path.join(FLAGS.base_path, FLAGS.image_list), newline="") as csvfile:
 		reader = csv.reader(csvfile)
-		#_ = next(reader) # Discard header line
+
 		for line in reader:
 			large_image_name = line[0]
 			img_path = os.path.join(FLAGS.base_path,large_image_name)
 			if not os.path.exists(img_path):
 				continue
-			size = os.path.getsize(img_path)
-			cprint(size, 'red')
+
 			img = tiff.imread(img_path)
 			size = img.size
 			if size < 4000000000 and not FLAGS.force_split:
