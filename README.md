@@ -108,6 +108,30 @@ python vote.py --model=[DNN testing name]
 
 The value of `--model` must be a directory in the configuration's `results_dir`. If using a custom configuration, specify with the `--conf` argument.
 
+### New Testing 
+To test a trained model with a new set of data first create a test.bin single binary file with the testing data 
+```
+python process_test.py 
+```
+Use the `--image_list` parameter to specify a certain csv with the new testing images:
+```
+python process_test.py --image_list=testing_images.csv
+```
+
+Run the neural network with testing data and set the `--name`, `--config`, and `--model_path` parameters where 
+`--config`=test for testing 
+`--name` is the name of the testing directory generated
+`--model_path` is the path to the directory with the checkpoint file
+
+**Note:** For the model being tested, the model_path directory must contain the `checkpoint` file with lines accurately pointing to the `.data`, `.index`, and `.meta` checkpoint files.
+```
+python recurrence_lstm_features_test.py --name=new_test --config=test --model_path=./results/epoch_run
+```
+To generate the neural network predictions if the images recurred or not, set the `--model` parameter the same as the Testing folder
+```
+python vote_test.py --model=new_test
+```
+
 ## summary.py
 Process the training logs of recurrence_lstm into a figure saved as a jpg image. The figure is a 2x2 subplot with values of each available epoch for:
 

@@ -56,6 +56,56 @@ def _generate_half_batch(record_data, min_queue_examples, batch_size, num_steps,
 
 	return sequences, label_half_batch, subjects, names, coordss, features
 
+def _generate_batch(record_data, min_queue_examples, batch_size, num_steps, test_mode):
+	""" Construct a queued batch, all of the same label
+	Args:
+		sequence: 2-D tensor of [sequence_length, sequence_length*image_bytes]
+		label: 1-D tensor of size [1]
+		min_queue_examples: minimum samples to retain in the queue
+		config: set of hyperparameters for the current run
+	Returns:
+		sequences: Full batch of images. 3-D tensor of
+		[batch_size, sequence_length, image_bytes] size.
+		label_batch: Full batch of labels. 1-D tensor of [batch_size] size.
+	"""
+	# From TF documentation: "The batching will be nondeterministic if num_threads > 1"
+	# Ok to have many threads for training, but in testing want a deterministic result.
+	if test_mode:
+		num_preprocess_threads = 1
+	else:
+		num_preprocess_threads = 16 
+	
+	sequence = record_data.sequence
+
+	# generate own set of labels 
+	subject = record_data.subject_id
+	label = record_data.label
+	name = record_data.image_name
+	coords = record_data.patch_coords
+	feature = record_data.features
+	# Create a batch of this data type's sequences, half the size of the
+	# batch that will be used in the RNN 
+	if False:
+		sequences, labels, subjects, names, coordss, features = tf.train.batch(
+			[sequence, label, subject, name, coords, feature],
+			batch_size = (batch_size),
+			num_threads = num_preprocess_threads,
+			capacity = (min_queue_examples + 3 * batch_size))
+	else:
+		sequences, labels, subjects, names, coordss, features = tf.train.shuffle_batch(
+			[sequence, label, subject, name, coords, feature],
+			batch_size = (batch_size),
+			num_threads = num_preprocess_threads,
+			capacity = (min_queue_examples + 3 * batch_size),
+			min_after_dequeue = min_queue_examples)
+
+	labels = tf.reshape(labels, [batch_size])
+	subjects = tf.reshape(subjects, [batch_size, record_data.patient_ID_bytes])
+	names = tf.reshape(names, [batch_size, record_data.image_name_bytes])
+	coordss = tf.reshape(coordss, [batch_size, record_data.coord_bytes])
+	features = tf.reshape(features, [batch_size, record_data.num_features])
+
+	return sequences, labels, subjects, names, coordss, features
 
 def _read_from_file(queue, config, class_label):
 	""" Reads data from a binary file of cell image data.
@@ -151,6 +201,99 @@ def _read_from_file(queue, config, class_label):
 
 	return result
 
+def _read_from_test_file(queue, config):
+	""" Reads data from a binary file of cell image data.
+	Create an object with information about sequence and
+	batch that will be filled with data obtained from the
+	queue by the FixedLengthRecordReader
+	
+	Args:
+		queue: FIFOQueue from which records will be read.
+		config: set of hyperparameters for the current run
+	Returns:
+		An object representing a single sequence with features
+			height: Patch image height in pixels
+			width: Patch image width in pixels
+			depth: Patch image depth in pixels
+			image_bytes: Size of a single patch (one element of sequence)
+			key: a scalar string Tensor describing the binary filename and
+			record number for this sequence
+			label: a Tensor with the label classification of 0 or 1
+			sequence: a [sequence_length, image_size] size Tensor
+	"""
+	
+	class SequenceRecord(object):
+		pass
+	result = SequenceRecord()
+	
+	# Dimensions of the images and the bytes they each take
+	# up in the binary file
+	result.height = config.image_size
+	result.width = config.image_size
+	result.depth = config.image_depth
+	result.sequence_length = config.num_steps
+	result.image_bytes = (result.height * result.width * result.depth)
+
+	result.patient_ID_bytes = 5 #uint8
+
+	initial_image_name_bytes = 92 #uint8
+	result.num_features = config.num_features
+	result.one_feature_bytes = 8
+	result.feature_bytes = config.num_features * result.one_feature_bytes # float64
+	result.coord_bytes = config.num_steps*2*6 # x and y coords, uint32
+
+	record_bytes = result.image_bytes * result.sequence_length + result.coord_bytes + result.patient_ID_bytes + initial_image_name_bytes + result.feature_bytes
+	
+	# The amount of padding on the image_name must be adjusted based on the number of features
+	# because the overall number of bytes must be a multiple of 8 for float64 processing of raw output.
+	increment = 8 - (record_bytes % 8)
+	result.image_name_bytes = initial_image_name_bytes + increment
+	record_bytes += increment
+	
+	# Create reader with the fixed record length and
+	# read off one record
+	reader = tf.FixedLengthRecordReader(record_bytes=record_bytes)
+	result.key, value = reader.read(queue)
+	# Convert from a string to a vector of uint8 that is record_bytes long.
+	record_data = tf.decode_raw(value, tf.uint8, name='decode_raw_uint8')
+	feature_data = tf.decode_raw(value, tf.float64, name='decode_raw_float64')
+	index = 0
+	next_index = result.patient_ID_bytes
+	result.subject_id, index = process_slice(index, result.patient_ID_bytes, record_data)
+	result.image_name, index = process_slice(index, result.image_name_bytes, record_data)
+	result.patch_coords, index = process_slice(index, result.coord_bytes, record_data)
+
+	# features are taken from float64 stream, they are taken out as a single block of data.
+	feature_index = index // result.one_feature_bytes
+	result.features, feature_index = process_slice(feature_index, result.num_features, feature_data)
+	
+	# result.feature_2, feature_index = process_slice(feature_index, 1, feature_data, 1)
+	# result.feature_3, feature_index = process_slice(feature_index, 1, feature_data, 1)
+	# result.feature_4, feature_index = process_slice(feature_index, 1, feature_data, 1)
+	# result.feature_5, feature_index = process_slice(feature_index, 1, feature_data, 1)
+	# result.feature_6, feature_index = process_slice(feature_index, 1, feature_data, 1)
+	# result.feature_7, _ = process_slice(feature_index, 1, feature_data, 1)
+
+	_ , index = process_slice(index, result.feature_bytes, record_data)
+	sequence_data = tf.strided_slice(record_data, [index], [record_bytes])
+
+	# Treat sequence as an image of dimensions [(steps * patch height), width, depth] and normalize per image
+	# Then reshape back to a single sequence
+
+	with tf.device("/cpu:0"):
+		normalized_sequence = tf.reshape(sequence_data,
+			[result.sequence_length*result.height,result.width, result.depth])
+		normalized_sequence = tf.image.per_image_standardization(normalized_sequence)
+
+		result.sequence = tf.reshape(normalized_sequence,
+								[result.sequence_length, result.height * result.width * result.depth]) #result.image_bytes])
+								
+	result.sequence = tf.cast(result.sequence, tf.float32)
+	result.label = tf.constant(0, shape=[1])
+
+
+	return result
+
 def process_slice(index, byte_length, record_data, block_size=1):
 	idx = index
 	next_idx = index + byte_length
@@ -198,3 +341,28 @@ def read_data(r_filename, nr_filename, config):
 	feature_batches_joined = tf.concat([r_features, nr_features], 0)
 
 	return sequence_batches_joined, label_batches_joined, subjects_batches_joined, names_batches_joined, coords_batches_joined, feature_batches_joined
+
+def read_test_data(filename, config):
+	""" Construct input for Sequence RNN for single binary file using reader ops""" 
+	# Create a queue for each file
+	queue = tf.train.string_input_producer(filename)
+	result = _read_from_test_file(queue, config)
+
+	min_queue_examples = 100 # Currently an arbitrary number
+
+	sequences, labels, subjects, names, coords, features = _generate_batch(
+												result,
+												min_queue_examples,
+												batch_size = config.batch_size,
+												num_steps = config.num_steps,
+												test_mode = config.test_mode)
+
+	sequence_batches_joined = tf.concat([sequences], 0)
+	label_batches_joined = tf.concat([labels], 0)
+	subjects_batches_joined = tf.concat([subjects], 0)
+	names_batches_joined = tf.concat([names], 0)
+	coords_batches_joined = tf.concat([coords], 0)
+	feature_batches_joined = tf.concat([features], 0)
+
+	return sequence_batches_joined, label_batches_joined, subjects_batches_joined, names_batches_joined, coords_batches_joined, feature_batches_joined
+
