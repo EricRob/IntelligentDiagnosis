@@ -30,13 +30,13 @@ def main():
     feature_list = []
     x_ticks = []
     y_ticks = []
-    name_dict = { 'imm small / total AUC': 'Unclustered Immune Count / Total Count AUC', \
-    'imm large / all imm AUC': 'Clustered Immune Count / Immune Count AUC', \
-    'imm large / tum large AUC': 'Clustered Immune Count / Clustered Tumor Count AUC', \
-    'imm large / imm small AUC': 'Clustered Immune Count / Unclustered Immune Count AUC', \
-    'imm small / total AUC': 'Unclustered Immune Count / Total Count AUC', \
-    'tum large / all tum AUC': 'Clustered Tumor Count / Tumor Count AUC', \
-    'imm large / total AUC': 'Clustered Immune Count / Total Count AUC'
+    name_dict = { 'imm small / total ACC': 'Unclustered Immune Count / Total Count ACC', \
+    'imm large / all imm ACC': 'Clustered Immune Count / Immune Count ACC', \
+    'imm large / tum large ACC': 'Clustered Immune Count / Clustered Tumor Count ACC', \
+    'imm large / imm small ACC': 'Clustered Immune Count / Unclustered Immune Count ACC', \
+    'imm small / total ACC': 'Unclustered Immune Count / Total Count ACC', \
+    'tum large / all tum ACC': 'Clustered Tumor Count / Tumor Count ACC', \
+    'imm large / total ACC': 'Clustered Immune Count / Total Count ACC',
     }
     with open(CSV_PATH, 'r') as csvfile:
         reader = csv.DictReader(csvfile)
@@ -64,7 +64,7 @@ def main():
                 continue
             
             for value in row:
-                if 'AUC' in value:
+                if 'ACC' in value:
                     data[rad][clust][value] = float(row[value])
                     if value not in feature_list:
                         feature_list.append(value)

@@ -25,6 +25,7 @@ parser.add_argument('--stage_one_test', default=False, action='store_true', help
 parser.add_argument('--cu_test', default=False, action='store_true', help='Test models on CUMC data')
 parser.add_argument('--omen', default=False, action='store_true', help='Run on OMEN tower')
 parser.add_argument('--fullyc', default=False, action='store_true', help='Run fully connected models only')
+parser.add_argument('--docker', default=False, action='store_true', help='Run inside of the docker container')
 
 
 # CU_MODELS = ['CU_Sinai_Apr_11', 'CU_Apr_09_200']
@@ -61,6 +62,19 @@ class OmenConfig(object):
 	SINAI_TEST_DIR = os.path.join('/hdd', 'ID_net', 'data_conditions', 'sinai_testing_data')
 	RESULTS_DIR = os.path.join('/hdd', 'ID_net', 'results')
 	OMEN = '--base_path=/hdd/ID_net/ '
+
+class DockerConfig(object):
+	RESULTS_DIR = os.path.join('/hdd', 'ID_net', 'results')
+	REPLACE_DIR = os.path.join('/data', 'recurrence_seq_lstm', 'results')
+	DATA_CONDITIONS = os.path.join('/hdd', 'ID_net', 'data_conditions')
+	SCRIPT_DIR = '/hdd/ID_net/IntelligentDiagnosis/'
+	YALE_TEST_DIR = os.path.join('/hdd', 'ID_net', 'data_conditions', 'yale_testing_data')
+	GEIS_TEST_DIR = os.path.join('/hdd', 'ID_net', 'data_conditions', 'geis_testing_data')
+	CU_TEST_DIR = os.path.join('/hdd', 'ID_net', 'data_conditions', 'cu_testing_data')
+	STAGE_ONE_DIR = os.path.join('/hdd', 'ID_net', 'data_conditions', 'stage_one_testing')
+	SINAI_TEST_DIR = os.path.join('/hdd', 'ID_net', 'data_conditions', 'sinai_testing_data')
+	RESULTS_DIR = './results'
+	OMEN = ''
 
 def test_model(base, model, test_dir, name, config):
 	if name in model:

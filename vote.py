@@ -201,7 +201,7 @@ def main(ars):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Create decisions based on output of recurrence_seq_lstm')
     parser.add_argument('--conf', default='default', type=str, help='Name of configuration file for processing and voting')
-    parser.add_argument('--model', default='None', type=str, required=True, help='Directory location of voting_csv to test and summarize')
+    parser.add_argument('--model', type=str, required=True, help='Directory location of voting_csv to test and summarize')
     ars = parser.parse_args()
     main(ars)
     sys.exit(0)

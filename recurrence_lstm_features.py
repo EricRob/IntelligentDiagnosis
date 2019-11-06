@@ -801,8 +801,6 @@ def main(_):
     cprint('waited for data, now waiting five more minutes to make sure it is all there ... ', 'yellow')
     time.sleep(300)
   stdout_backup = sys.stdout
-
-  config = get_config()
   
   #If training (not testing) need to set these training parameters (but they are set by default in flags)
   if config.test_mode == 0:

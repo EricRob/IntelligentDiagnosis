@@ -656,6 +656,7 @@ def k_means_clustering_and_features(data, delaunay):
             pickle.dump(dense_delaunay, handle, protocol=pickle.HIGHEST_PROTOCOL)
     KMEANS_CSV.close()
     return cell_locs, dense_delaunay
+    
 def compute_hull(imm_locations, cluster=1, remove=100, threshold=0.95):
     clust_distances, clust_locs = find_immune_distances(imm_locations, cluster, remove)
     ranks = np.argsort(clust_distances)
@@ -1105,7 +1106,7 @@ def show_delaunay_histogram(delaunay):
     #             plt.hist(non, alpha=0.5, label='Nonrecurrent')
     #             plt.hist(rec, alpha=0.5, label="Recurrent")
     #             plt.xlabel(feature + ' -- ' + cell_class)
-
+    pdb.set_trace()
     re_imm_large_count = np.array(RE['Immune cells']['large_cluster_cells'])
     nr_imm_large_count = np.array(NR['Immune cells']['large_cluster_cells'])
 
@@ -1535,10 +1536,10 @@ def main(subject_id = None, image_name=None, image_processor=False):
     #       --[image]
     #           --[region counts] -> [cluster number, distances to 5 closest regions]
     #           --[cell_locations] -> [x, y, label, cluster number]
-    cell_locations, d_delaunay = k_means_clustering_and_features(data, delaunay)
+    # cell_locations, d_delaunay = k_means_clustering_and_features(data, delaunay)
     if QFLAGS.show_delaunay:
         show_delaunay_histogram(delaunay)
-        dense_delaunay_histogram(d_delaunay)
+        # dense_delaunay_histogram(d_delaunay)
 
 
 # Main body

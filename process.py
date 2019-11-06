@@ -141,8 +141,11 @@ def image_to_be_processed(data, he_img):
 def process_input_csv(config, ars):
 
 	data = create_data_dict(ars)
-
-	with open(config.image_csv) as csvfile:
+	if ars.image_list == 'default':
+		file = config.image_csv
+	else:
+		file = ars.image_list
+	with open(file) as csvfile:
 		csvreader = csv.DictReader(csvfile)
 		for row in csvreader:
 			he_img = HE_Image(row, config)
@@ -212,7 +215,11 @@ def main(ars):
 		sys.exit(1)
 
 	input_data = process_input_csv(config, ars)
-	cprint('Loading from image_list: %s' % config.image_csv, 'grey', 'on_white')
+	if ars.image_list == 'default':
+		file = config.image_csv
+	else:
+		file = ars.image_list
+	cprint('Loading from image_list: %s' % file, 'grey', 'on_white')
 	err_list = []
 	for label in sorted(input_data):
 		for mode in sorted(input_data[label]):
@@ -229,6 +236,7 @@ if __name__ == '__main__':
 	parser.add_argument('--conf', default='default', type=str, help='Name of configuration file for processing and voting')
 	parser.add_argument('--set', default='', type=str, help='Name of set to create. Must be equal to train, valid, or test. If not equal to a specific set, all sets will be created.')
 	parser.add_argument('--label', default='', type=str, help='Name of label binaries to create. Must be equal to recurrence or nonrecurrence. If not equal to a specific label, all labels will be created.')
+	parser.add_argument('--image_list', default='default', type=str, help='Name of image list csv to read from. If not equal to a specific list, will you the default image_list specified in config.py')
 	ars = parser.parse_args()
 	main(ars)
 	sys.exit(0)
