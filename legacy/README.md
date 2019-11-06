@@ -145,6 +145,7 @@ __ATTN__: The script used to produce detection files is called
 `qupath_script.groovy`. Before running the script, ensure that: 
 - `runClassifier` has the correct path to the classifier file and that the file exists 
 - `saveDetectionMeasurements` has the correct path to the folder to save the Detection files 
+- to speed up the process on Qupath set the number of parallel processes to 1 (Edit --> preferences --> )
 
 > Running the Script
 3. Press `Automate` and then `Show script editor`. Then press `File` --> `Open` and select `qupath_script.groovy`. Then Press `Run for Project` and select the images you would like produce detection files for. 
